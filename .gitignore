@@ -5,3 +5,9 @@
 /quicrq_vs/.vs/quicrq_vs/v16/TestStore/0
 /quicrq_vs/.vs/quicrq_vs/v16
 *.user
+/quicrq_vs/quicrq_lib/x64/Debug
+/quicrq_vs/quicrq_test/x64/Debug/quicrq_test.tlog
+/quicrq_vs/quicrq_test_lib/x64/Debug
+/quicrq_vs/quicr_st/x64/Debug
+/quicrq_vs/x64/Debug
+/quicrq_vs/UnitTest/x64/Debug
