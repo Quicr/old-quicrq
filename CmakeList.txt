@@ -19,6 +19,7 @@ set(QUICRQ_LIBRARY_FILES
 set(QUICRQ_TEST_LIBRARY_FILES
     test/basic_test.c
     test/network_test.c
+    test/test_media.c
 )
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

@@ -16,5 +16,12 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(media_video1)
+		{
+			int ret = quicrq_media_video1_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

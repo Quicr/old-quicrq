@@ -21,5 +21,8 @@
     <ClCompile Include="..\..\tests\basic_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\tests\test_media.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

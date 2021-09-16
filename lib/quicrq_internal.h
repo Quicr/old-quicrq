@@ -35,8 +35,6 @@ extern "C" {
  * 
  * The quicrq context is created by the call to quicrq_create, which
  * starts the operation. It is deleted by a call to quicr_delete */
-typedef struct st_quicrq_cnx_ctx_t quicrq_cnx_ctx_t;
-typedef struct st_quicrq_stream_ctx_t quicrq_stream_ctx_t;
 
 
 /* Quicrq stream handling */
@@ -100,6 +98,10 @@ int quicrq_callback_prepare_to_send(picoquic_cnx_t* cnx, uint64_t stream_id, qui
 void quicrq_set_tp(picoquic_cnx_t* cnx);
 /* Set default transport parameters to adequate value for quicrq server. */
 int quicrq_set_default_tp(quicrq_ctx_t* quicrq_ctx);
+
+/* Encode and decode the frame header */
+const uint8_t* quicr_decode_frame_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_frame_header_t* hdr);
+uint8_t* quicr_encode_frame_header(uint8_t* fh, const uint8_t* fh_max, const quicrq_media_frame_header_t* hdr);
 
 #ifdef __cplusplus
 }

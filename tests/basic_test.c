@@ -1,20 +1,24 @@
 #include "quicrq.h"
 #include "quicrq_internal.h"
+#include "quicrq_tests.h"
+#include "quicrq_test_internal.h"
 #include "picoquic_utils.h"
-
 
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
 #define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\..\\..\\picoquic\\"
+#define QUICRQ_DEFAULT_SOLUTION_DIR "..\\..\\..\\"
 #else
 #define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\..\\picoquic\\"
+#define QUICRQ_DEFAULT_SOLUTION_DIR "..\\..\\"
 #endif
 #else
-#define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "../../picoquic/"
+#define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "../picoquic/"
+#define QUICRQ_DEFAULT_SOLUTION_DIR "./"
 #endif
 
 char const* quicrq_test_picoquic_solution_dir = QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR;
-
+char const* quicrq_test_solution_dir = QUICRQ_DEFAULT_SOLUTION_DIR;
 
 
 /* Test configuration: nodes, sources, addresses and links.
@@ -361,7 +365,7 @@ quicrq_test_config_t* quicrq_test_basic_config_create()
             &config->simulated_time);
         config->nodes[1] = quicrq_create(NULL,
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
-            NULL, NULL, &config->simulated_time);
+            NULL, 0, &config->simulated_time);
         if (config->nodes[0] == NULL || config->nodes[1] == NULL) {
             quicrq_test_config_delete(config);
             config = NULL;

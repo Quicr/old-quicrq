@@ -12,6 +12,10 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "quicrq_test_lib", "quicrq_test_lib\quicrq_test_lib.vcxproj", "{C8C675E2-3173-487E-AC27-5438A0D07166}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnitTest", "UnitTest\UnitTest.vcxproj", "{B8BB861C-926D-4EBE-835A-24B8037520AE}"
+	ProjectSection(ProjectDependencies) = postProject
+		{5F9A9F68-AA73-42B9-B050-1B348C117801} = {5F9A9F68-AA73-42B9-B050-1B348C117801}
+		{C8C675E2-3173-487E-AC27-5438A0D07166} = {C8C675E2-3173-487E-AC27-5438A0D07166}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

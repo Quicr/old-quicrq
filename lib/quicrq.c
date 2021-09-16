@@ -29,6 +29,7 @@
 
 #include "quicrq.h"
 #include "quicrq_internal.h"
+#include "picoquic_utils.h"
 
 /* New request: media segment.
  * Create a connection to the upstream server.
@@ -367,4 +368,61 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
     }
 
     return stream_ctx;
+}
+
+/* Media publisher API.
+ * Simplified API for now:
+ * - cnx_ctx: context of the QUICR connection
+ * - media_url: URL of the media segment
+ * - media_publisher_fn: callback function for processing media arrival
+ * - media_ctx: media context managed by the publisher
+ */
+
+int quicrq_publish_media_stream(
+    quicrq_ctx_t* qr_ctx,
+    char const* url,
+    quicr_media_consumer_cb media_consumer_fn,
+    void* media_ctx)
+{
+    return -1;
+}
+
+/* Subscribe to a media segment using QUIC streams.
+ * Simplified API for now:
+ * - cnx_ctx: context of the QUICR connection
+ * - media_url: URL of the media segment
+ * - 
+ */
+int quicrq_subscribe_media_stream(
+    quicrq_cnx_ctx_t* cnx_ctx,
+    char const* url,
+    quicr_media_consumer_cb media_consumer_fn,
+    void* media_ctx)
+{
+    return -1;
+}
+
+/* Utility function, encode or decode a frame header.
+ */
+const uint8_t* quicr_decode_frame_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_frame_header_t* hdr)
+{
+    /* decode the frame header */
+    if ((fh = picoquic_frames_uint64_decode(fh, fh_max, &hdr->timestamp)) != NULL &&
+        (fh = picoquic_frames_uint64_decode(fh, fh_max, &hdr->number)) != NULL){
+        uint32_t length = 0;
+        fh = picoquic_frames_uint32_decode(fh, fh_max, &length);
+        hdr->length = length;
+    }
+    return fh;
+}
+
+uint8_t* quicr_encode_frame_header(uint8_t* fh, const uint8_t* fh_max, const quicrq_media_frame_header_t* hdr)
+{
+    /* decode the frame header */
+    if ((fh = picoquic_frames_uint64_encode(fh, fh_max, hdr->timestamp)) != NULL &&
+        (fh = picoquic_frames_uint64_encode(fh, fh_max, hdr->number)) != NULL) {
+        fh = picoquic_frames_uint32_encode(fh, fh_max, (uint32_t)hdr->length);
+    }
+
+    return fh;
 }
