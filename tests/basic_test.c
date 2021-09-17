@@ -6,11 +6,11 @@
 
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
-#define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\..\\..\\picoquic\\"
-#define QUICRQ_DEFAULT_SOLUTION_DIR "..\\..\\..\\"
-#else
 #define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\..\\picoquic\\"
 #define QUICRQ_DEFAULT_SOLUTION_DIR "..\\..\\"
+#else
+#define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\picoquic\\"
+#define QUICRQ_DEFAULT_SOLUTION_DIR "..\\"
 #endif
 #else
 #define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "../picoquic/"
