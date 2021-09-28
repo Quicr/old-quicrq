@@ -72,7 +72,7 @@ int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, s
                 memcpy(x, msg_buffer->buffer, bytes_stored);
             }
             free(msg_buffer->buffer);
-            msg_buffer->buffer_alloc = msg_buffer->message_size;
+            msg_buffer->buffer_alloc = space;
             msg_buffer->buffer = x;
         }
     }

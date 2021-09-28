@@ -359,11 +359,11 @@ quicrq_test_config_t* quicrq_test_basic_config_create()
     quicrq_test_config_t* config = quicrq_test_config_create(2, 2, 2, 1);
     if (config != NULL) {
         /* Create the contexts for the origin and the client */
-        config->nodes[0] = quicrq_create(NULL,
+        config->nodes[0] = quicrq_create(QUICRQ_ALPN,
             config->test_server_cert_file, config->test_server_key_file, NULL, NULL, NULL,
             config->ticket_encryption_key, sizeof(config->ticket_encryption_key),
             &config->simulated_time);
-        config->nodes[1] = quicrq_create(NULL,
+        config->nodes[1] = quicrq_create(QUICRQ_ALPN,
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
             NULL, 0, &config->simulated_time);
         if (config->nodes[0] == NULL || config->nodes[1] == NULL) {
@@ -384,19 +384,83 @@ quicrq_test_config_t* quicrq_test_basic_config_create()
     return config;
 }
 
+quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int client_node, int server_node)
+{
+    quicrq_ctx_t* qr_ctx = config->nodes[client_node];
+    picoquic_quic_t * quic = quicrq_get_quic_ctx(qr_ctx);
+    picoquic_cnx_t* cnx = NULL;
+    quicrq_cnx_ctx_t* cnx_ctx = NULL;
+    struct sockaddr* addr_to = NULL;
+    
+    /* Find an attachment leading to server node */
+    for (int i = 0; i < config->nb_attachments; i++) {
+        if (config->attachments[i].link_to_id == server_node) {
+            addr_to = (struct sockaddr*)&config->attachments[i].node_addr;
+        }
+    }
+
+    if (addr_to != NULL) {
+        cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
+            addr_to, config->simulated_time, 0, NULL, QUICRQ_ALPN, 1);
+        if (cnx != NULL) {
+            cnx_ctx = quicrq_create_cnx_context(qr_ctx, cnx);
+        }
+    }
+    return cnx_ctx;
+}
+
+#ifdef _WINDOWS
+#define QUICRQ_TEST_BASIC_SOURCE "tests\\video1_source.bin"
+#else
+#define QUICRQ_TEST_BASIC_SOURCE "tests/video1_source.bin"
+#endif
+#define QUICRQ_TEST_BASIC_RESULT "basic_result.bin"
+#define QUICRQ_TEST_BASIC_LOG    "basic_log.csv"
+
+
 /* Basic connection test */
 int quicrq_basic_test()
 {
     int ret = 0;
     quicrq_test_config_t* config = quicrq_test_basic_config_create();
+    quicrq_cnx_ctx_t* cnx_ctx = NULL;
+    char media_source_path[512];
 
     if (config == NULL) {
         ret = -1;
     }
-    else {
-        /* declare test source on server */
-        quicrq_test_config_delete(config);
+
+    /* Locate the source and reference file */
+    if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
+        quicrq_test_solution_dir, QUICRQ_TEST_BASIC_SOURCE) != 0) {
+        ret = -1;
     }
 
+    if (ret == 0){
+        /* Add a test source to the configuration, and to the server */
+        ret = test_media_publish(config->nodes[0], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, 0);
+    }
+
+    if (ret == 0) {
+        /* Create a quirq connection context on client */
+        cnx_ctx = quicrq_test_basic_create_cnx(config, 1, 0);
+        if (cnx_ctx == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Create a subscription to the test source on client */
+        ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), QUICRQ_TEST_BASIC_RESULT, QUICRQ_TEST_BASIC_LOG);
+    }
+
+    if (ret == 0) {
+        /* Run the simulation. Monitor the connection. Monitor the media. */
+    }
+
+    /* Clear everything. */
+    if (config != NULL) {
+        quicrq_test_config_delete(config);
+    }
     return ret;
 }

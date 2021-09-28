@@ -412,6 +412,21 @@ int test_media_consumer_cb(
     return ret;
 }
 
+int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, char const* media_result_file, char const* media_result_log)
+{
+    int ret = 0;
+    void* media_ctx = test_media_consumer_init(media_result_file, media_result_log);
+
+    if (media_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, test_media_consumer_cb, media_ctx);
+    }
+
+    return ret;
+}
+
 /* Compare media file.
  * These are binary files composed of sequences of frames.
  */
