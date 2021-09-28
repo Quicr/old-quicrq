@@ -35,26 +35,74 @@ extern "C" {
  * 
  * The quicrq context is created by the call to quicrq_create, which
  * starts the operation. It is deleted by a call to quicr_delete */
+#define QUICRQ_ACTION_OPEN_STREAM 1
+#define QUICRQ_ACTION_OPEN_DATAGRAM 2
 
+/* Protocol message buffer.
+ * For the base protocol, all messages start with a 2-bytes length field,
+ * and are accumulated in a quicrq_incoming_message buffer.
+ */
+typedef struct st_quicrq_message_buffer_t {
+    size_t nb_bytes_read; /* if >= 2, the message size is known */
+    size_t message_size;
+    size_t buffer_alloc;
+    uint8_t* buffer;
+    int is_finished;
+} quicrq_message_buffer_t;
 
-/* Quicrq stream handling */
+int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, size_t bytes_stored);
+uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_buffer_t* msg_buffer, int* is_finished);
+
+/* Encode and decode protocol messages */
+size_t quicrq_rq_msg_reserved_length(size_t url_length);
+uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, uint8_t* url);
+const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
+
+ /* Quicrq per media source context.
+  * Can we make it simpler?
+  */
+typedef struct st_quicrq_media_source_ctx_t {
+    struct st_quicrq_media_source_ctx_t* next_source;
+    struct st_quicrq_media_source_ctx_t* previous_source;
+    uint8_t* media_url;
+    size_t media_url_length;
+    void* pub_ctx;
+    quicrq_media_publisher_subscribe_fn subscribe_fn;
+    quicrq_media_publisher_fn getdata_fn;
+} quicrq_media_source_ctx_t;
+
+int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
+
+/* Quicrq stream handling.
+ * Media stream come in two variants.
+ * - server to client stream, that must include the API for sending data from a stream.
+ * - client to server stream, that must include the API for receiving data.
+ * 
+ */
 struct st_quicrq_stream_ctx_t {
     uint64_t stream_id;
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
     struct st_quicrq_cnx_ctx_t* cnx_ctx;
+    unsigned int is_client : 1;
+    unsigned int is_client_finished : 1;
+    unsigned int is_server_finished : 1;
+
     size_t bytes_sent;
     size_t bytes_received;
-    uint16_t length_received;
 
-    unsigned int client_mode : 1;
+    quicrq_message_buffer_t message;
+
+    quicrq_media_consumer_fn consumer_fn; /* Callback function for data arrival on client */
+    quicrq_media_publisher_fn publisher_fn; /* Data providing function for source */
+    void* media_ctx; /* Callback argument for receiving or sending data */
 };
 
 /* Quicrq per connection context */
 struct st_quicrq_cnx_ctx_t {
     struct st_quicrq_cnx_ctx_t* next_cnx;
     struct st_quicrq_cnx_ctx_t* previous_cnx;
-    struct st_quicrq_ctx_t* quicrq_ctx;
+    struct st_quicrq_ctx_t* qr_ctx;
 
     char* sni;
     struct sockaddr_storage addr;
@@ -69,6 +117,9 @@ struct st_quicrq_cnx_ctx_t {
 /* Quicrq context */
 struct st_quicrq_ctx_t {
     picoquic_quic_t* quic; /* The quic context for the Quicrq service */
+    /* Local media sources */
+    quicrq_media_source_ctx_t* first_source;
+    quicrq_media_source_ctx_t* last_source;
     /* Todo: message passing and synchronization */
     /* Todo: sockets, etc */
     struct st_quicrq_cnx_ctx_t* first_cnx; /* First in double linked list of open connections in this context */
@@ -87,9 +138,6 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
 int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
-
-int quicrq_callback_data(picoquic_cnx_t* cnx, quicrq_stream_ctx_t* stream_ctx, uint64_t stream_id, uint8_t* bytes,
-    size_t length, picoquic_call_back_event_t fin_or_event, quicrq_cnx_ctx_t* cnx_ctx);
 
 int quicrq_callback_prepare_to_send(picoquic_cnx_t* cnx, uint64_t stream_id, quicrq_stream_ctx_t* stream_ctx,
     void* bytes, size_t length, quicrq_cnx_ctx_t* cnx_ctx);

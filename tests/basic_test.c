@@ -394,6 +394,7 @@ int quicrq_basic_test()
         ret = -1;
     }
     else {
+        /* declare test source on server */
         quicrq_test_config_delete(config);
     }
 

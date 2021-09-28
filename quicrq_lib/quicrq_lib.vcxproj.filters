@@ -21,6 +21,9 @@
     <ClCompile Include="..\lib\segment.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\lib\proto.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\lib\quicrq_internal.h">

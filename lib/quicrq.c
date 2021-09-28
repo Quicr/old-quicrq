@@ -43,6 +43,197 @@
 /* Poll for data on a stream. Either send pending request (upstream)
  * or push available media (downstream)
  */
+int quicrq_callback_prepare_to_send(picoquic_cnx_t* cnx, uint64_t stream_id, quicrq_stream_ctx_t* stream_ctx,
+    void* bytes, size_t length, quicrq_cnx_ctx_t* cnx_ctx)
+{
+    if (stream_ctx->is_client) {
+        /* In the basic protocol, the client sends request messages, followed by fin */
+    }
+    else {
+        /* In the basic protocol, the server sends data from a source */
+
+    }
+    return -1;
+}
+
+/* Allocate space in the message buffer */
+int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, size_t bytes_stored)
+{
+    int ret = 0;
+
+    if (space > msg_buffer->buffer_alloc) {
+        uint8_t* x = (uint8_t*)malloc(space);
+        if (x == NULL) {
+            /* internal error! */
+            ret = -1;
+        }
+        else {
+            if (bytes_stored > 0) {
+                memcpy(x, msg_buffer->buffer, bytes_stored);
+            }
+            free(msg_buffer->buffer);
+            msg_buffer->buffer_alloc = msg_buffer->message_size;
+            msg_buffer->buffer = x;
+        }
+    }
+    return ret;
+}
+
+/* Accumulate a protocol message from series of read data call backs */
+uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_buffer_t* msg_buffer, int* is_finished)
+{
+    *is_finished = 0;
+
+    while (msg_buffer->nb_bytes_read < 2 && length > 0) {
+        msg_buffer->nb_bytes_read++;
+        msg_buffer->message_size *= 8;
+        msg_buffer->message_size += bytes[0];
+        bytes++;
+        length--;
+    }
+
+    if (msg_buffer->nb_bytes_read >= 2) {
+        size_t bytes_stored = msg_buffer->nb_bytes_read - 2;
+        size_t required = msg_buffer->message_size - bytes_stored;
+
+        if (required > 0) {
+            if (quicrq_msg_buffer_alloc(msg_buffer, msg_buffer->message_size, bytes_stored) != 0) {
+                bytes = NULL;
+            } else {
+                if (length <= required) {
+                    length = required;
+                    *is_finished = 1;
+                }
+                memcpy(msg_buffer->buffer + bytes_stored, bytes, length);
+                bytes += length;
+                msg_buffer->nb_bytes_read += length;
+            }
+        }
+        else {
+            *is_finished = 1;
+        }
+    }
+
+    return bytes;
+}
+
+/* Send a protocol message through series of read data call backs */
+int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space)
+{
+    int ret = 0;
+    quicrq_message_buffer_t* msg_buffer = &stream_ctx->message;
+    size_t total_to_send = msg_buffer->message_size + 2;
+
+    if (msg_buffer->nb_bytes_read < total_to_send) {
+        uint8_t* buffer;
+        size_t available = total_to_send - msg_buffer->nb_bytes_read;
+        int is_fin = 1;
+
+        if (available > space) {
+            available = space;
+            is_fin = 0;
+        }
+
+        buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
+        if (buffer != NULL) {
+            size_t copied = 0;
+            /* Feed the message length on two bytes */
+            while (msg_buffer->nb_bytes_read < 2 && available > 0) {
+                uint8_t b = (msg_buffer->nb_bytes_read == 0) ?
+                    (uint8_t)((msg_buffer->message_size >> 8) & 255) :
+                    (uint8_t)(msg_buffer->message_size & 255);
+                *buffer = b;
+                buffer++;
+                available--;
+                msg_buffer->nb_bytes_read++;
+            }
+            /* feed the content at offset */
+            if (available > 0) {
+                size_t offset = msg_buffer->nb_bytes_read - 2;
+                memcpy(buffer, msg_buffer->buffer + offset, available);
+                msg_buffer->nb_bytes_read += available;
+                stream_ctx->is_client_finished = (is_fin != 0);
+            }
+        }
+    }
+    return ret;
+}
+
+/* send the media using the provider supplied function */
+int quicrq_prepare_to_send_media(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space, uint64_t current_time)
+{
+    /* Find how much data is available on the media stream */
+    int is_finished = 0;
+    size_t available = 0;
+    size_t data_length = 0;
+    int ret = stream_ctx->publisher_fn(media_source_get_data, stream_ctx->media_ctx, NULL, space, &available, &is_finished, current_time);
+    /* If data is available, ask the media stream to fill the buffer */
+    if (ret == 0 && available > 0) {
+        void * buffer = picoquic_provide_stream_data_buffer(context, available, is_finished, !is_finished);
+        if (buffer != NULL) {
+            ret = -1;
+        }
+        else {
+            ret = stream_ctx->publisher_fn(media_source_get_data, stream_ctx->media_ctx, buffer, available, &data_length, &is_finished, current_time);
+            if (ret == 0 && available != data_length) {
+                ret = -1;
+            }
+            else {
+                stream_ctx->is_server_finished = (is_finished != 0);
+            }
+        }
+    }
+    return ret;
+}
+
+/* Receive and process media control messages */
+int quicrq_receive_server_command(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, size_t length, int is_fin)
+{
+    int ret = 0;
+
+    if (stream_ctx->is_client_finished && length > 0) {
+        /* One message per stream! */
+        ret = -1;
+    } else if (length > 0) {
+        int is_finished = 0;
+        uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &stream_ctx->message, &is_finished);
+        if (next_bytes == NULL) {
+            ret = -1;
+        }
+        else if (next_bytes != bytes + length) {
+            /* we only expect one message per stream. This is a protocol violation. */
+            ret = -1;
+        }
+        else if (is_finished) {
+            /* Process the media command */
+            uint64_t message_type;
+            size_t url_length = 0;
+            const uint8_t* url;
+            const uint8_t* next_bytes = quicrq_rq_msg_decode(stream_ctx->message.buffer, stream_ctx->message.buffer + stream_ctx->message.message_size,
+                &message_type, &url_length, &url);
+
+            if (next_bytes == NULL) {
+                /* bad message format */
+                ret = -1;
+            }
+            else {
+                /* Mark message as received */
+                stream_ctx->is_client_finished = 1;
+                /* Open the media -- TODO, variants with different actions. */
+                ret = quicrq_subscribe_local_media(stream_ctx, url, url_length);
+            }
+        }
+    }
+
+    if (is_fin) {
+        /* end of command stream. If something is in progress, yell */
+        if (!stream_ctx->is_client_finished) {
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
 
 /* Callback from Quic
  */
@@ -86,88 +277,38 @@ int quicrq_callback(picoquic_cnx_t* cnx,
                 (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
                 return(-1);
             }
-#if 0
-            /* TODO: this depends on role, stream, etc.*/
-            else if (stream_ctx->is_name_read) {
-                /* Write after fin? */
-                return(-1);
+            else if (stream_ctx->is_client) {
+                /* In the basic protocol, the client receives media data */
+                stream_ctx->is_client_finished = (fin_or_event == picoquic_callback_stream_fin);
+                ret = stream_ctx->consumer_fn(stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), bytes, length, stream_ctx->is_client_finished);
             }
             else {
-                /* Accumulate data */
-                size_t available = sizeof(stream_ctx->file_name) - stream_ctx->name_length - 1;
-
-                if (length > available) {
-                    /* Name too long: reset stream! */
-                    sample_server_delete_stream_context(cnx_ctx, stream_ctx);
-                    (void)picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_NAME_TOO_LONG_ERROR);
-                }
-                else {
-                    if (length > 0) {
-                        memcpy(stream_ctx->file_name + stream_ctx->name_length, bytes, length);
-                        stream_ctx->name_length += length;
-                    }
-                    if (fin_or_event == picoquic_callback_stream_fin) {
-                        int stream_ret;
-
-                        /* If fin, mark read, check the file, open it. Or reset if there is no such file */
-                        stream_ctx->file_name[stream_ctx->name_length + 1] = 0;
-                        stream_ctx->is_name_read = 1;
-                        stream_ret = sample_server_open_stream(cnx_ctx, stream_ctx);
-
-                        if (stream_ret == 0) {
-                            /* If data needs to be sent, set the context as active */
-                            ret = picoquic_mark_active_stream(cnx, stream_id, 1, stream_ctx);
-                        }
-                        else {
-                            /* If the file could not be read, reset the stream */
-                            sample_server_delete_stream_context(cnx_ctx, stream_ctx);
-                            (void)picoquic_reset_stream(cnx, stream_id, stream_ret);
-                        }
-                    }
-                }
+                /* In the basic protocol, the server receives messages */
+                ret = quicrq_receive_server_command(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
             }
-#endif
+            if (stream_ctx->is_client_finished && stream_ctx->is_server_finished) {
+                quicrq_delete_stream_ctx(cnx_ctx, stream_ctx);
+                stream_ctx = NULL;
+            }
             break;
         case picoquic_callback_prepare_to_send:
             /* Active sending API */
             if (stream_ctx == NULL) {
                 /* This should never happen */
+                ret = -1;
             }
-#if 0
-            /* TODO: this depends on stream, role, etc. */
-            else if (stream_ctx->F == NULL) {
-                /* Error, asking for data after end of file */
+            else if (stream_ctx->is_client) {
+                /* In the basic protocol, the client sends request messages, followed by fin */
+                ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, bytes, length);
             }
             else {
-                /* Implement the zero copy callback */
-                size_t available = stream_ctx->file_length - stream_ctx->file_sent;
-                int is_fin = 1;
-                uint8_t* buffer;
-
-                if (available > length) {
-                    available = length;
-                    is_fin = 0;
-                }
-
-                buffer = picoquic_provide_stream_data_buffer(bytes, available, is_fin, !is_fin);
-                if (buffer != NULL) {
-                    size_t nb_read = fread(buffer, 1, available, stream_ctx->F);
-
-                    if (nb_read != available) {
-                        /* Error while reading the file */
-                        sample_server_delete_stream_context(cnx_ctx, stream_ctx);
-                        (void)picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_READ_ERROR);
-                    }
-                    else {
-                        stream_ctx->file_sent += available;
-                    }
-                }
-                else {
-                    /* Should never happen according to callback spec. */
-                    ret = -1;
-                }
+                /* In the basic protocol, the server sends data from a source */
+                ret = quicrq_prepare_to_send_media(stream_ctx, bytes, length, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
             }
-#endif
+            if (stream_ctx->is_client_finished && stream_ctx->is_server_finished) {
+                quicrq_delete_stream_ctx(cnx_ctx, stream_ctx);
+                stream_ctx = NULL;
+            }
             break;
         case picoquic_callback_stream_reset: /* Client reset stream #x */
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
@@ -268,15 +409,15 @@ void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx)
         quicrq_delete_stream_ctx(cnx_ctx, cnx_ctx->first_stream);
     }
     /* Remove the connection from the double linked list */
-    if (cnx_ctx->quicrq_ctx != NULL) {
+    if (cnx_ctx->qr_ctx != NULL) {
         if (cnx_ctx->next_cnx == NULL) {
-            cnx_ctx->quicrq_ctx->last_cnx = cnx_ctx->previous_cnx;
+            cnx_ctx->qr_ctx->last_cnx = cnx_ctx->previous_cnx;
         }
         else {
             cnx_ctx->next_cnx->previous_cnx = cnx_ctx->previous_cnx;
         }
         if (cnx_ctx->previous_cnx == NULL) {
-            cnx_ctx->quicrq_ctx->first_cnx = cnx_ctx->next_cnx;
+            cnx_ctx->qr_ctx->first_cnx = cnx_ctx->next_cnx;
         }
         else {
             cnx_ctx->previous_cnx->next_cnx = cnx_ctx->next_cnx;
@@ -309,6 +450,7 @@ quicrq_cnx_ctx_t* quicrq_create_cnx_context(quicrq_ctx_t* qr_ctx, picoquic_cnx_t
         }
         cnx_ctx->previous_cnx = qr_ctx->last_cnx;
         qr_ctx->last_cnx = cnx_ctx;
+        cnx_ctx->qr_ctx = qr_ctx;
     }
     return cnx_ctx;
 }
@@ -336,6 +478,7 @@ quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uin
     quicrq_stream_ctx_t* stream_ctx = (quicrq_stream_ctx_t*)malloc(sizeof(quicrq_stream_ctx_t));
     if (stream_ctx != NULL) {
         memset(stream_ctx, 0, sizeof(quicrq_stream_ctx_t));
+        stream_ctx->cnx_ctx = cnx_ctx;
         stream_ctx->stream_id = stream_id;
         if (cnx_ctx->last_stream == NULL) {
             cnx_ctx->first_stream = stream_ctx;
@@ -378,14 +521,6 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
  * - media_ctx: media context managed by the publisher
  */
 
-int quicrq_publish_media_stream(
-    quicrq_ctx_t* qr_ctx,
-    char const* url,
-    quicr_media_consumer_cb media_consumer_fn,
-    void* media_ctx)
-{
-    return -1;
-}
 
 /* Subscribe to a media segment using QUIC streams.
  * Simplified API for now:
@@ -396,7 +531,7 @@ int quicrq_publish_media_stream(
 int quicrq_subscribe_media_stream(
     quicrq_cnx_ctx_t* cnx_ctx,
     char const* url,
-    quicr_media_consumer_cb media_consumer_fn,
+    quicrq_media_consumer_fn media_consumer_fn,
     void* media_ctx)
 {
     return -1;

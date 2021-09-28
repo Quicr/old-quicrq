@@ -23,5 +23,12 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(media_source)
+		{
+			int ret = quicrq_media_source_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }
