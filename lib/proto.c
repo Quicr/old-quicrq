@@ -4,6 +4,7 @@
  * - Publish source
 */
 
+#include <stdlib.h>
 #include "quicrq.h"
 #include "quicrq_internal.h"
 #include "picoquic_utils.h"

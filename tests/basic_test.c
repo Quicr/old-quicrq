@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "quicrq.h"
 #include "quicrq_internal.h"
 #include "quicrq_tests.h"

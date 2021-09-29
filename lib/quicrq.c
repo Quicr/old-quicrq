@@ -27,9 +27,10 @@
  * If not, the request is queued and the media is requested to an upstream server.
  */
 
+#include <stdlib.h>
+#include "picoquic_utils.h"
 #include "quicrq.h"
 #include "quicrq_internal.h"
-#include "picoquic_utils.h"
 
 /* New request: media segment.
  * Create a connection to the upstream server.
