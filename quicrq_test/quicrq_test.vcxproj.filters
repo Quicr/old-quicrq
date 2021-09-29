@@ -18,7 +18,7 @@
     <ClCompile Include="..\src\getopt.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\quicr_test.c">
+    <ClCompile Include="..\src\quicrq_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

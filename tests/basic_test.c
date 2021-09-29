@@ -54,7 +54,7 @@ typedef struct st_quicrq_test_config_t {
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
-    char ticket_encryption_key[16];
+    uint8_t ticket_encryption_key[16];
     int nb_nodes;
     quicrq_ctx_t** nodes;
     int nb_links;
@@ -111,7 +111,6 @@ int quicrq_test_find_send_link(quicrq_test_config_t* config, int srce_node_id, c
 /* Find destination address from source and destination node id. */
 struct sockaddr* quicrq_test_find_send_addr(quicrq_test_config_t* config, int srce_node_id, int dest_node_id)
 {
-    int ret = 0;
     struct sockaddr* dest_addr = NULL;
     for (int s_attach = 0; s_attach < config->nb_attachments && dest_addr == NULL; s_attach++) {
         if (config->attachments[s_attach].node_id == srce_node_id) {
@@ -233,7 +232,6 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
     }
     /* Check which link has the lowest arrival time */
     for (int i = 0; i < config->nb_nodes; i++) {
-        uint64_t quic_time = picoquic_get_next_wake_time(config->nodes[i]->quic, config->simulated_time);
         if (config->links[i]->first_packet != NULL &&
             config->links[i]->first_packet->arrival_time < next_time) {
             next_time = config->links[i]->first_packet->arrival_time;
@@ -314,7 +312,7 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
     if (config != NULL) {
         int success = 1;
 
-        memset(config, 0, sizeof(config));
+        memset(config, 0, sizeof(quicrq_test_config_t));
         memset(config->ticket_encryption_key, 0x55, sizeof(config->ticket_encryption_key));
 
         /* Locate the default cert, key and root in the Picoquic solution*/
