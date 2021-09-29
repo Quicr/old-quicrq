@@ -18,9 +18,9 @@ set(QUICRQ_LIBRARY_FILES
 )
 
 set(QUICRQ_TEST_LIBRARY_FILES
-    test/basic_test.c
-    test/network_test.c
-    test/test_media.c
+    tests/basic_test.c
+    tests/network_test.c
+    tests/test_media.c
 )
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -39,14 +39,13 @@ message(STATUS "OpenSSL_VERSION: ${OPENSSL_VERSION}")
 message(STATUS "OpenSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
 message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 
-include_directories(include lib test 
+include_directories(include lib tests 
     ${Picoquic_INCLUDE_DIRS} ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
 add_library(quicrq-core
     ${QUICRQ_LIBRARY_FILES}
 )
 
-if(FALSE) # fake a block comment to comment out all applications for now
 add_executable(quicrq_app
     src/quicrq_app.c
 )
@@ -77,7 +76,6 @@ target_link_libraries(quicrq_test
 )
 
 set(TEST_EXES quicrq_test)
-endif()
 
 # get all project files for formatting
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)

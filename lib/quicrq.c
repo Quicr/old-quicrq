@@ -138,7 +138,6 @@ int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* con
 
         buffer = picoquic_provide_stream_data_buffer(context, available, is_fin, !is_fin);
         if (buffer != NULL) {
-            size_t copied = 0;
             /* Feed the message length on two bytes */
             while (msg_buffer->nb_bytes_read < 2 && available > 0) {
                 uint8_t b = (msg_buffer->nb_bytes_read == 0) ?

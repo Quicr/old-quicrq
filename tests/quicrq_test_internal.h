@@ -43,6 +43,7 @@ typedef struct st_test_media_source_context_t {
 
 int test_media_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time);
 int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, char const* media_result_file, char const* media_result_log);
+int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file);
 
 #ifdef __cplusplus
 }
