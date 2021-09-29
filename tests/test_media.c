@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "quicrq.h"
 #include "quicrq_internal.h"
 #include "quicrq_tests.h"
