@@ -74,8 +74,8 @@ typedef struct st_quicrq_media_frame_header_t {
  */
 
 typedef enum {
-    media_source_get_data = 0,
-    media_source_close
+    quicrq_media_source_get_data = 0,
+    quicrq_media_source_close
 } quicrq_media_source_action_enum;
 
 typedef void* (*quicrq_media_publisher_subscribe_fn)(const uint8_t* media_url, const size_t media_url_length, void* pub_ctx);
@@ -97,12 +97,13 @@ int quicrq_close_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, v
 
  /* Quic media consumer */
 typedef enum {
-    data_ready = 0,
-    close
+    quicrq_media_data_ready = 0,
+    quicrq_media_close
 } quicrq_media_consumer_enum;
 
 
 typedef int (*quicrq_media_consumer_fn)(
+    quicrq_media_consumer_enum action,
     void* media_ctx,
     uint64_t current_time,
     uint8_t* data,

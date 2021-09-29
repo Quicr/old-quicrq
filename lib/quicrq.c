@@ -166,7 +166,7 @@ int quicrq_prepare_to_send_media(quicrq_stream_ctx_t* stream_ctx, void* context,
     int is_finished = 0;
     size_t available = 0;
     size_t data_length = 0;
-    int ret = stream_ctx->publisher_fn(media_source_get_data, stream_ctx->media_ctx, NULL, space, &available, &is_finished, current_time);
+    int ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space, &available, &is_finished, current_time);
     /* Ask the media stream to fill the buffer.
      * Do this even if the stream is finished and there is no data to send, as this is a way
      * to communicate the FIN of stream to the stack.
@@ -177,7 +177,7 @@ int quicrq_prepare_to_send_media(quicrq_stream_ctx_t* stream_ctx, void* context,
             ret = -1;
         }
         else {
-            ret = stream_ctx->publisher_fn(media_source_get_data, stream_ctx->media_ctx, buffer, available, &data_length, &is_finished, current_time);
+            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, buffer, available, &data_length, &is_finished, current_time);
             if (ret == 0 && available != data_length) {
                 ret = -1;
             }
@@ -289,8 +289,8 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             }
             else if (stream_ctx->is_client) {
                 /* In the basic protocol, the client receives media data */
-                stream_ctx->is_client_finished = (fin_or_event == picoquic_callback_stream_fin);
-                ret = stream_ctx->consumer_fn(stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), bytes, length, stream_ctx->is_client_finished);
+                stream_ctx->is_server_finished = (fin_or_event == picoquic_callback_stream_fin);
+                ret = stream_ctx->consumer_fn(quicrq_media_data_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), bytes, length, stream_ctx->is_server_finished);
             }
             else {
                 /* In the basic protocol, the server receives messages */
@@ -484,6 +484,14 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
     }
     if (cnx_ctx->cnx != NULL) {
         (void)picoquic_mark_active_stream(cnx_ctx->cnx, stream_ctx->stream_id, 0, NULL);
+    }
+    if (stream_ctx->media_ctx != NULL) {
+        if (stream_ctx->is_client) {
+            stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 1);
+        }
+        else {
+            stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, 0);
+        }
     }
     free(stream_ctx);
 }

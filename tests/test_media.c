@@ -236,7 +236,7 @@ int test_media_publisher_fn(
     int ret = 0;
     test_media_publisher_context_t* pub_ctx = (test_media_publisher_context_t*)media_ctx;
 
-    if (action == media_source_get_data) {
+    if (action == quicrq_media_source_get_data) {
 
         if (pub_ctx->media_frame_size <= pub_ctx->media_frame_read) {
             /* No more frame data available. */
@@ -274,8 +274,9 @@ int test_media_publisher_fn(
             }
         }
     }
-    else if (action == media_source_close) {
-        /* TODO: close the context */
+    else if (action == quicrq_media_source_close) {
+        /* close the context */
+        test_media_publisher_close(media_ctx);
     }
     return ret;
 }
@@ -341,7 +342,7 @@ void* test_media_consumer_init(char const* media_result_file, char const * media
     return cons_ctx;
 }
 
-int test_media_consumer_cb(
+int test_media_consumer_data_ready(
     void* media_ctx,
     uint64_t current_time,
     uint8_t* data, 
@@ -409,6 +410,28 @@ int test_media_consumer_cb(
         cons_ctx->is_finished = 1;
     }
 
+    return ret;
+}
+int test_media_consumer_cb(
+    quicrq_media_consumer_enum action,
+    void* media_ctx,
+    uint64_t current_time,
+    uint8_t* data,
+    size_t data_length,
+    int is_finished)
+{
+    int ret = 0;
+    switch (action) {
+    case quicrq_media_data_ready:
+        ret = test_media_consumer_data_ready(media_ctx, current_time, data, data_length, is_finished);
+        break;
+    case quicrq_media_close:
+        test_media_consumer_close(media_ctx);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
     return ret;
 }
 
@@ -568,11 +591,11 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
 
     /* Loop through publish and consume until finished */
     while (ret == 0 && !is_finished) {
-        ret = test_media_publisher_fn(media_source_get_data,
+        ret = test_media_publisher_fn(quicrq_media_source_get_data,
             pub_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &is_finished, current_time);
         if (ret == 0) {
-            ret = test_media_consumer_cb(cons_ctx, current_time, media_buffer,
+            ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
                 data_length, is_finished);
         }
     }
@@ -582,11 +605,11 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
         test_media_publisher_close(pub_ctx);
     }
 
-    /* Compare media result to media source */
     if (cons_ctx != NULL) {
         test_media_consumer_close(cons_ctx);
     }
 
+    /* Compare media result to media source */
     if (ret == 0) {
         ret = quicrq_compare_log_file(media_result_log, media_log_ref_path);
     }
@@ -646,7 +669,10 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
         ret = -1;
     }
     else {
-        cnx_ctx = quicrq_create_cnx_context(qr_ctx, NULL);
+        struct sockaddr_in addr_to = { 0 };
+        picoquic_cnx_t * cnx = picoquic_create_cnx(quicrq_get_quic_ctx(qr_ctx), picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&addr_to, simulated_time, 0, NULL, QUICRQ_ALPN, 1);
+        cnx_ctx = quicrq_create_cnx_context(qr_ctx, cnx);
         if (cnx_ctx == NULL) {
             ret = -1;
         }
@@ -686,18 +712,18 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
 
     /* Loop through publish and consume until finished */
     while (ret == 0 && !is_finished) {
-        ret = stream_ctx->publisher_fn(media_source_get_data,
+        ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &is_finished, current_time);
         if (ret == 0) {
-            ret = test_media_consumer_cb(cons_ctx, current_time, media_buffer,
+            ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
                 data_length, is_finished);
         }
     }
 
-    /* Close publisher */
+    /* Close publisher by closing the connection context */
     if (ret == 0) {
-        ret = stream_ctx->publisher_fn(media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, current_time);
+        quicrq_delete_cnx_context(cnx_ctx);
     }
     /* Close consumer */
     if (cons_ctx != NULL) {

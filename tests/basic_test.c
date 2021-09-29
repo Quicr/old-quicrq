@@ -475,6 +475,7 @@ int quicrq_basic_test()
     int ret = 0;
     int nb_steps = 0;
     int nb_inactive = 0;
+    int is_closed = 0;
     const int max_steps = 20000;
     const int max_inactive = 128;
 
@@ -524,11 +525,14 @@ int quicrq_basic_test()
             nb_inactive++;
         }
         /* TODO: if the media is received, exit the loop */
-        if (config->nodes[1]->first_cnx == NULL ||
-            config->nodes[1]->first_cnx->first_stream == NULL ||
-            config->nodes[1]->first_cnx->first_stream->is_server_finished) {
-            /* End of test! */
+        if (config->nodes[1]->first_cnx == NULL) {
             break;
+        } else if (config->nodes[1]->first_cnx->first_stream == NULL || config->nodes[1]->first_cnx->first_stream->is_server_finished) {
+            if (!is_closed) {
+                /* Client is done. Close connection without waiting for timer */
+                ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
+                is_closed = 1;
+            }
         }
     }
 
@@ -536,7 +540,10 @@ int quicrq_basic_test()
     if (config != NULL) {
         quicrq_test_config_delete(config);
     }
-    /* TODO: verify that all resource were freed. */
+    /* Verify that media file was received correctly */
+    if (ret == 0) {
+        ret = quicrq_compare_media_file(QUICRQ_TEST_BASIC_RESULT, media_source_path);
+    }
 
     return ret;
 }

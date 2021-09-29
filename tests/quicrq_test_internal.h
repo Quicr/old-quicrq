@@ -37,7 +37,7 @@ extern const generation_parameters_t video_1mps;
 
 typedef struct st_test_media_source_context_t {
     char const* file_path;
-    generation_parameters_t* generation_context;
+    const generation_parameters_t* generation_context;
     unsigned int is_real_time : 1;
 } test_media_source_context_t;
 
