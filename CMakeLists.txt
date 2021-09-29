@@ -14,6 +14,7 @@ endif()
 set(QUICRQ_LIBRARY_FILES
     lib/quicrq.c
     lib/segment.c
+    lib/proto.c
 )
 
 set(QUICRQ_TEST_LIBRARY_FILES
@@ -42,12 +43,12 @@ include_directories(include lib test
     ${Picoquic_INCLUDE_DIRS} ${PTLS_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 
 add_library(quicrq-core
-    ${quicrq_LIBRARY_FILES}
+    ${QUICRQ_LIBRARY_FILES}
 )
 
 if(FALSE) # fake a block comment to comment out all applications for now
 add_executable(quicrq_app
-    quicrq_cli_app/quicrq_app.c
+    src/quicrq_app.c
 )
 
 target_link_libraries(quicrq_app
@@ -61,12 +62,12 @@ target_link_libraries(quicrq_app
 
 set(TEST_EXES quicrq_t)
 
-add_executable(quicrq_t
-    src/quicrq_t.c
-    ${quicrq_TEST_LIBRARY_FILES}
+add_executable(quicrq_test
+    src/quicrq_test.c
+    ${QUICRQ_TEST_LIBRARY_FILES}
 )
 
-target_link_libraries(quicrq_t
+target_link_libraries(quicrq_test
     quicrq-core
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}
@@ -75,7 +76,7 @@ target_link_libraries(quicrq_t
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-set(TEST_EXES quicrq_t)
+set(TEST_EXES quicrq_test)
 endif()
 
 # get all project files for formatting
