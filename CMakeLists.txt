@@ -61,8 +61,8 @@ target_link_libraries(quicrq_app
 
 set(TEST_EXES quicrq_t)
 
-add_executable(quicrq_test
-    src/quicrq_test.c
+add_executable(quicrq_t
+    src/quicrq_t.c
     ${QUICRQ_TEST_LIBRARY_FILES}
 )
 
@@ -75,7 +75,7 @@ target_link_libraries(quicrq_test
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-set(TEST_EXES quicrq_test)
+set(TEST_EXES quicrq_t)
 
 # get all project files for formatting
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
