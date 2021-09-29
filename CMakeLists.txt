@@ -66,7 +66,7 @@ add_executable(quicrq_t
     ${QUICRQ_TEST_LIBRARY_FILES}
 )
 
-target_link_libraries(quicrq_test
+target_link_libraries(quicrq_t
     quicrq-core
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}

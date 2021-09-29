@@ -1,4 +1,4 @@
-# Place holder for quicr demo app
+/* Place holder for quicr demo app */
 #include <stdio.h>
 
 int main(int argc, char** argv)
