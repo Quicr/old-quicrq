@@ -117,6 +117,9 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         if (stream_ctx->media_ctx == NULL) {
             ret = -1;
         }
+        else {
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        }
     }
     return ret;
 }
@@ -147,6 +150,7 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t u
                 ret = -1;
             } else {
                 /* Queue the media request message to that stream */
+                stream_ctx->is_client = 1;
                 stream_ctx->message.message_size = message_next - stream_ctx->message.buffer;
                 stream_ctx->consumer_fn = media_consumer_fn;
                 stream_ctx->media_ctx = media_ctx;

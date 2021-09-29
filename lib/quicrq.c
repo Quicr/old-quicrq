@@ -167,10 +167,13 @@ int quicrq_prepare_to_send_media(quicrq_stream_ctx_t* stream_ctx, void* context,
     size_t available = 0;
     size_t data_length = 0;
     int ret = stream_ctx->publisher_fn(media_source_get_data, stream_ctx->media_ctx, NULL, space, &available, &is_finished, current_time);
-    /* If data is available, ask the media stream to fill the buffer */
-    if (ret == 0 && available > 0) {
+    /* Ask the media stream to fill the buffer.
+     * Do this even if the stream is finished and there is no data to send, as this is a way
+     * to communicate the FIN of stream to the stack.
+     */
+    if (ret == 0) {
         void * buffer = picoquic_provide_stream_data_buffer(context, available, is_finished, !is_finished);
-        if (buffer != NULL) {
+        if (buffer == NULL) {
             ret = -1;
         }
         else {
@@ -178,8 +181,9 @@ int quicrq_prepare_to_send_media(quicrq_stream_ctx_t* stream_ctx, void* context,
             if (ret == 0 && available != data_length) {
                 ret = -1;
             }
-            else {
-                stream_ctx->is_server_finished = (is_finished != 0);
+            else if (is_finished) {
+                stream_ctx->is_server_finished = 1;
+                /* TODO: Should at this point close the publishing service */
             }
         }
     }
@@ -251,14 +255,20 @@ int quicrq_callback(picoquic_cnx_t* cnx,
      * to the global context in which streams and roles are defined.
      */
     if (callback_ctx == NULL || callback_ctx == picoquic_get_default_callback_context(picoquic_get_quic_ctx(cnx))) {
-        cnx_ctx = quicrq_create_cnx_context((quicrq_ctx_t*)callback_ctx, cnx);
-        if (cnx_ctx == NULL) {
-            /* cannot handle the connection */
-            picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
-            return -1;
+        if (fin_or_event == picoquic_callback_close) {
+            picoquic_set_callback(cnx, NULL, NULL);
+            return 0;
         }
         else {
-            picoquic_set_callback(cnx, quicrq_callback, cnx_ctx);
+            cnx_ctx = quicrq_create_cnx_context((quicrq_ctx_t*)callback_ctx, cnx);
+            if (cnx_ctx == NULL) {
+                /* cannot handle the connection */
+                picoquic_close(cnx, PICOQUIC_ERROR_MEMORY);
+                return -1;
+            }
+            else {
+                picoquic_set_callback(cnx, quicrq_callback, cnx_ctx);
+            }
         }
     }
 
@@ -389,7 +399,7 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
         memset(qr_ctx, 0, sizeof(quicrq_ctx_t));
 
         qr_ctx->quic = picoquic_create(QUICRQ_MAX_CONNECTIONS, cert_file_name, key_file_name, cert_root_file_name, alpn,
-            quicrq_callback, &qr_ctx, NULL, NULL, NULL, current_time, p_simulated_time,
+            quicrq_callback, qr_ctx, NULL, NULL, NULL, current_time, p_simulated_time,
             ticket_store_file_name, ticket_encryption_key, ticket_encryption_key_length);
 
         if (qr_ctx->quic == NULL ||
@@ -404,6 +414,12 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
 /* Delete a connection context */
 void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx)
 {
+    /* Delete the quic connection */
+    if (cnx_ctx->cnx != NULL) {
+        picoquic_set_callback(cnx_ctx->cnx, NULL, NULL);
+        picoquic_delete_cnx(cnx_ctx->cnx);
+        cnx_ctx->cnx = NULL;
+    }
     /* Delete the stream contexts */
     while (cnx_ctx->first_stream != NULL) {
         quicrq_delete_stream_ctx(cnx_ctx, cnx_ctx->first_stream);
@@ -422,10 +438,6 @@ void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx)
         else {
             cnx_ctx->previous_cnx->next_cnx = cnx_ctx->next_cnx;
         }
-    }
-    /* Delete the quic connection */
-    if (cnx_ctx->cnx != NULL) {
-        picoquic_delete_cnx(cnx_ctx->cnx);
     }
     /* Free the context */
     free(cnx_ctx);
@@ -451,6 +463,7 @@ quicrq_cnx_ctx_t* quicrq_create_cnx_context(quicrq_ctx_t* qr_ctx, picoquic_cnx_t
         cnx_ctx->previous_cnx = qr_ctx->last_cnx;
         qr_ctx->last_cnx = cnx_ctx;
         cnx_ctx->qr_ctx = qr_ctx;
+        picoquic_set_callback(cnx, quicrq_callback, cnx_ctx);
     }
     return cnx_ctx;
 }
@@ -469,7 +482,9 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
     else {
         stream_ctx->previous_stream->next_stream = stream_ctx->next_stream;
     }
-
+    if (cnx_ctx->cnx != NULL) {
+        (void)picoquic_mark_active_stream(cnx_ctx->cnx, stream_ctx->stream_id, 0, NULL);
+    }
     free(stream_ctx);
 }
 

@@ -22,15 +22,23 @@ char const* quicrq_test_solution_dir = QUICRQ_DEFAULT_SOLUTION_DIR;
 
 
 /* Test configuration: nodes, sources, addresses and links.
- * Each source is connected to a node.
- * Each node is connected to departure links, with a specified address.
- * Each link has a list of reachable destinations, specifying node context and address.
+ * Each source is connected to a node, identified by a node_id
+ * Nodes are connected via one-way links, identified by a link_id.
+ * The links can be either symmetric or asymmetric. The link context
+ * includes for each link the "return link" -- either itself or
+ * a different link.
+ * Each link can deliver data to a set of nodes. The relation between
+ * the link and the nodes is an "attachment", which identifies the
+ * link and a node, plus the IP address at which the node can receive data.
+ * When a packet arrives on a node, the packet's IP address is used to
+ * find which node shall receive it.
+ * When a packet is posted on a link, the source IP address is posted
+ * to the IP address of the attachment between that link and the return link.
  */
 
 typedef struct st_quicrq_test_attach_t {
     int node_id;
-    int link_to_id;
-    int link_from_id;
+    int link_id;
     struct sockaddr_storage node_addr;
 } quicrq_test_attach_t;
 
@@ -49,6 +57,7 @@ typedef struct st_quicrq_test_config_t {
     quicrq_ctx_t** nodes;
     int nb_links;
     picoquictest_sim_link_t** links;
+    int* return_links;
     int nb_attachments;
     quicrq_test_attach_t* attachments;
     int nb_sources;
@@ -56,35 +65,66 @@ typedef struct st_quicrq_test_config_t {
 } quicrq_test_config_t;
 
 /* Find arrival context by link ID and destination address */
-int quicrq_test_find_recv_link(quicrq_test_config_t* config, int link_id, struct sockaddr* addr)
+int quicrq_test_find_dest_node(quicrq_test_config_t* config, int link_id, struct sockaddr* addr)
 {
-    int attach_id = -1;
+    int node_id = -1;
 
-    for (int j_attach = 0; j_attach < config->nb_attachments; j_attach++) {
-        if (config->attachments[j_attach].link_to_id == link_id &&
-            picoquic_compare_addr((struct sockaddr*)&config->attachments[j_attach].node_addr, addr) == 0) {
-            attach_id = j_attach;
+    for (int d_attach = 0; d_attach < config->nb_attachments; d_attach++) {
+        if (config->attachments[d_attach].link_id == link_id &&
+            picoquic_compare_addr((struct sockaddr*)&config->attachments[d_attach].node_addr, addr) == 0) {
+            node_id = config->attachments[d_attach].node_id;
             break;
         }
     }
-    return (attach_id);
+    return (node_id);
 }
 
-/* Find departure context by nodeid and destination address.
+/* Find departure link by destination address.
+ * The code verifies that the return link is present.
+ * If srce_addr is prsent and set to AF_UNSPEC, it is filled with appropriate address.
  */
-int quicrq_test_find_send_link(quicrq_test_config_t * config, int node_id, struct sockaddr* addr)
+int quicrq_test_find_send_link(quicrq_test_config_t* config, int srce_node_id, const struct sockaddr* dest_addr, struct sockaddr_storage* srce_addr)
 {
-    int attach_id = -1;
-    for (int i_attach = 0; i_attach < config->nb_attachments; i_attach++) {
-        if (config->attachments[i_attach].node_id == node_id) {
-            int link_id = config->attachments[i_attach].link_from_id;
-            if (quicrq_test_find_recv_link(config, config->attachments[i_attach].link_from_id, addr) >= 0) {
-                attach_id = i_attach;
-                break;
+    int dest_link_id = -1;
+
+    for (int s_attach = 0; s_attach < config->nb_attachments && dest_link_id == -1; s_attach++) {
+        if (config->attachments[s_attach].node_id == srce_node_id) {
+            int link_id = config->return_links[config->attachments[s_attach].link_id];
+            for (int d_attach = 0; d_attach < config->nb_attachments; d_attach++) {
+                if (config->attachments[d_attach].link_id == link_id &&
+                    picoquic_compare_addr((struct sockaddr*)&config->attachments[d_attach].node_addr, dest_addr) == 0) {
+                    if (srce_addr != NULL && srce_addr->ss_family == AF_UNSPEC) {
+                        picoquic_store_addr(srce_addr, (struct sockaddr*)&config->attachments[s_attach].node_addr);
+                    }
+                    dest_link_id = config->attachments[d_attach].link_id;
+                    break;
+                }
             }
         }
     }
-    return attach_id;
+
+    return dest_link_id;
+}
+
+/* Find destination address from source and destination node id. */
+struct sockaddr* quicrq_test_find_send_addr(quicrq_test_config_t* config, int srce_node_id, int dest_node_id)
+{
+    int ret = 0;
+    struct sockaddr* dest_addr = NULL;
+    for (int s_attach = 0; s_attach < config->nb_attachments && dest_addr == NULL; s_attach++) {
+        if (config->attachments[s_attach].node_id == srce_node_id) {
+            int link_id = config->return_links[config->attachments[s_attach].link_id];
+            for (int d_attach = 0; d_attach < config->nb_attachments; d_attach++) {
+                if (config->attachments[d_attach].link_id == link_id &&
+                    config->attachments[d_attach].node_id == dest_node_id){
+                    dest_addr = (struct sockaddr*)&config->attachments[d_attach].node_addr;
+                    break;
+                }
+            }
+        }
+    }
+
+    return dest_addr;
 }
 
 /* Packet departure from selected node */
@@ -113,14 +153,11 @@ int quicrq_test_packet_departure(quicrq_test_config_t* config, int node_id, int*
         }
         else if (packet->length > 0) {
             /* Find the exit link. This assumes destination addresses are available on only one link */
-            int attach_id = quicrq_test_find_send_link(config, node_id, (struct sockaddr*)&packet->addr_to);
+            int link_id = quicrq_test_find_send_link(config, node_id, (struct sockaddr*)&packet->addr_to, &packet->addr_from);
 
-            if (attach_id >= 0) {
-                if (packet->addr_from.ss_family == AF_UNSPEC) {
-                    picoquic_store_addr(&packet->addr_from, (struct sockaddr*)&config->attachments[attach_id].node_addr);
-                }
+            if (link_id >= 0) {
                 *is_active = 1;
-                picoquictest_sim_link_submit(config->links[config->attachments[attach_id].link_to_id], packet, config->simulated_time);
+                picoquictest_sim_link_submit(config->links[link_id], packet, config->simulated_time);
             }
             else {
                 /* packet cannot be routed. */
@@ -144,16 +181,19 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
         ret = -1;
     }
     else {
-        int attach_id = quicrq_test_find_recv_link(config, link_id, (struct sockaddr*)&packet->addr_to);
+        int node_id = quicrq_test_find_dest_node(config, link_id, (struct sockaddr*)&packet->addr_to);
 
-        if (attach_id >= 0) {
+        if (node_id >= 0) {
             *is_active = 1;
             
-            ret = picoquic_incoming_packet(config->nodes[config->attachments[attach_id].node_id]->quic,
+            ret = picoquic_incoming_packet(config->nodes[node_id]->quic,
                 packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*)&packet->addr_from,
                 (struct sockaddr*)&packet->addr_to, 0, 0,
                 config->simulated_time);
+        }
+        else {
+            /* TODO: keep track of failures */
         }
         free(packet);
     }
@@ -168,6 +208,9 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
     int next_step_type = 0;
     int next_step_index = 0;
     uint64_t next_time = UINT64_MAX;
+
+    /* TODO: insert source timing in the simulation */
+#if 0
     /* Check which source has the lowest time */
     for (int i = 0; i < config->nb_sources; i++) {
         if (config->sources[i].next_source_time < next_time) {
@@ -176,6 +219,7 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
             next_step_index = i;
         }
     }
+#endif
     /* Check which node has the lowest wait time */
     for (int i = 0; i < config->nb_nodes; i++) {
         uint64_t quic_time = picoquic_get_next_wake_time(config->nodes[i]->quic, config->simulated_time);
@@ -245,6 +289,10 @@ void quicrq_test_config_delete(quicrq_test_config_t* config)
         free(config->links);
     }
 
+    if (config->return_links != NULL) {
+        free(config->return_links);
+    }
+
     if (config->attachments != NULL) {
         free(config->attachments);
     }
@@ -293,6 +341,7 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
             success = 0;
         } else if (success) {
             config->links = (picoquictest_sim_link_t**)malloc(nb_links * sizeof(picoquictest_sim_link_t*));
+            config->return_links = (int*)malloc(nb_links * sizeof(int));
             success &= (config->links != NULL);
 
             if (success) {
@@ -373,13 +422,13 @@ quicrq_test_config_t* quicrq_test_basic_config_create()
     }
     if (config != NULL) {
         /* Populate the attachments */
-        config->attachments[0].link_from_id = 1;
-        config->attachments[0].link_to_id = 0;
+        config->return_links[0] = 1;
+        config->attachments[0].link_id = 0;
         config->attachments[0].node_id = 0;
         /* TODO: initiate source */
-        config->attachments[0].link_from_id = 0;
-        config->attachments[0].link_to_id = 1;
-        config->attachments[0].node_id = 1;
+        config->return_links[1] = 0;
+        config->attachments[1].link_id = 1;
+        config->attachments[1].node_id = 1;
     }
     return config;
 }
@@ -394,14 +443,16 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
     
     /* Find an attachment leading to server node */
     for (int i = 0; i < config->nb_attachments; i++) {
-        if (config->attachments[i].link_to_id == server_node) {
-            addr_to = (struct sockaddr*)&config->attachments[i].node_addr;
-        }
+        addr_to = quicrq_test_find_send_addr(config, 1, 0);
     }
 
     if (addr_to != NULL) {
         cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
             addr_to, config->simulated_time, 0, NULL, QUICRQ_ALPN, 1);
+        if (picoquic_start_client_cnx(cnx) != 0){
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
         if (cnx != NULL) {
             cnx_ctx = quicrq_create_cnx_context(qr_ctx, cnx);
         }
@@ -422,6 +473,11 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
 int quicrq_basic_test()
 {
     int ret = 0;
+    int nb_steps = 0;
+    int nb_inactive = 0;
+    const int max_steps = 20000;
+    const int max_inactive = 128;
+
     quicrq_test_config_t* config = quicrq_test_basic_config_create();
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     char media_source_path[512];
@@ -454,13 +510,33 @@ int quicrq_basic_test()
         ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), QUICRQ_TEST_BASIC_RESULT, QUICRQ_TEST_BASIC_LOG);
     }
 
-    if (ret == 0) {
+    while (ret == 0 && nb_inactive < max_inactive && nb_steps < max_steps) {
         /* Run the simulation. Monitor the connection. Monitor the media. */
+        int is_active = 0;
+
+        ret = quicrq_test_loop_step(config, &is_active);
+
+        nb_steps++;
+        if (is_active) {
+            nb_inactive = 0;
+        }
+        else {
+            nb_inactive++;
+        }
+        /* TODO: if the media is received, exit the loop */
+        if (config->nodes[1]->first_cnx == NULL ||
+            config->nodes[1]->first_cnx->first_stream == NULL ||
+            config->nodes[1]->first_cnx->first_stream->is_server_finished) {
+            /* End of test! */
+            break;
+        }
     }
 
     /* Clear everything. */
     if (config != NULL) {
         quicrq_test_config_delete(config);
     }
+    /* TODO: verify that all resource were freed. */
+
     return ret;
 }

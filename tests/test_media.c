@@ -109,7 +109,7 @@ int test_media_read_frame_from_file(test_media_publisher_context_t* pub_ctx)
         /* Read the frame header */
         nb_read = fread(pub_ctx->media_frame, 1, QUIRRQ_MEDIA_TEST_HEADER_SIZE, pub_ctx->F);
         if (nb_read != QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
-            /* Bug. Assume this is the end of file. */
+            /* Assume this is the end of file. */
             pub_ctx->is_finished = 1;
         }
         else {
