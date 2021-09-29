@@ -655,7 +655,6 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     uint8_t media_buffer[1024];
     uint64_t current_time = 0;
     size_t data_length;
-    void* media_ctx = NULL;
     void* cons_ctx = NULL;
     int is_finished = 0;
     uint64_t simulated_time = 0;
