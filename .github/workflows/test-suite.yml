@@ -32,7 +32,8 @@ jobs:
           cmake --build .
           make
           ulimit -c unlimited -S
-          ./quicrq_t -n -S ../../picoquic && QDRESULT=$? 
-          if [ ${QDRESULT} == 0 ]; then exit 0; fi;
+          pwd
+          ./quicrq_t -n && QRQRESULT=$? 
+          if [ ${QRQRESULT} == 0 ]; then exit 0; fi;
           exit 1
 
