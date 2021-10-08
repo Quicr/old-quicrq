@@ -252,13 +252,15 @@ int test_media_publisher_fn(
                 ret = test_media_generate_frame(pub_ctx);
             }
         }
-        /* TODO: matters of time */
+
         if (ret == 0) {
             if (pub_ctx->is_finished) {
                 *is_finished = 1;
                 *data_length = 0;
             }
-            else if (pub_ctx->media_frame_size > pub_ctx->media_frame_read) {
+            else if (pub_ctx->media_frame_size > pub_ctx->media_frame_read &&
+                (!pub_ctx->is_real_time || 
+                    current_time >= pub_ctx->current_header.timestamp)) {
                 /* Copy data from frame in memory */
                 size_t available = pub_ctx->media_frame_size - pub_ctx->media_frame_read;
                 size_t copied = (available > data_max_size) ? data_max_size : available;
@@ -280,6 +282,12 @@ int test_media_publisher_fn(
         test_media_publisher_close(media_ctx);
     }
     return ret;
+}
+
+uint64_t test_media_publisher_next_time(void * media_ctx)
+{
+    test_media_publisher_context_t* pub_ctx = (test_media_publisher_context_t*)media_ctx;
+    return pub_ctx->current_header.timestamp;
 }
 
 /* Provide an API for "declaring" a test media to the local quicrq context  */
@@ -572,6 +580,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     void* pub_ctx = NULL;
     void* cons_ctx = NULL;
     int is_finished = 0;
+    int inactive = 0;
 
     /* Locate the source and reference file */
     if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
@@ -591,11 +600,16 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     }
 
     /* Loop through publish and consume until finished */
-    while (ret == 0 && !is_finished) {
+    while (ret == 0 && !is_finished && inactive < 32) {
         ret = test_media_publisher_fn(quicrq_media_source_get_data,
             pub_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &is_finished, current_time);
-        if (ret == 0) {
+        if (ret == 0 && !is_finished && data_length == 0) {
+            /* Update the current time to reflect media time */
+            current_time = test_media_publisher_next_time(pub_ctx, current_time);
+            inactive++;
+        } else if (ret == 0) {
+            inactive = 0;
             ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
                 data_length, is_finished);
         }
@@ -625,12 +639,17 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
 #ifdef _WINDOWS
 #define QUICRQ_TEST_VIDEO1_SOURCE "tests\\video1_source.bin"
 #define QUICRQ_TEST_VIDEO1_LOGREF "tests\\video1_logref.csv"
+#define QUICRQ_TEST_VIDEO1_RT_LOGREF "tests\\video1_rt_logref.csv"
 #else
 #define QUICRQ_TEST_VIDEO1_SOURCE "tests/video1_source.bin"
 #define QUICRQ_TEST_VIDEO1_LOGREF "tests/video1_logref.csv"
+#define QUICRQ_TEST_VIDEO1_RT_LOGREF "tests/video1_rt_logref.csv"
 #endif
 #define QUICRQ_TEST_VIDEO1_RESULT "video1_result.bin"
 #define QUICRQ_TEST_VIDEO1_LOG    "video1_log.csv"
+#define QUICRQ_TEST_VIDEO1_RT_RESULT "video1_rt_result.bin"
+#define QUICRQ_TEST_VIDEO1_RT_LOG    "video1_rt_log.csv"
+
 
 const generation_parameters_t video_1mps = {
     10000000, 30, 10, 60, 4000, 5000, 0, 0 };
@@ -639,6 +658,15 @@ int quicrq_media_video1_test()
 {
     int ret = quicrq_media_api_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_LOGREF, QUICRQ_TEST_VIDEO1_RESULT, QUICRQ_TEST_VIDEO1_LOG,
         &video_1mps, 0);
+
+    return ret;
+}
+
+int quicrq_media_video1_rt_test()
+{
+    int ret = quicrq_media_api_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_RT_LOGREF, 
+        QUICRQ_TEST_VIDEO1_RT_RESULT, QUICRQ_TEST_VIDEO1_RT_LOG,
+        &video_1mps, 1);
 
     return ret;
 }
