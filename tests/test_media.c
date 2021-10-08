@@ -225,6 +225,27 @@ int test_media_generate_frame(test_media_publisher_context_t* pub_ctx)
     return ret;
 }
 
+static int test_media_publisher_check_frame(test_media_publisher_context_t* pub_ctx)
+{
+    int ret = 0;
+
+    if (pub_ctx->media_frame_size <= pub_ctx->media_frame_read) {
+        /* No more frame data available. */
+        pub_ctx->media_frame_size = 0;
+        pub_ctx->media_frame_read = 0;
+        if (pub_ctx->F != NULL) {
+            /* Read the next frame from the file */
+            ret = test_media_read_frame_from_file(pub_ctx);
+        }
+        else {
+            /* Generate a frame */
+            ret = test_media_generate_frame(pub_ctx);
+        }
+    }
+
+    return ret;
+}
+
 int test_media_publisher_fn(
     quicrq_media_source_action_enum action,
     void* media_ctx,
@@ -239,19 +260,7 @@ int test_media_publisher_fn(
 
     if (action == quicrq_media_source_get_data) {
 
-        if (pub_ctx->media_frame_size <= pub_ctx->media_frame_read) {
-            /* No more frame data available. */
-            pub_ctx->media_frame_size = 0;
-            pub_ctx->media_frame_read = 0;
-            if (pub_ctx->F != NULL) {
-                /* Read the next frame from the file */
-                ret = test_media_read_frame_from_file(pub_ctx);
-            }
-            else {
-                /* Generate a frame */
-                ret = test_media_generate_frame(pub_ctx);
-            }
-        }
+        ret = test_media_publisher_check_frame(pub_ctx);
 
         if (ret == 0) {
             if (pub_ctx->is_finished) {
@@ -284,10 +293,17 @@ int test_media_publisher_fn(
     return ret;
 }
 
-uint64_t test_media_publisher_next_time(void * media_ctx)
+uint64_t test_media_publisher_next_time(void * media_ctx, uint64_t current_time)
 {
     test_media_publisher_context_t* pub_ctx = (test_media_publisher_context_t*)media_ctx;
-    return pub_ctx->current_header.timestamp;
+    uint64_t next_time = current_time;
+    int ret = test_media_publisher_check_frame(pub_ctx);
+
+    if (ret == 0 && pub_ctx->current_header.timestamp > next_time) {
+        next_time = pub_ctx->current_header.timestamp;
+    }
+
+    return next_time;
 }
 
 /* Provide an API for "declaring" a test media to the local quicrq context  */
@@ -691,6 +707,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
         NULL, NULL, NULL, NULL, NULL,
         NULL, 0, &simulated_time);
+    int inactive = 0;
 
     /* Create empty contexts for qr object, connection, stream */
     if (qr_ctx == NULL) {
@@ -739,13 +756,20 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     }
 
     /* Loop through publish and consume until finished */
-    while (ret == 0 && !is_finished) {
+    while (ret == 0 && !is_finished && inactive < 32) {
         ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &is_finished, current_time);
         if (ret == 0) {
-            ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
-                data_length, is_finished);
+            if (is_finished || data_length > 0) {
+                ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
+                    data_length, is_finished);
+                inactive = 0;
+            }
+            else {
+                current_time = test_media_publisher_next_time(stream_ctx->media_ctx, current_time);
+                inactive++;
+            }
         }
     }
 
@@ -779,6 +803,14 @@ int quicrq_media_source_test()
 {
     int ret = quicrq_media_publish_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_LOGREF, QUICRQ_TEST_VIDEO1_RESULT, QUICRQ_TEST_VIDEO1_LOG,
         &video_1mps, 0);
+
+    return ret;
+}
+
+int quicrq_media_source_rt_test()
+{
+    int ret = quicrq_media_publish_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_RT_LOGREF, QUICRQ_TEST_VIDEO1_RT_RESULT, QUICRQ_TEST_VIDEO1_RT_LOG,
+        &video_1mps, 1);
 
     return ret;
 }

@@ -13,6 +13,7 @@ extern "C" {
     int quicrq_media_video1_test();
     int quicrq_media_video1_rt_test();
     int quicrq_media_source_test();
+    int quicrq_media_source_rt_test();
 
 #ifdef __cplusplus
 }
