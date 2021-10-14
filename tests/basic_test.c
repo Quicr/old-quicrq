@@ -47,6 +47,7 @@ typedef struct st_quicrq_test_attach_t {
 typedef struct st_quicrq_test_source_t {
     /* TODO: relation between source and node */
     uint64_t next_source_time;
+    quicrq_media_source_ctx_t* srce_ctx;
 } quicrq_test_source_t;
 
 typedef struct st_quicrq_test_config_t {
@@ -211,7 +212,6 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
     uint64_t next_time = UINT64_MAX;
 
     /* TODO: insert source timing in the simulation */
-#if 0
     /* Check which source has the lowest time */
     for (int i = 0; i < config->nb_sources; i++) {
         if (config->sources[i].next_source_time < next_time) {
@@ -220,7 +220,7 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
             next_step_index = i;
         }
     }
-#endif
+
     /* Check which node has the lowest wait time */
     for (int i = 0; i < config->nb_nodes; i++) {
         uint64_t quic_time = picoquic_get_next_wake_time(config->nodes[i]->quic, config->simulated_time);
@@ -246,7 +246,8 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
         }
         switch (next_step_type) {
         case 1: /* Media ready on source #next_step_index */
-            /* TODO: source processing */
+            quicrq_source_wakeup(config->sources[next_step_index].srce_ctx);
+            config->sources[next_step_index].next_source_time = UINT64_MAX;
             break;
         case 2: /* Quicrq context #next_step_index is ready to send data */
             ret = quicrq_test_packet_departure(config, next_step_index, is_active);
@@ -415,6 +416,7 @@ quicrq_test_config_t* quicrq_test_basic_config_create()
         config->nodes[1] = quicrq_create(QUICRQ_ALPN,
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
             NULL, 0, &config->simulated_time);
+        config->sources[0].srce_ctx = NULL;
         if (config->nodes[0] == NULL || config->nodes[1] == NULL) {
             quicrq_test_config_delete(config);
             config = NULL;
@@ -470,13 +472,13 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
 
 
 /* Basic connection test */
-int quicrq_basic_test()
+int quicrq_basic_test_one(int is_real_time)
 {
     int ret = 0;
     int nb_steps = 0;
     int nb_inactive = 0;
     int is_closed = 0;
-    const int max_steps = 20000;
+    const uint64_t max_time = 360000000;
     const int max_inactive = 128;
 
     quicrq_test_config_t* config = quicrq_test_basic_config_create();
@@ -495,7 +497,8 @@ int quicrq_basic_test()
 
     if (ret == 0){
         /* Add a test source to the configuration, and to the server */
-        ret = test_media_publish(config->nodes[0], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, 0);
+        ret = test_media_publish(config->nodes[0], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, &config->sources[0].next_source_time);
+        config->sources[0].srce_ctx = config->nodes[0]->first_source;
     }
 
     if (ret == 0) {
@@ -511,7 +514,7 @@ int quicrq_basic_test()
         ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), QUICRQ_TEST_BASIC_RESULT, QUICRQ_TEST_BASIC_LOG);
     }
 
-    while (ret == 0 && nb_inactive < max_inactive && nb_steps < max_steps) {
+    while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
         /* Run the simulation. Monitor the connection. Monitor the media. */
         int is_active = 0;
 
@@ -546,4 +549,16 @@ int quicrq_basic_test()
     }
 
     return ret;
+}
+
+/* Basic connection test, using streams, not real time. */
+int quicrq_basic_test()
+{
+    return quicrq_basic_test_one(0);
+}
+
+/* Basic connection test, using streams, real time. */
+int quicrq_basic_rt_test()
+{
+    return quicrq_basic_test_one(1);
 }

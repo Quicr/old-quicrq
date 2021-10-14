@@ -22,7 +22,8 @@ typedef enum {
 
 static const quicrq_test_def_t test_table[] =
 {
-    { "basic_test", quicrq_basic_test },
+    { "basic", quicrq_basic_test },
+    { "basic_rt", quicrq_basic_rt_test },
     { "media_video1", quicrq_media_video1_test },
     { "media_video1_rt", quicrq_media_video1_rt_test },
     { "media_source", quicrq_media_source_test },

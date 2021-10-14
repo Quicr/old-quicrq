@@ -59,19 +59,23 @@ uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t messa
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
 
  /* Quicrq per media source context.
-  * Can we make it simpler?
   */
 typedef struct st_quicrq_media_source_ctx_t {
     struct st_quicrq_media_source_ctx_t* next_source;
     struct st_quicrq_media_source_ctx_t* previous_source;
+    struct st_quicrq_stream_ctx_t* first_stream;
+    struct st_quicrq_stream_ctx_t* last_stream;
     uint8_t* media_url;
     size_t media_url_length;
     void* pub_ctx;
     quicrq_media_publisher_subscribe_fn subscribe_fn;
     quicrq_media_publisher_fn getdata_fn;
+
 } quicrq_media_source_ctx_t;
 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
+
+void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 
 /* Quicrq stream handling.
  * Media stream come in two variants.
@@ -84,6 +88,10 @@ struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
     struct st_quicrq_cnx_ctx_t* cnx_ctx;
+    quicrq_media_source_ctx_t* media_source;
+    struct st_quicrq_stream_ctx_t* next_stream_for_source;
+    struct st_quicrq_stream_ctx_t* previous_stream_for_source;
+
     unsigned int is_client : 1;
     unsigned int is_client_finished : 1;
     unsigned int is_server_finished : 1;
