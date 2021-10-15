@@ -634,7 +634,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     if (ret == 0) {
         srce_ctx = test_media_create_source(media_source_path, generation_model, is_real_time, &next_time);
         if (srce_ctx != NULL) {
-            pub_ctx = test_media_publisher_subscribe(media_source_path, strlen(media_source_path), srce_ctx);
+            pub_ctx = test_media_publisher_subscribe((uint8_t*)media_source_path, strlen(media_source_path), srce_ctx);
         }
         cons_ctx = test_media_consumer_init(media_result_file, media_result_log);
         if (pub_ctx == NULL || cons_ctx == NULL){
