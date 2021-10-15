@@ -134,7 +134,7 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         else {
             srce_ctx->last_stream->next_stream_for_source = stream_ctx;
             stream_ctx->previous_stream_for_source = srce_ctx->last_stream;
-            srce_ctx->last_stream = srce_ctx;
+            srce_ctx->last_stream = stream_ctx;
         }
         /* Document media function. */
         stream_ctx->publisher_fn = srce_ctx->getdata_fn;
