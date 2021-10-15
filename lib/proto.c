@@ -77,6 +77,18 @@ int quicrq_publish_source(quicrq_ctx_t * qr_ctx, uint8_t * url, size_t url_lengt
 
 void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_ctx)
 {
+    quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
+
+    while (stream_ctx != NULL) {
+        quicrq_stream_ctx_t* next_stream_ctx = stream_ctx->next_stream_for_source;
+        
+        stream_ctx->next_stream_for_source = NULL;
+        stream_ctx->previous_stream_for_source = NULL;
+        
+
+        stream_ctx = next_stream_ctx;
+    }
+
     if (srce_ctx == qr_ctx->first_source) {
         qr_ctx->first_source = srce_ctx->next_source;
     }
@@ -89,6 +101,7 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
     else {
         srce_ctx->previous_source->next_source = srce_ctx->previous_source;
     }
+
     free(srce_ctx);
 }
 
@@ -112,6 +125,17 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         ret = -1;
     }
     else {
+        /* Add stream to list of published streams */
+        stream_ctx->media_source = srce_ctx;
+        if (srce_ctx->last_stream == NULL) {
+            srce_ctx->first_stream = stream_ctx;
+            srce_ctx->last_stream = stream_ctx;
+        }
+        else {
+            srce_ctx->last_stream->next_stream_for_source = stream_ctx;
+            stream_ctx->previous_stream_for_source = srce_ctx->last_stream;
+            srce_ctx->last_stream = stream_ctx;
+        }
         /* Document media function. */
         stream_ctx->publisher_fn = srce_ctx->getdata_fn;
         /* Create a subscribe media context */
@@ -125,6 +149,15 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
     }
     return ret;
 }
+
+void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
+{
+    quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
+    while (stream_ctx != NULL) {
+        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        stream_ctx = stream_ctx->next_stream_for_source;
+    }
+};
 
 /* Request media in connection.
  * Send a media request to the server.
