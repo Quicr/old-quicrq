@@ -27,7 +27,8 @@ static const quicrq_test_def_t test_table[] =
     { "media_video1", quicrq_media_video1_test },
     { "media_video1_rt", quicrq_media_video1_rt_test },
     { "media_source", quicrq_media_source_test },
-    { "media_source_rt", quicrq_media_source_rt_test}
+    { "media_source_rt", quicrq_media_source_rt_test},
+    { "basic_datagram", quicrq_basic_datagram_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);

@@ -37,6 +37,7 @@ extern "C" {
  * starts the operation. It is deleted by a call to quicr_delete */
 #define QUICRQ_ACTION_OPEN_STREAM 1
 #define QUICRQ_ACTION_OPEN_DATAGRAM 2
+#define QUICRQ_ACTION_FIN_DATAGRAM 3
 
 /* Protocol message buffer.
  * For the base protocol, all messages start with a 2-bytes length field,
@@ -55,8 +56,13 @@ uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_b
 
 /* Encode and decode protocol messages */
 size_t quicrq_rq_msg_reserved_length(size_t url_length);
-uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, uint8_t* url);
-const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
+uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, uint8_t* url, uint64_t datagram_stream_id);
+#define QUICRQ_DATAGRAM_HEADER_MAX 16
+const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint64_t* datagram_stream_id);
+uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t datagram_offset);
+const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* datagram_stream_id, uint64_t* datagram_offset);
+uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_offset);
+const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* final_offset);
 
  /* Quicrq per media source context.
   */
@@ -84,7 +90,6 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
  * 
  */
 struct st_quicrq_stream_ctx_t {
-    uint64_t stream_id;
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
     struct st_quicrq_cnx_ctx_t* cnx_ctx;
@@ -92,9 +97,16 @@ struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream_for_source;
     struct st_quicrq_stream_ctx_t* previous_stream_for_source;
 
+    uint64_t stream_id;
+    uint64_t datagram_stream_id;
+    uint64_t datagram_offset;
+    uint64_t final_offset;
+
     unsigned int is_client : 1;
     unsigned int is_client_finished : 1;
     unsigned int is_server_finished : 1;
+    unsigned int is_datagram : 1;
+    unsigned int is_active_datagram : 1;
 
     size_t bytes_sent;
     size_t bytes_received;
@@ -117,7 +129,7 @@ struct st_quicrq_cnx_ctx_t {
     picoquic_cnx_t* cnx;
     int is_server;
 
-    uint64_t next_available_stream_id; /* starts with stream 0 on client */
+    uint64_t next_datagram_stream_id; /* only used for receiving */
     struct st_quicrq_stream_ctx_t* first_stream;
     struct st_quicrq_stream_ctx_t* last_stream;
 };

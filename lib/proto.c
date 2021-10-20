@@ -23,24 +23,67 @@ size_t quicrq_rq_msg_reserved_length(size_t url_length)
     return 8 + 2 + url_length;
 }
 
-uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, uint8_t* url)
+uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, uint8_t* url, uint64_t datagram_stream_id)
 {
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL){
-        bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url);
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url)) != NULL){
+        if (message_type == QUICRQ_ACTION_OPEN_DATAGRAM) {
+            bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_stream_id);
+        }
     }
     return bytes;
 }
 
-const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * message_type, size_t * url_length, const uint8_t** url)
+const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * message_type, size_t * url_length, const uint8_t** url, uint64_t* datagram_stream_id)
 {
+    *datagram_stream_id = 0;
+    *url = NULL;
+    *url_length = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, url_length)) != NULL){
         *url = bytes;
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length);
+        if ((bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length)) != NULL &&
+            *message_type == QUICRQ_ACTION_OPEN_DATAGRAM) {
+            bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id);
+        }
     }
     return bytes;
 }
 
+/* Encoding or decoding the fin of datagram stream message */
+uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_offset)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, final_offset);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* final_offset)
+{
+    *final_offset = 0;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL) {
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, final_offset);
+    }
+    return bytes;
+}
+
+/* encoding of the datagram header */
+uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t datagram_offset)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_stream_id)) != NULL) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_offset);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * datagram_stream_id, uint64_t * datagram_offset)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id)) != NULL) {
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_offset);
+    }
+    return bytes;
+}
 
 /* Publish local source API.
  */
@@ -143,27 +186,41 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         if (stream_ctx->media_ctx == NULL) {
             ret = -1;
         }
-        else {
+        else if (stream_ctx->is_datagram) {
+            stream_ctx->is_active_datagram = 1;
+            picoquic_mark_datagram_ready(stream_ctx->cnx_ctx->cnx, 1);
+        } else {
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
         }
     }
     return ret;
 }
 
+/* When data is available for a source, wake up the corresponding connection 
+ * and possibly stream.
+ * TODO: for datagram, we may want to manage a queue of media for which data is ready.
+ */
 void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
 {
     quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
     while (stream_ctx != NULL) {
-        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        if (stream_ctx->is_datagram) {
+            picoquic_mark_datagram_ready(stream_ctx->cnx_ctx->cnx, 1);
+            stream_ctx->is_active_datagram = 1;
+        }
+        else {
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        }
         stream_ctx = stream_ctx->next_stream_for_source;
     }
 };
 
 /* Request media in connection.
  * Send a media request to the server.
+ * TODO: mention datagram stream.
  */
 int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length,
-    quicrq_media_consumer_fn media_consumer_fn, void* media_ctx)
+    int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx)
 {
     /* Create a stream for the media */
     int ret = 0;
@@ -179,13 +236,16 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t u
         }
         else {
             /* Format the media request */
+            uint64_t datagram_stream_id = stream_ctx->cnx_ctx->next_datagram_stream_id;
             uint8_t* message_next = quicrq_rq_msg_encode(stream_ctx->message.buffer, stream_ctx->message.buffer + stream_ctx->message.buffer_alloc,
-                QUICRQ_ACTION_OPEN_STREAM, url_length, url);
+                (use_datagrams)? QUICRQ_ACTION_OPEN_DATAGRAM:QUICRQ_ACTION_OPEN_STREAM, url_length, url, datagram_stream_id);
             if (message_next == NULL) {
                 ret = -1;
             } else {
                 /* Queue the media request message to that stream */
                 stream_ctx->is_client = 1;
+                stream_ctx->is_datagram = (use_datagrams != 0);
+                stream_ctx->datagram_stream_id = datagram_stream_id;
                 stream_ctx->message.message_size = message_next - stream_ctx->message.buffer;
                 stream_ctx->consumer_fn = media_consumer_fn;
                 stream_ctx->media_ctx = media_ctx;

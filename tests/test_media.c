@@ -392,7 +392,7 @@ void* test_media_consumer_init(char const* media_result_file, char const * media
 int test_media_consumer_data_ready(
     void* media_ctx,
     uint64_t current_time,
-    uint8_t* data, 
+    const uint8_t* data, 
     size_t data_length,
     int is_finished)
 {
@@ -459,11 +459,12 @@ int test_media_consumer_data_ready(
 
     return ret;
 }
+
 int test_media_consumer_cb(
     quicrq_media_consumer_enum action,
     void* media_ctx,
     uint64_t current_time,
-    uint8_t* data,
+    const uint8_t* data,
     size_t data_length,
     int is_finished)
 {
@@ -471,6 +472,9 @@ int test_media_consumer_cb(
     switch (action) {
     case quicrq_media_data_ready:
         ret = test_media_consumer_data_ready(media_ctx, current_time, data, data_length, is_finished);
+        break;
+    case quicrq_media_final_offset:
+        test_media_consumer_close(media_ctx);
         break;
     case quicrq_media_close:
         test_media_consumer_close(media_ctx);
@@ -482,7 +486,7 @@ int test_media_consumer_cb(
     return ret;
 }
 
-int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, char const* media_result_file, char const* media_result_log)
+int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log)
 {
     int ret = 0;
     void* media_ctx = test_media_consumer_init(media_result_file, media_result_log);
@@ -491,7 +495,7 @@ int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_len
         ret = -1;
     }
     else {
-        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, test_media_consumer_cb, media_ctx);
+        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams, test_media_consumer_cb, media_ctx);
     }
 
     return ret;

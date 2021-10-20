@@ -51,5 +51,12 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(basic_datagram)
+		{
+			int ret = quicrq_basic_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }
