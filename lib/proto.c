@@ -1,7 +1,4 @@
-/* Codingand decoding of quicrq APIand messages
- *
- * - Subscribe to segment
- * - Publish source
+/* Coding and decoding of quicrq API and messages
 */
 
 #include <stdlib.h>
@@ -10,13 +7,30 @@
 #include "quicrq_internal.h"
 #include "picoquic_utils.h"
 
+/* The protocol defines a set of actions, identified by a code. For each action
+ * we get a specific encoding and decoding function. We also use a generic decoding
+ * structure.
+ */
+
 /* Media request message. 
  * 
- * quicrq_message {
+ * quicrq_request_message {
  *     message_type(i),
  *     url_length(i),
  *     url(...)
  * }
+ * 
+ * Datagram variant:
+ * 
+ * quicrq_request_message {
+ *     message_type(i),
+ *     url_length(i),
+ *     url(...),
+ *     datagram_stream_id(i)
+ * }
+ * 
+ * Same encoding and decoding code is used for both.
+ * 
  */
 size_t quicrq_rq_msg_reserved_length(size_t url_length)
 {
@@ -50,7 +64,12 @@ const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_m
     return bytes;
 }
 
-/* Encoding or decoding the fin of datagram stream message */
+/* Encoding or decoding the fin of datagram stream message
+ * 
+ * quicrq_fin_message {
+ *     message_type(i),
+ *     offset(i)
+ */
 uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_offset)
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL) {
@@ -67,6 +86,85 @@ const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_
     }
     return bytes;
 }
+
+
+/* Encoding or decoding the repair message
+ *
+ * quicrq_fin_message {
+ *     message_type(i),
+ *     offset(i),
+ *     length(i)
+ */
+uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_offset, uint64_t repair_length)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_offset)) != NULL) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_length);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_offset, uint64_t* repair_length)
+{
+    *repair_offset = 0;
+    *repair_length = 0;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, repair_offset)) != NULL) {
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, repair_length);
+    }
+    return bytes;
+}
+
+/* Generic decoding of QUICRQ control message */
+const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t* msg)
+{
+    const uint8_t* bytes0 = bytes;
+    memset(msg, 0, sizeof(quicrq_message_t));
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, &msg->message_type)) != NULL) {
+        /* TODO: do not decode the message type twice */
+        bytes = bytes0;
+        switch (msg->message_type) {
+        case QUICRQ_ACTION_OPEN_STREAM:
+        case QUICRQ_ACTION_OPEN_DATAGRAM:
+            bytes = quicrq_rq_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url, &msg->datagram_stream_id);
+            break;
+        case QUICRQ_ACTION_FIN_DATAGRAM:
+            bytes = quicrq_fin_msg_decode(bytes, bytes_max, &msg->message_type, &msg->offset);
+            break;
+        case QUICRQ_ACTION_REQUEST_REPAIR:
+            bytes = quicrq_repair_msg_decode(bytes, bytes_max, &msg->message_type, &msg->offset, &msg->length);
+            break;
+        default:
+            /* Unexpected message type */
+            bytes = NULL;
+            break;
+        }
+    }
+    return bytes;
+}
+
+/* Generic encoding of QUICRQ control message */
+uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg)
+{
+    switch (msg->message_type) {
+    case QUICRQ_ACTION_OPEN_STREAM:
+    case QUICRQ_ACTION_OPEN_DATAGRAM:
+        bytes = quicrq_rq_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url, msg->datagram_stream_id);
+        break;
+    case QUICRQ_ACTION_FIN_DATAGRAM:
+        bytes = quicrq_fin_msg_encode(bytes, bytes_max, msg->message_type, msg->offset);
+        break;
+    case QUICRQ_ACTION_REQUEST_REPAIR:
+        bytes = quicrq_repair_msg_encode(bytes, bytes_max, msg->message_type, msg->offset, msg->length);
+        break;
+    default:
+        /* Unexpected message type */
+        bytes = NULL;
+        break;
+    }
+    return bytes;
+}
+
 
 /* encoding of the datagram header */
 uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t datagram_offset)
