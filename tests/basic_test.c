@@ -187,7 +187,7 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
 
         if (node_id >= 0) {
             *is_active = 1;
-            
+
             ret = picoquic_incoming_packet(config->nodes[node_id]->quic,
                 packet->bytes, (uint32_t)packet->length,
                 (struct sockaddr*)&packet->addr_from,
@@ -472,7 +472,7 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
 
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time)
+int quicrq_basic_test_one(int is_real_time, int use_datagrams)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -511,7 +511,7 @@ int quicrq_basic_test_one(int is_real_time)
 
     if (ret == 0) {
         /* Create a subscription to the test source on client */
-        ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), QUICRQ_TEST_BASIC_RESULT, QUICRQ_TEST_BASIC_LOG);
+        ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, QUICRQ_TEST_BASIC_RESULT, QUICRQ_TEST_BASIC_LOG);
     }
 
     while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
@@ -554,11 +554,17 @@ int quicrq_basic_test_one(int is_real_time)
 /* Basic connection test, using streams, not real time. */
 int quicrq_basic_test()
 {
-    return quicrq_basic_test_one(0);
+    return quicrq_basic_test_one(0, 0);
 }
 
 /* Basic connection test, using streams, real time. */
 int quicrq_basic_rt_test()
 {
-    return quicrq_basic_test_one(1);
+    return quicrq_basic_test_one(1, 0);
+}
+
+/* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
+int quicrq_basic_datagram_test()
+{
+    return quicrq_basic_test_one(1, 1);
 }
