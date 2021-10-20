@@ -70,7 +70,7 @@ uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_b
 typedef struct st_quicrq_message_t {
     uint64_t message_type;
     size_t url_length;
-    uint8_t* url;
+    const uint8_t* url;
     uint64_t datagram_stream_id;
     uint64_t offset;
     uint64_t length;
