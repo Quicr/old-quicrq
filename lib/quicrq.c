@@ -167,7 +167,7 @@ int quicrq_prepare_to_send_media(quicrq_stream_ctx_t* stream_ctx, void* context,
 }
 
 /* Receive data in a datagram */
-int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* bytes, int length, uint64_t current_time)
+int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, int length, uint64_t current_time)
 {
     int ret = 0;
     quicrq_stream_ctx_t* stream_ctx = NULL;
@@ -218,8 +218,6 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
             int is_finished = 0;
             size_t available = 0;
             size_t data_length = 0;
-            int stream_ret = 0;
-            size_t overhead = 0;
             /* Compute length of datagram_stream_id + length of offset */
             uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
             uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id, stream_ctx->datagram_offset);

@@ -107,7 +107,7 @@ typedef int (*quicrq_media_consumer_fn)(
     quicrq_media_consumer_enum action,
     void* media_ctx,
     uint64_t current_time,
-    uint8_t* data,
+    const uint8_t* data,
     uint64_t data_length,
     int is_finished);
 

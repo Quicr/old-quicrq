@@ -392,7 +392,7 @@ void* test_media_consumer_init(char const* media_result_file, char const * media
 int test_media_consumer_data_ready(
     void* media_ctx,
     uint64_t current_time,
-    uint8_t* data, 
+    const uint8_t* data, 
     size_t data_length,
     int is_finished)
 {
@@ -464,7 +464,7 @@ int test_media_consumer_cb(
     quicrq_media_consumer_enum action,
     void* media_ctx,
     uint64_t current_time,
-    uint8_t* data,
+    const uint8_t* data,
     size_t data_length,
     int is_finished)
 {
