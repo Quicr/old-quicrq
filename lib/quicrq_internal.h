@@ -130,7 +130,7 @@ struct st_quicrq_stream_ctx_t {
 
     uint64_t stream_id;
     uint64_t datagram_stream_id;
-    uint64_t datagram_offset;
+    uint64_t highest_offset;
     uint64_t final_offset;
 
     unsigned int is_client : 1;

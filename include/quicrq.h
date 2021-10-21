@@ -98,6 +98,7 @@ int quicrq_close_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, v
  /* Quic media consumer */
 typedef enum {
     quicrq_media_data_ready = 0,
+    quicrq_media_datagram_ready,
     quicrq_media_final_offset,
     quicrq_media_close
 } quicrq_media_consumer_enum;
@@ -108,6 +109,7 @@ typedef int (*quicrq_media_consumer_fn)(
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
+    uint64_t offset,
     uint64_t data_length,
     int is_finished);
 

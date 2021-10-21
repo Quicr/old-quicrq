@@ -167,7 +167,7 @@ int quicrq_prepare_to_send_media(quicrq_stream_ctx_t* stream_ctx, void* context,
 }
 
 /* Receive data in a datagram */
-int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, int length, uint64_t current_time)
+int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, size_t length, uint64_t current_time)
 {
     int ret = 0;
     quicrq_stream_ctx_t* stream_ctx = NULL;
@@ -196,7 +196,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, int
         }
         else {
             /* Pass data to the media context. Consider handling the offset. */
-            ret = stream_ctx->consumer_fn(quicrq_media_data_ready, stream_ctx->media_ctx, current_time, next_bytes, bytes_max - next_bytes, 0);
+            ret = stream_ctx->consumer_fn(quicrq_media_data_ready, stream_ctx->media_ctx, current_time, next_bytes, datagram_offset, bytes_max - next_bytes, 0);
         }
     }
 
@@ -220,7 +220,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
             size_t data_length = 0;
             /* Compute length of datagram_stream_id + length of offset */
             uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
-            uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id, stream_ctx->datagram_offset);
+            uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id, stream_ctx->highest_offset);
             size_t h_size;
             if (h_byte == NULL) {
                 ret = -1;
@@ -239,7 +239,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                         /* Mark the stream as finished */
                         /* Consider how to send an end-of-stream mark to the peer, maybe on the control flow. */
                         stream_ctx->is_active_datagram = 0;
-                        stream_ctx->final_offset = stream_ctx->datagram_offset + available;
+                        stream_ctx->final_offset = stream_ctx->highest_offset + available;
                         /* Wake up the control stream so the final message can be sent. */
                         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                         stream_ctx->is_active_datagram = 0;
@@ -259,7 +259,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 ret = -1;
                             }
                             /* Update offset based on what is sent. */
-                            stream_ctx->datagram_offset += available;
+                            stream_ctx->highest_offset += available;
                         }
                         /* Exit the loop, since data was copied */
                         break;
@@ -314,7 +314,7 @@ int quicrq_receive_server_response(quicrq_stream_ctx_t* stream_ctx, uint8_t* byt
                 stream_ctx->is_server_finished = 1;
                 /* Signal final offset to receiver */
 
-                ret = stream_ctx->consumer_fn(quicrq_media_final_offset, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL, final_offset, 0);
+                ret = stream_ctx->consumer_fn(quicrq_media_final_offset, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL, final_offset, 0, 0);
             }
         }
     }
@@ -431,7 +431,8 @@ int quicrq_callback(picoquic_cnx_t* cnx,
                 if (!stream_ctx->is_datagram) {
                     /* In the basic protocol, the client receives media data */
                     stream_ctx->is_server_finished = (fin_or_event == picoquic_callback_stream_fin);
-                    ret = stream_ctx->consumer_fn(quicrq_media_data_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), bytes, length, stream_ctx->is_server_finished);
+                    ret = stream_ctx->consumer_fn(quicrq_media_data_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), bytes, stream_ctx->highest_offset, length, stream_ctx->is_server_finished);
+                    stream_ctx->highest_offset += length;
                 }
                 else {
                     /* In the basic protocol, the server may send messages */
@@ -645,7 +646,7 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
     }
     if (stream_ctx->media_ctx != NULL) {
         if (stream_ctx->is_client) {
-            stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 1);
+            stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 1);
         }
         else {
             stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, 0);

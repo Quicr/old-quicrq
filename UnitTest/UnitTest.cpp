@@ -52,6 +52,13 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(media_disorder)
+		{
+			int ret = quicrq_media_disorder_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(basic_datagram)
 		{
 			int ret = quicrq_basic_datagram_test();
