@@ -426,6 +426,10 @@ int test_media_consumer_learn_final_offset(
         ret = -1;
     }
 
+    if (ret == 0 && cons_ctx->highest_offset >= offset) {
+        cons_ctx->is_finished = 1;
+    }
+
     return ret;
 }
 
@@ -468,12 +472,13 @@ int test_media_consumer_data_ready(
     uint64_t current_time,
     const uint8_t* data,
     uint64_t offset,
-    size_t data_length,
-    int is_finished)
+    size_t data_length)
 {
     int ret = 0;
     size_t processed = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
+    cons_ctx->highest_offset += data_length;
+
     /* While some bytes to process, process them. Call may straddle several media frames */
     while (processed < data_length) {
         size_t available = data_length - processed;
@@ -528,7 +533,8 @@ int test_media_consumer_data_ready(
             }
         }
     }
-    if (is_finished) {
+
+    if (ret == 0 && cons_ctx->highest_offset >= offset) {
         cons_ctx->is_finished = 1;
     }
 
@@ -540,8 +546,7 @@ int test_media_consumer_datagram_ready(
     uint64_t current_time,
     const uint8_t* data,
     uint64_t offset,
-    size_t data_length,
-    int is_finished)
+    size_t data_length)
 {
     int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
@@ -551,8 +556,7 @@ int test_media_consumer_datagram_ready(
         data += consumed;
         offset += consumed;
         data_length -= consumed;
-        ret = test_media_consumer_data_ready(media_ctx, current_time, data, offset, data_length, is_finished);
-        cons_ctx->highest_offset += data_length;
+        ret = test_media_consumer_data_ready(media_ctx, current_time, data, offset, data_length);
     }
     else if (cons_ctx->last_packet == NULL || cons_ctx->last_packet->offset <= offset) {
         /* Short cut if this is the last packet */
@@ -633,8 +637,7 @@ int test_media_consumer_datagram_ready(
         packet = cons_ctx->first_packet;
 
         while (ret == 0 && packet != NULL && packet->offset == cons_ctx->highest_offset) {
-            ret = test_media_consumer_data_ready(media_ctx, packet->current_time, packet->data, packet->offset, packet->data_length, is_finished);
-            cons_ctx->highest_offset += packet->data_length;
+            ret = test_media_consumer_data_ready(media_ctx, packet->current_time, packet->data, packet->offset, packet->data_length);
             cons_ctx->first_packet = packet->next_packet;
             if (packet->next_packet == NULL) {
                 cons_ctx->first_packet = NULL;
@@ -658,16 +661,15 @@ int test_media_consumer_cb(
     uint64_t current_time,
     const uint8_t* data,
     uint64_t offset,
-    size_t data_length,
-    int is_finished)
+    size_t data_length)
 {
     int ret = 0;
     switch (action) {
     case quicrq_media_data_ready:
-        ret = test_media_consumer_data_ready(media_ctx, current_time, data, offset, data_length, is_finished);
+        ret = test_media_consumer_data_ready(media_ctx, current_time, data, offset, data_length);
         break;
     case quicrq_media_datagram_ready:
-        ret = test_media_consumer_datagram_ready(media_ctx, current_time, data, offset, data_length, is_finished);
+        ret = test_media_consumer_datagram_ready(media_ctx, current_time, data, offset, data_length);
         break;
     case quicrq_media_final_offset:
         test_media_consumer_learn_final_offset(media_ctx, offset);
@@ -855,7 +857,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
         } else if (ret == 0) {
             inactive = 0;
             ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
-                published_offset, data_length, is_finished);
+                published_offset, data_length);
             published_offset += data_length;
         }
     }
@@ -996,7 +998,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
         if (ret == 0) {
             if (is_finished || data_length > 0) {
                 ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
-                    published_offset, data_length, is_finished);
+                    published_offset, data_length);
                 published_offset += data_length;
                 inactive = 0;
             }
@@ -1120,7 +1122,7 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
             data_length = fread(media_buffer, 1, sizeof(media_buffer), F);
             if (data_length > 0) {
                 ret = test_media_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    published_offset, data_length, 0);
+                    published_offset, data_length);
                 published_offset += data_length;
             }
             else {
@@ -1136,13 +1138,13 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
         for (size_t i = 0; i < actual_losses; i++) {
             /* Simulate repair of a hole */
             ret = test_media_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, losses[i].media_buffer,
-                losses[i].offset, losses[i].length, 0);
+                losses[i].offset, losses[i].length);
         }
     }
 
     /* Indicate the final offset, to simulate what datagrams would do */
     if (ret == 0) {
-        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL, published_offset, 0, 0);
+        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL, published_offset, 0);
     }
 
     /* Close media file */

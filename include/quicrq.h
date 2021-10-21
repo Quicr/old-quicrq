@@ -110,8 +110,7 @@ typedef int (*quicrq_media_consumer_fn)(
     uint64_t current_time,
     const uint8_t* data,
     uint64_t offset,
-    uint64_t data_length,
-    int is_finished);
+    uint64_t data_length);
 
 int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx,
     uint8_t* url, size_t url_length, int use_datagrams,
