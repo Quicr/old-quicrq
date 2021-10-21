@@ -1073,7 +1073,6 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
     size_t data_length;
     void* cons_ctx = NULL;
     FILE* F = NULL;
-    int inactive = 0;
     media_disorder_hole_t* losses = NULL;
     size_t actual_losses = 0;
 
