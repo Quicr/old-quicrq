@@ -4,7 +4,11 @@
 #include "quicrq_internal.h"
 #include "quicrq_tests.h"
 #include "quicrq_test_internal.h"
+#include "picoquic.h"
 #include "picoquic_utils.h"
+
+int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir);
+int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
 
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
@@ -451,6 +455,14 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
     if (addr_to != NULL) {
         cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
             addr_to, config->simulated_time, 0, NULL, QUICRQ_ALPN, 1);
+        /* Set parameters */
+        if (!server_node) {
+            picoquic_tp_t client_parameters;
+
+            quicrq_init_transport_parameters(&client_parameters, 1);
+            picoquic_set_transport_parameters(cnx, &client_parameters);
+        }
+
         if (picoquic_start_client_cnx(cnx) != 0){
             picoquic_delete_cnx(cnx);
             cnx = NULL;
@@ -493,6 +505,11 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
     if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
         quicrq_test_solution_dir, QUICRQ_TEST_BASIC_SOURCE) != 0) {
         ret = -1;
+    }
+
+    /* Add QUIC level log */
+    if (ret == 0) {
+        ret = picoquic_set_textlog(config->nodes[1]->quic, "basic_textlog.txt");
     }
 
     if (ret == 0){

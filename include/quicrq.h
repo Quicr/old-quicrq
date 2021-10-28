@@ -45,6 +45,7 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
     uint64_t* simulated_time);
 void quicrq_delete(quicrq_ctx_t* ctx);
 picoquic_quic_t* quicrq_get_quic_ctx(quicrq_ctx_t* ctx);
+void quicrq_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
 
 quicrq_cnx_ctx_t* quicrq_create_cnx_context(quicrq_ctx_t* qr_ctx, picoquic_cnx_t* cnx);
 void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx);
@@ -103,6 +104,9 @@ typedef enum {
     quicrq_media_close
 } quicrq_media_consumer_enum;
 
+#define quicrq_consumer_finished 1
+#define quicrq_consumer_continue 0
+#define quicrq_consumer_error -1
 
 typedef int (*quicrq_media_consumer_fn)(
     quicrq_media_consumer_enum action,

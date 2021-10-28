@@ -58,11 +58,13 @@ uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_b
  *   Content will be sent as a stream of datagrams, each specifying an offset and a set of bytes.
  * - Fin Datagram: when the media segment has been sent as a set of datagrams, provides the final offset.
  * - Request repair: when a stream is opened as datagram, some datagrams may be lost. The receiver may request data at offset and length.
+ * - Repair: 1 byte code, followed by content of a datagram
  */
 #define QUICRQ_ACTION_OPEN_STREAM 1
 #define QUICRQ_ACTION_OPEN_DATAGRAM 2
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
+#define QUICRQ_ACTION_REPAIR 5
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -74,18 +76,22 @@ typedef struct st_quicrq_message_t {
     uint64_t datagram_stream_id;
     uint64_t offset;
     uint64_t length;
+    const uint8_t* data;
 } quicrq_message_t;
 
 /* Encode and decode protocol messages */
-size_t quicrq_rq_msg_reserved_length(size_t url_length);
+size_t quicrq_rq_msg_reserve(size_t url_length);
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint64_t datagram_stream_id);
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint64_t* datagram_stream_id);
+size_t quicrq_fin_msg_reserve(uint64_t final_offset);
 uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_offset);
 const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* final_offset);
-uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_offset);
-const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* final_offset);
-uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_offset, uint64_t repair_length);
-const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_offset, uint64_t* repair_length);
+size_t quicrq_repair_request_reserve(uint64_t repair_offset, uint64_t repair_length);
+uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_offset, uint64_t repair_length);
+const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_offset, uint64_t* repair_length);
+size_t quicrq_repair_msg_reserve(uint64_t repair_offset, size_t length);
+uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_offset, size_t length, const uint8_t* repair_data);
+const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_offset, size_t* length, const uint8_t** repair_data);
 
 uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg);
 const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t * msg);
@@ -118,8 +124,38 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
  * Media stream come in two variants.
  * - server to client stream, that must include the API for sending data from a stream.
  * - client to server stream, that must include the API for receiving data.
- * 
+ * Media can be sent in two modes, stream or datagram. In stream mode, 
+ * the server just posts the media content on the stream. In datagram
+ * mode, the server posts the content as a set of datagrams. The server
+ * may also post a set of "datagram repair" corrections, when datagrams
+ * are deemed missing.
  */
+ /* Quic media consumer */
+typedef enum {
+    quicrq_sending_ready = 0,
+    quicrq_sending_stream,
+    quicrq_sending_initial,
+    quicrq_sending_repair,
+    quicrq_sending_offset
+} quicrq_stream_sending_state_enum;
+
+typedef enum {
+    quicrq_receive_initial = 0,
+    quicrq_receive_stream,
+    quicrq_receive_confirmation,
+    quicrq_receive_repair,
+    quicrq_receive_done
+}  quicrq_stream_receive_state_enum;
+
+
+typedef struct st_quicrq_datagram_queued_repair_t {
+    struct st_quicrq_datagram_queued_repair_t* next_repair;
+    struct st_quicrq_datagram_queued_repair_t* previous_repair;
+    uint8_t* datagram;
+    uint64_t offset;
+    size_t length;
+} quicrq_datagram_queued_repair_t;
+
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
@@ -128,21 +164,30 @@ struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream_for_source;
     struct st_quicrq_stream_ctx_t* previous_stream_for_source;
 
+    quicrq_datagram_queued_repair_t* datagram_repair_first;
+    quicrq_datagram_queued_repair_t* datagram_repair_last;
+
     uint64_t stream_id;
     uint64_t datagram_stream_id;
     uint64_t highest_offset;
     uint64_t final_offset;
 
+    quicrq_stream_sending_state_enum send_state;
+    quicrq_stream_receive_state_enum receive_state;
+
     unsigned int is_client : 1;
+    unsigned int is_sender : 1;
     unsigned int is_client_finished : 1;
     unsigned int is_server_finished : 1;
     unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
+    unsigned int is_final_offset_sent : 1;
 
     size_t bytes_sent;
     size_t bytes_received;
 
-    quicrq_message_buffer_t message;
+    quicrq_message_buffer_t message_sent;
+    quicrq_message_buffer_t message_receive;
 
     quicrq_media_consumer_fn consumer_fn; /* Callback function for data arrival on client */
     quicrq_media_publisher_fn publisher_fn; /* Data providing function for source */
