@@ -490,7 +490,7 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
 
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time, int use_datagrams, int simulate_losses)
+int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -498,10 +498,13 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, int simulate_loss
     int is_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
-
     quicrq_test_config_t* config = quicrq_test_basic_config_create(simulate_losses);
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     char media_source_path[512];
+    char text_log_name[512];
+    size_t nb_log_chars = 0;
+
+    picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
 
     if (config == NULL) {
         ret = -1;
@@ -515,7 +518,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, int simulate_loss
 
     /* Add QUIC level log */
     if (ret == 0) {
-        ret = picoquic_set_textlog(config->nodes[1]->quic, "basic_textlog.txt");
+        ret = picoquic_set_textlog(config->nodes[1]->quic, text_log_name);
     }
 
     if (ret == 0){
