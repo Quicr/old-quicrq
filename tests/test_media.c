@@ -462,6 +462,9 @@ static test_media_consumer_packet_t* test_media_store_create_packet(
         if (packet->next_packet == NULL) {
             cons_ctx->last_packet = packet;
         }
+        else {
+            packet->next_packet->previous_packet = packet;
+        }
     }
 
     return packet;
@@ -551,7 +554,12 @@ int test_media_consumer_datagram_ready(
     int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
     /* is this datagram in order? */
-    if (cons_ctx->first_packet == NULL && offset <= cons_ctx->highest_offset) {
+    if (offset + data_length < cons_ctx->highest_offset) {
+        /* Redundant replica of an old packet. Nothing to see. */
+        ret = 0;
+    }
+    else if (cons_ctx->first_packet == NULL && offset <= cons_ctx->highest_offset) {
+        /* Everything in order so far, just submit the data */
         size_t consumed = cons_ctx->highest_offset - offset;
         data += consumed;
         offset += consumed;
@@ -559,40 +567,22 @@ int test_media_consumer_datagram_ready(
         ret = test_media_consumer_data_ready(media_ctx, current_time, data, offset, data_length);
     }
     else if (cons_ctx->last_packet == NULL || cons_ctx->last_packet->offset <= offset) {
-        /* Short cut if this is the last packet */
-        /* TODO, maybe: ask for repair if new hole is detected */
+        /* Short cut if this is the last packet -- just add at the tail of the list */
         test_media_consumer_packet_t* new_packet = test_media_store_create_packet(cons_ctx, cons_ctx->last_packet, current_time, data, offset, data_length);
         if (new_packet == NULL) {
             ret = -1;
         }
     }
     else {
-        /* It is not in order. Does it fill a gap? */
+        /* It is not in order. Insert ranked by offset */
         test_media_consumer_packet_t* packet = cons_ctx->first_packet;
         test_media_consumer_packet_t* previous_packet = NULL;
 
         while (packet != NULL) {
-            if (packet->offset > offset) {
+            if (packet->offset >= offset) {
                 /* filling a hole */
-                if (offset + data_length > packet->offset) {
-                    /* partial overlap */
-                    test_media_consumer_packet_t* new_packet = test_media_store_create_packet(cons_ctx, previous_packet, current_time, data, offset, packet->offset - offset);
-                    if (new_packet == NULL) {
-                        ret = -1;
-                        break;
-                    }
-                    else if (data_length > new_packet->data_length) {
-                        data += new_packet->data_length;
-                        offset += new_packet->data_length;
-                        data_length -= new_packet->data_length;
-                    }
-                    else {
-                        data_length = 0;
-                        break;
-                    }
-                }
-                else {
-                    /* insert packet just after previous */
+                if (offset + data_length <= packet->offset) {
+                    /* No overlap. Just insert the packet after the previous one */
                     test_media_consumer_packet_t* new_packet = test_media_store_create_packet(cons_ctx, previous_packet, current_time, data, offset, data_length);
                     if (new_packet == NULL) {
                         ret = -1;
@@ -602,10 +592,28 @@ int test_media_consumer_datagram_ready(
                     }
                     break;
                 }
+                else {
+                    if (offset < packet->offset) {
+                        /* partial overlap. Create a packet for the non overlapping part, then retain the bytes at the end. */
+                        test_media_consumer_packet_t* new_packet = test_media_store_create_packet(cons_ctx, previous_packet, current_time, data, offset, packet->offset - offset);
+                        if (new_packet == NULL) {
+                            ret = -1;
+                            break;
+                        }
+                        else {
+                            /* Trim the data. First remove the part that was consumed */
+                            size_t consumed = cons_ctx->highest_offset - offset;
+                            data += consumed;
+                            offset += consumed;
+                            data_length -= consumed;
+                        }
+                    }
+                }
             }
-            else if (packet->offset + packet->data_length > offset) {
+            /* At this point, we know the incoming data is at or after the current packet */
+            if (packet->offset + packet->data_length > offset) {
                 /* at least partial overlap */
-                if (packet->offset + packet->data_length > offset + data_length) {
+                if (packet->offset + packet->data_length >= offset + data_length) {
                     /* all remaining data is redundant */
                     data_length = 0;
                     break;
@@ -623,9 +631,9 @@ int test_media_consumer_datagram_ready(
                 packet = packet->next_packet;
             }
         }
-
+        /* All packets in store have been checked */
         if (ret == 0 && data_length > 0) {
-            /* remainer of packet was not inserted */
+            /* Some of the incoming data was not inserted */
             test_media_consumer_packet_t* new_packet = test_media_store_create_packet(cons_ctx, previous_packet, current_time, data, offset, data_length);
             if (new_packet == NULL) {
                 ret = -1;
@@ -634,21 +642,26 @@ int test_media_consumer_datagram_ready(
                 data_length = 0;
             }
         }
-        packet = cons_ctx->first_packet;
 
-        while (ret == 0 && packet != NULL && packet->offset == cons_ctx->highest_offset) {
-            ret = test_media_consumer_data_ready(media_ctx, packet->current_time, packet->data, packet->offset, packet->data_length);
-            cons_ctx->first_packet = packet->next_packet;
-            if (packet->next_packet == NULL) {
-                cons_ctx->first_packet = NULL;
-                cons_ctx->last_packet = NULL;
-            }
-            else {
-                cons_ctx->first_packet = packet->next_packet;
-                packet->next_packet->previous_packet = NULL;
-            }
-            free(packet);
+        /* Something has changed. Check whether the first hole has been filled and packets can be delivered */
+        if (ret == 0) {
             packet = cons_ctx->first_packet;
+
+            while (ret == 0 && packet != NULL && packet->offset == cons_ctx->highest_offset) {
+                /* The first packet in the list fills the first hole. Submit and then delete. */
+                ret = test_media_consumer_data_ready(media_ctx, packet->current_time, packet->data, packet->offset, packet->data_length);
+                cons_ctx->first_packet = packet->next_packet;
+                if (packet->next_packet == NULL) {
+                    cons_ctx->first_packet = NULL;
+                    cons_ctx->last_packet = NULL;
+                }
+                else {
+                    cons_ctx->first_packet = packet->next_packet;
+                    packet->next_packet->previous_packet = NULL;
+                }
+                free(packet);
+                packet = cons_ctx->first_packet;
+            }
         }
     }
 
@@ -1061,7 +1074,7 @@ typedef struct st_media_disorder_hole_t {
     uint8_t media_buffer[1024];
 } media_disorder_hole_t;
 
-int quicrq_media_disorder_test_one(char const* media_source_name, char const* media_result_file, char const* media_result_log, size_t nb_losses, uint64_t* loss_pattern)
+int quicrq_media_disorder_test_one(char const* media_source_name, char const* media_result_file, char const* media_result_log, size_t nb_losses, uint64_t* loss_pattern, size_t nb_dup)
 {
 
     int ret = 0;
@@ -1134,6 +1147,16 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
 
     /* At this point, all blocks have been sent, except for the holes */
     if (ret == 0) {
+        if (nb_dup > 0) {
+            /* Fill some holes, in order to simulate duplication of repairs. */
+            for (size_t n = 0; n < nb_dup; n++) {
+                for (size_t i = 1; i < actual_losses; i += 2) {
+                    /* Simulate repair of a hole */
+                    ret = test_media_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, losses[i].media_buffer,
+                        losses[i].offset, losses[i].length);
+                }
+            }
+        }
         for (size_t i = 0; i < actual_losses; i++) {
             /* Simulate repair of a hole */
             ret = test_media_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, losses[i].media_buffer,
@@ -1175,6 +1198,6 @@ int quicrq_media_disorder_test()
     uint64_t loss_pattern[] = { 0, 4096, 8192, 9216, 20480 };
 
     int ret = quicrq_media_disorder_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_LOSS_RESULT, QUICRQ_TEST_VIDEO1_LOSS_LOG,
-        sizeof(loss_pattern) / sizeof(uint64_t), loss_pattern);
+        sizeof(loss_pattern) / sizeof(uint64_t), loss_pattern, 3);
     return ret;
 }

@@ -16,7 +16,8 @@ extern "C" {
     int quicrq_media_source_rt_test();
     int quicrq_media_disorder_test();
     int quicrq_basic_rt_test();
-    int quicrq_basic_datagram_test();
+    int quicrq_datagram_basic_test();
+    int quicrq_datagram_loss_test();
     int proto_msg_test();
 
 #ifdef __cplusplus

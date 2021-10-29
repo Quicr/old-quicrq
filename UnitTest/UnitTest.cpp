@@ -59,9 +59,16 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(basic_datagram)
+		TEST_METHOD(datagram_basic)
 		{
-			int ret = quicrq_basic_datagram_test();
+			int ret = quicrq_datagram_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(datagram_loss)
+		{
+			int ret = quicrq_datagram_loss_test();
 
 			Assert::AreEqual(ret, 0);
 		}

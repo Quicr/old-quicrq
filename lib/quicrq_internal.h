@@ -51,6 +51,7 @@ typedef struct st_quicrq_message_buffer_t {
 
 int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, size_t bytes_stored);
 uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_buffer_t* msg_buffer, int* is_finished);
+void quicrq_msg_buffer_reset(quicrq_message_buffer_t* msg_buffer);
 
 /* The protocol used for our tests defines a set of actions:
  * - Open Stream: request to open a stream, defined by URL of media segment. Content will be sent as a stream of bytes.

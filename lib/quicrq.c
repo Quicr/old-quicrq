@@ -57,13 +57,13 @@ int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, s
 }
 
 /* Accumulate a protocol message from series of read data call backs */
-uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_buffer_t* msg_buffer, int* is_finished)
+uint8_t * quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_buffer_t* msg_buffer, int* is_finished)
 {
     *is_finished = 0;
 
     while (msg_buffer->nb_bytes_read < 2 && length > 0) {
         msg_buffer->nb_bytes_read++;
-        msg_buffer->message_size *= 8;
+        msg_buffer->message_size <<= 8;
         msg_buffer->message_size += bytes[0];
         bytes++;
         length--;
@@ -77,7 +77,7 @@ uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_b
             if (quicrq_msg_buffer_alloc(msg_buffer, msg_buffer->message_size, bytes_stored) != 0) {
                 bytes = NULL;
             } else {
-                if (length <= required) {
+                if (length >= required) {
                     length = required;
                     *is_finished = 1;
                 }
@@ -94,21 +94,32 @@ uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_b
     return bytes;
 }
 
+void quicrq_msg_buffer_reset(quicrq_message_buffer_t* msg_buffer)
+{
+
+    msg_buffer->nb_bytes_read = 0;
+    msg_buffer->message_size = 0;
+}
+
 /* Send a protocol message through series of read data call backs.
  * The repair messages include some data after the header.
  * The "data" and "data_length" must be the same across all calls for the same message.
  * If message is fully sent, the state moves to "ready"
  */
-int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space, const byte* data, size_t data_length, int more_to_send)
+int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space, int more_to_send)
 {
     int ret = 0;
     quicrq_message_buffer_t* msg_buffer = &stream_ctx->message_sent;
-    size_t total_size = msg_buffer->message_size + data_length;
+    size_t total_size = msg_buffer->message_size;
     size_t total_to_send = 2 + total_size;
 
     if (msg_buffer->nb_bytes_read < total_to_send) {
         uint8_t* buffer;
         size_t available = total_to_send - msg_buffer->nb_bytes_read;
+        if (available > space) {
+            more_to_send = 1;
+            available = space;
+        }
 
         buffer = picoquic_provide_stream_data_buffer(context, available, 0, more_to_send);
         if (buffer != NULL) {
@@ -125,18 +136,7 @@ int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* con
             /* feed the remaining header content at offset */
             if (available > 0 && msg_buffer->nb_bytes_read < msg_buffer->message_size + 2) {
                 size_t offset = msg_buffer->nb_bytes_read - 2;
-                size_t header_left = msg_buffer->message_size - offset;
-                if (header_left > available) {
-                    header_left = available;
-                }
-                available -= header_left;
-                memcpy(buffer, msg_buffer->buffer + offset, header_left);
-                msg_buffer->nb_bytes_read += header_left;
-            }
-            /* if there is still space, send data */
-            if (available > 0 && msg_buffer->nb_bytes_read >= msg_buffer->message_size + 2) {
-                size_t data_offset = msg_buffer->nb_bytes_read - (msg_buffer->message_size + 2);
-                memcpy(buffer, data + data_offset, available);
+                memcpy(buffer, msg_buffer->buffer + offset, available);
                 msg_buffer->nb_bytes_read += available;
             }
         }
@@ -185,14 +185,14 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
 }
 
 /* Find the stream context associated with a datagram */
-quicrq_stream_ctx_t* quicrq_find_stream_ctx_for_datagram(quicrq_cnx_ctx_t* cnx_ctx, uint64_t datagram_stream_id)
+quicrq_stream_ctx_t* quicrq_find_stream_ctx_for_datagram(quicrq_cnx_ctx_t* cnx_ctx, uint64_t datagram_stream_id, int is_sender)
 {
     quicrq_stream_ctx_t* stream_ctx = NULL;
 
     /* Find the stream context by datagram ID */
     stream_ctx = cnx_ctx->first_stream;
     while (stream_ctx != NULL) {
-        if (stream_ctx->is_client && stream_ctx->is_datagram && stream_ctx->datagram_stream_id == datagram_stream_id) {
+        if ((stream_ctx->is_sender == is_sender) && stream_ctx->is_datagram && stream_ctx->datagram_stream_id == datagram_stream_id) {
             break;
         }
         stream_ctx = stream_ctx->next_stream;
@@ -218,7 +218,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     }
     else {
         /* Find the stream context by datagram ID */
-        stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id);
+        stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 0);
         if (stream_ctx == NULL) {
             ret = -1;
         }
@@ -314,28 +314,33 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     uint64_t datagram_offset;
     const uint8_t* next_bytes;
 
-    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &datagram_offset);
-    /* Retrieve the stream context for the datagram */
-    if (next_bytes == NULL) {
+    if (bytes == NULL) {
         ret = -1;
     }
     else {
-        /* Find the stream context by datagram ID */
-        quicrq_stream_ctx_t* stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id);
-        if (stream_ctx == NULL) {
+        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &datagram_offset);
+        /* Retrieve the stream context for the datagram */
+        if (next_bytes == NULL) {
             ret = -1;
         }
-        else switch (picoquic_event) {
-        case picoquic_callback_datagram_acked: /* Ack for packet carrying datagram-frame received from peer */
-            ret = -1;
-            break;
-        case picoquic_callback_datagram_lost: /* Packet carrying datagram-frame probably lost */
-            ret = quicrq_add_repair_to_stream_ctx(cnx_ctx, stream_ctx, bytes, length, datagram_offset);
-            break;
-        case picoquic_callback_datagram_spurious: /* Packet carrying datagram-frame was not really lost */
-            ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, datagram_offset);
-        default:
-            ret = -1;
+        else {
+            /* Find the stream context by datagram ID */
+            quicrq_stream_ctx_t* stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 1);
+            if (stream_ctx == NULL) {
+                ret = -1;
+            }
+            else switch (picoquic_event) {
+            case picoquic_callback_datagram_acked: /* Ack for packet carrying datagram-frame received from peer */
+                ret = -1;
+                break;
+            case picoquic_callback_datagram_lost: /* Packet carrying datagram-frame probably lost */
+                ret = quicrq_add_repair_to_stream_ctx(cnx_ctx, stream_ctx, next_bytes, bytes_max - next_bytes, datagram_offset);
+                break;
+            case picoquic_callback_datagram_spurious: /* Packet carrying datagram-frame was not really lost */
+                ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, datagram_offset);
+            default:
+                ret = -1;
+            }
         }
     }
 
@@ -469,7 +474,6 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                     else {
                         /* Queue the media request message to that stream */
-                        stream_ctx->is_client = 1;
                         message->message_size = message_next - message->buffer;
                         stream_ctx->send_state = quicrq_sending_repair;
                         more_to_send = (stream_ctx->datagram_repair_first->next_repair != NULL);
@@ -489,12 +493,15 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                     else {
                         /* Queue the media request message to that stream */
-                        stream_ctx->is_client = 1;
                         message->message_size = message_next - message->buffer;
                         stream_ctx->send_state = quicrq_sending_offset;
                         more_to_send = (stream_ctx->datagram_repair_first != NULL);
                     }
                 }
+            }
+            else {
+                /* This is a bug. If there is nothing to send, we should not be sending any stream data */
+                ret = -1;
             }
         }
         else {
@@ -514,17 +521,18 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             break;
         case quicrq_sending_initial:
             /* Send available buffer data. Mark state ready after sent. */
-            ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, NULL, 0, more_to_send);
+            ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             break;
         case quicrq_sending_repair:
             /* Send available buffer data and repair data. Dequeue repair and mark state ready after sent. */
+            ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 quicrq_remove_repair_in_stream_ctx(stream_ctx, stream_ctx->datagram_repair_first);
             }
             break;
         case quicrq_sending_offset:
             /* Send available buffer data and repair data. Mark offset sent and mark state ready after sent. */
-            ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, NULL, 0, more_to_send);
+            ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 stream_ctx->is_final_offset_sent = 1;
             }
@@ -538,114 +546,6 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
 
     return ret;
 }
-#if 0
-/* Receive and process media control messages */
-int quicrq_receive_server_response(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, size_t length, int is_fin)
-{
-    int ret = 0;
-
-    if (stream_ctx->is_client_finished && length > 0) {
-        /* One message per stream! */
-        ret = -1;
-    }
-    else if (length > 0) {
-        int is_finished = 0;
-        uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &stream_ctx->message_sent, &is_finished);
-        if (next_bytes == NULL) {
-            ret = -1;
-        }
-        else if (next_bytes != bytes + length) {
-            /* we only expect one message per stream. This is a protocol violation. */
-            ret = -1;
-        }
-        else if (is_finished) {
-            /* Process the media command */
-            uint64_t message_type;
-            uint64_t final_offset = 0;
-            const uint8_t* next_bytes = quicrq_fin_msg_decode(stream_ctx->message_sent.buffer, stream_ctx->message_sent.buffer + stream_ctx->message_sent.message_size,
-                &message_type, &final_offset);
-
-            if (next_bytes == NULL) {
-                /* bad message format */
-                ret = -1;
-            }
-            else {
-                /* Mark message as received */
-                stream_ctx->is_server_finished = 1;
-                /* Signal final offset to receiver */
-
-                ret = stream_ctx->consumer_fn(quicrq_media_final_offset, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL, final_offset, 0);
-            }
-        }
-    }
-
-    if (is_fin) {
-        /* end of command stream. If something is in progress, yell */
-        if (!stream_ctx->is_client_finished) {
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-#endif
-
-#if 0
-/* Receive and process media control messages */
-int quicrq_receive_server_command(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, size_t length, int is_fin)
-{
-    int ret = 0;
-
-    if (stream_ctx->is_client_finished && length > 0) {
-        /* One message per stream! */
-        ret = -1;
-    } else if (length > 0) {
-        int is_finished = 0;
-        uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &stream_ctx->message_receive, &is_finished);
-        if (next_bytes == NULL) {
-            ret = -1;
-        }
-        else if (next_bytes != bytes + length) {
-            /* we only expect one message per stream. This is a protocol violation. */
-            ret = -1;
-        }
-        else if (is_finished) {
-            /* Process the media command */
-            uint64_t message_type;
-            size_t url_length = 0;
-            const uint8_t* url;
-            const uint8_t* next_bytes = quicrq_rq_msg_decode(stream_ctx->message_receive.buffer, stream_ctx->message_receive.buffer + stream_ctx->message_receive.message_size,
-                &message_type, &url_length, &url, &stream_ctx->datagram_stream_id);
-
-            if (next_bytes == NULL) {
-                /* bad message format */
-                ret = -1;
-            }
-            else {
-                /* Mark message as received */
-                stream_ctx->is_client_finished = 1;
-                stream_ctx->is_datagram = (message_type == QUICRQ_ACTION_OPEN_DATAGRAM);
-                /* Open the media -- TODO, variants with different actions. */
-                ret = quicrq_subscribe_local_media(stream_ctx, url, url_length);
-                stream_ctx->is_sender = 1;
-                if (message_type == QUICRQ_ACTION_OPEN_STREAM) {
-                    stream_ctx->send_state = quicrq_sending_stream;
-                    picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-                }
-            }
-        }
-    }
-
-    if (is_fin) {
-        /* end of command stream. If something is in progress, yell */
-        if (!stream_ctx->is_client_finished) {
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-#endif
 
 /* Receive and process media control messages.
  * This is governed by the receive state variable, with the following values:
@@ -758,8 +658,13 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 ret = -1;
                             }
                             else {
-                                stream_ctx->final_offset = incoming.offset;
-                                /* TODO: pass the repair data to the media consumer. */
+                                /* Pass the repair data to the media consumer. */
+                                ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), 
+                                    incoming.data, incoming.offset, incoming.length);
+                                if (ret == quicrq_consumer_finished) {
+                                    stream_ctx->is_server_finished = 1;
+                                    ret = 0;
+                                }
                             }
                             break;
                         default:
@@ -767,6 +672,9 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             ret = -1;
                             break;
                         }
+                        /* As the message was processed, reset the message buffer. */
+                        quicrq_msg_buffer_reset(&stream_ctx->message_receive);
+
                     }
                 }
             }
@@ -837,31 +745,6 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             else {
                 ret = quicrq_receive_stream_data(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
             }
-#if 0
-            else if (stream_ctx->is_client) {
-                if (!stream_ctx->is_datagram) {
-                    /* In the basic protocol, the client receives media data */
-                    ret = stream_ctx->consumer_fn(quicrq_media_data_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), bytes, stream_ctx->highest_offset, length);
-                    stream_ctx->highest_offset += length;
-                    if (ret == 0 && fin_or_event == picoquic_callback_stream_fin && !stream_ctx->is_server_finished) {
-                        stream_ctx->is_server_finished = 1;
-                        ret = stream_ctx->consumer_fn(quicrq_media_final_offset, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL, stream_ctx->highest_offset, 0);
-                    }
-                }
-                else {
-                    /* In the basic protocol, the server just send the data on the stream */
-                    ret = quicrq_receive_server_response(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
-                }
-            }
-            else {
-                /* In the basic protocol, the server receives messages */
-                ret = quicrq_receive_server_command(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
-            }
-            if (stream_ctx->is_client_finished && stream_ctx->is_server_finished) {
-                quicrq_delete_stream_ctx(cnx_ctx, stream_ctx);
-                stream_ctx = NULL;
-            }
-#endif
             break;
         case picoquic_callback_prepare_to_send:
             /* Active sending API */
@@ -924,11 +807,6 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             break;
         }
     }
-#if 1
-    if (ret != 0) {
-        DBG_PRINTF("%s", "Debug");
-    }
-#endif
 
     return ret;
 }

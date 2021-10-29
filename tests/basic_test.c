@@ -56,6 +56,7 @@ typedef struct st_quicrq_test_source_t {
 
 typedef struct st_quicrq_test_config_t {
     uint64_t simulated_time;
+    uint64_t simulate_loss;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
@@ -188,8 +189,11 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
     }
     else {
         int node_id = quicrq_test_find_dest_node(config, link_id, (struct sockaddr*)&packet->addr_to);
+        uint64_t loss = (config->simulate_loss & 1);
+        config->simulate_loss >>= 1;
+        config->simulate_loss |= (loss << 63);
 
-        if (node_id >= 0) {
+        if (node_id >= 0 && loss == 0) {
             *is_active = 1;
 
             ret = picoquic_incoming_packet(config->nodes[node_id]->quic,
@@ -407,7 +411,7 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
     return config;
 }
 
-quicrq_test_config_t* quicrq_test_basic_config_create()
+quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss)
 {
     /* Create a configuration with just two nodes, two links, one source and two attachment points.*/
     quicrq_test_config_t* config = quicrq_test_config_create(2, 2, 2, 1);
@@ -435,6 +439,8 @@ quicrq_test_config_t* quicrq_test_basic_config_create()
         config->return_links[1] = 0;
         config->attachments[1].link_id = 1;
         config->attachments[1].node_id = 1;
+        /* Set the desired loss pattern */
+        config->simulate_loss = simulate_loss;
     }
     return config;
 }
@@ -484,7 +490,7 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
 
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time, int use_datagrams)
+int quicrq_basic_test_one(int is_real_time, int use_datagrams, int simulate_losses)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -493,7 +499,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
 
-    quicrq_test_config_t* config = quicrq_test_basic_config_create();
+    quicrq_test_config_t* config = quicrq_test_basic_config_create(simulate_losses);
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     char media_source_path[512];
 
@@ -571,17 +577,22 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
 /* Basic connection test, using streams, not real time. */
 int quicrq_basic_test()
 {
-    return quicrq_basic_test_one(0, 0);
+    return quicrq_basic_test_one(0, 0, 0);
 }
 
 /* Basic connection test, using streams, real time. */
 int quicrq_basic_rt_test()
 {
-    return quicrq_basic_test_one(1, 0);
+    return quicrq_basic_test_one(1, 0, 0);
 }
 
 /* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
-int quicrq_basic_datagram_test()
+int quicrq_datagram_basic_test()
 {
-    return quicrq_basic_test_one(1, 1);
+    return quicrq_basic_test_one(1, 1, 0);
+}
+
+int quicrq_datagram_loss_test()
+{
+    return quicrq_basic_test_one(1, 1, 0x80);
 }
