@@ -92,7 +92,7 @@ int test_media_allocate_frame(test_media_publisher_context_t* pub_ctx, size_t ta
             ret = -1;
         }
         else {
-            if (pub_ctx->media_frame_size > 0) {
+            if (pub_ctx->media_frame_size > 0 && pub_ctx->media_frame_size <= target_size) {
                 memcpy(new_memory, pub_ctx->media_frame, pub_ctx->media_frame_size);
             }
             if (pub_ctx->media_frame_alloc > 0) {
@@ -441,29 +441,33 @@ static test_media_consumer_packet_t* test_media_store_create_packet(
     uint64_t offset,
     size_t data_length)
 {
-    test_media_consumer_packet_t* packet = (test_media_consumer_packet_t*)malloc(sizeof(test_media_consumer_packet_t) + data_length);
-    if (packet != NULL) {
-        memset(packet, 0, sizeof(test_media_consumer_packet_t));
-        packet->current_time = current_time;
-        packet->offset = offset;
-        packet->data_length = data_length;
-        packet->data = ((uint8_t*)packet) + sizeof(test_media_consumer_packet_t);
-        memcpy(packet->data, data, data_length);
+    test_media_consumer_packet_t* packet = NULL;
+    size_t packet_size = sizeof(test_media_consumer_packet_t) + data_length;
+    if (packet_size >= sizeof(test_media_consumer_packet_t)) {
+        packet = (test_media_consumer_packet_t*)malloc(packet_size);
+        if (packet != NULL) {
+            memset(packet, 0, sizeof(test_media_consumer_packet_t));
+            packet->current_time = current_time;
+            packet->offset = offset;
+            packet->data_length = data_length;
+            packet->data = ((uint8_t*)packet) + sizeof(test_media_consumer_packet_t);
+            memcpy(packet->data, data, data_length);
 
-        packet->previous_packet = previous_packet;
-        if (previous_packet == NULL) {
-            packet->next_packet = cons_ctx->first_packet;
-            cons_ctx->first_packet = packet;
-        }
-        else {
-            packet->next_packet = previous_packet->next_packet;
-            previous_packet->next_packet = packet;
-        }
-        if (packet->next_packet == NULL) {
-            cons_ctx->last_packet = packet;
-        }
-        else {
-            packet->next_packet->previous_packet = packet;
+            packet->previous_packet = previous_packet;
+            if (previous_packet == NULL) {
+                packet->next_packet = cons_ctx->first_packet;
+                cons_ctx->first_packet = packet;
+            }
+            else {
+                packet->next_packet = previous_packet->next_packet;
+                previous_packet->next_packet = packet;
+            }
+            if (packet->next_packet == NULL) {
+                cons_ctx->last_packet = packet;
+            }
+            else {
+                packet->next_packet->previous_packet = packet;
+            }
         }
     }
 
@@ -1088,14 +1092,24 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
     FILE* F = NULL;
     media_disorder_hole_t* losses = NULL;
     size_t actual_losses = 0;
+    size_t losses_size = sizeof(media_disorder_hole_t) * nb_losses;
 
-
-    losses = (media_disorder_hole_t*)malloc(sizeof(media_disorder_hole_t) * nb_losses);
-
-    /* Locate the source and reference file */
-    if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
-        quicrq_test_solution_dir, media_source_name) != 0 ) {
+    if (nb_losses == 0 || losses_size < sizeof(media_disorder_hole_t)) {
         ret = -1;
+    }
+    else {
+        losses = (media_disorder_hole_t*)malloc(losses_size);
+        if (losses == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
+        /* Locate the source and reference file */
+        if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
+            quicrq_test_solution_dir, media_source_name) != 0) {
+            ret = -1;
+        }
     }
 
     /* Initialize a consumer context for testing */
@@ -1135,6 +1149,9 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
             if (data_length > 0) {
                 ret = test_media_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
                     published_offset, data_length);
+                if (ret != 0) {
+                    DBG_PRINTF("Media consumer callback: ret = %d", ret);
+                }
                 published_offset += data_length;
             }
             else {
@@ -1154,6 +1171,9 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
                     /* Simulate repair of a hole */
                     ret = test_media_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, losses[i].media_buffer,
                         losses[i].offset, losses[i].length);
+                    if (ret != 0) {
+                        DBG_PRINTF("Media consumer callback: ret = %d", ret);
+                    }
                 }
             }
         }
@@ -1161,12 +1181,18 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
             /* Simulate repair of a hole */
             ret = test_media_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, losses[i].media_buffer,
                 losses[i].offset, losses[i].length);
+            if (ret != 0) {
+                DBG_PRINTF("Media consumer callback: ret = %d", ret);
+            }
         }
     }
 
     /* Indicate the final offset, to simulate what datagrams would do */
     if (ret == 0) {
         ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL, published_offset, 0);
+        if (ret != 0) {
+            DBG_PRINTF("Media consumer callback: ret = %d", ret);
+        }
     }
 
     /* Close media file */

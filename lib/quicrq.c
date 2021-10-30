@@ -38,14 +38,17 @@ int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, s
 {
     int ret = 0;
 
-    if (space > msg_buffer->buffer_alloc) {
+    if (bytes_stored > msg_buffer->buffer_alloc) {
+        ret = -1;
+    }
+    else if (space > msg_buffer->buffer_alloc) {
         uint8_t* x = (uint8_t*)malloc(space);
         if (x == NULL) {
             /* internal error! */
             ret = -1;
         }
         else {
-            if (bytes_stored > 0) {
+            if (bytes_stored > 0 && bytes_stored <= space) {
                 memcpy(x, msg_buffer->buffer, bytes_stored);
             }
             free(msg_buffer->buffer);
@@ -166,6 +169,10 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
      * to communicate the FIN of stream to the stack.
      */
     if (ret == 0) {
+        if (available == 0) {
+            /* Mark stream as not ready */
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
+        }
         void * buffer = picoquic_provide_stream_data_buffer(context, available, is_finished, !is_finished);
         if (buffer == NULL) {
             ret = -1;
@@ -257,28 +264,34 @@ void quicrq_remove_repair_in_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_
 int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, const uint8_t* bytes, size_t length, uint64_t offset)
 {
     int ret = 0;
-    /* Create a repair message, reserving space at the end to copy the datagram */
-    quicrq_datagram_queued_repair_t* repair = (quicrq_datagram_queued_repair_t*)malloc(sizeof(quicrq_datagram_queued_repair_t) + length);
-    if (repair == NULL) {
+    size_t target_size = sizeof(quicrq_datagram_queued_repair_t) + length;
+
+    if (target_size < sizeof(quicrq_datagram_queued_repair_t)) {
         ret = -1;
-    }
-    else {
-        memset(repair, 0, sizeof(quicrq_datagram_queued_repair_t));
-        repair->offset = offset;
-        repair->length = length;
-        repair->datagram = ((uint8_t*) repair)+sizeof(quicrq_datagram_queued_repair_t);
-        memcpy(repair->datagram, bytes, length);
-        if (stream_ctx->datagram_repair_last == NULL) {
-            stream_ctx->datagram_repair_last = repair;
-            stream_ctx->datagram_repair_first = repair;
+    } else {
+        /* Create a repair message, reserving space at the end to copy the datagram */
+        quicrq_datagram_queued_repair_t* repair = (quicrq_datagram_queued_repair_t*)malloc(target_size);
+        if (repair == NULL) {
+            ret = -1;
         }
         else {
-            repair->previous_repair = stream_ctx->datagram_repair_last;
-            stream_ctx->datagram_repair_last->next_repair = repair;
-            stream_ctx->datagram_repair_last = repair;
+            memset(repair, 0, sizeof(quicrq_datagram_queued_repair_t));
+            repair->offset = offset;
+            repair->length = length;
+            repair->datagram = ((uint8_t*)repair) + sizeof(quicrq_datagram_queued_repair_t);
+            memcpy(repair->datagram, bytes, length);
+            if (stream_ctx->datagram_repair_last == NULL) {
+                stream_ctx->datagram_repair_last = repair;
+                stream_ctx->datagram_repair_first = repair;
+            }
+            else {
+                repair->previous_repair = stream_ctx->datagram_repair_last;
+                stream_ctx->datagram_repair_last->next_repair = repair;
+                stream_ctx->datagram_repair_last = repair;
+            }
+            /* Wake up the control stream so the final message can be sent. */
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
         }
-        /* Wake up the control stream so the final message can be sent. */
-        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     }
     return ret;
 }

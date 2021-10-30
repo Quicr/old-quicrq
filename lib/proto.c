@@ -251,28 +251,35 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 int quicrq_publish_source(quicrq_ctx_t * qr_ctx, uint8_t * url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn)
 {
     int ret = 0;
-    quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t) + url_length);
+    size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
 
-    if (srce_ctx == NULL) {
+    if (source_ctx_size < sizeof(quicrq_media_source_ctx_t)) {
         ret = -1;
     }
     else {
-        memset(srce_ctx, 0, sizeof(quicrq_media_source_ctx_t));
-        srce_ctx->media_url = ((uint8_t*)srce_ctx) + sizeof(quicrq_media_source_ctx_t);
-        srce_ctx->media_url_length = url_length;
-        memcpy(srce_ctx->media_url, url, url_length);
-        if (qr_ctx->last_source == NULL) {
-            qr_ctx->first_source = srce_ctx;
-            qr_ctx->last_source = srce_ctx;
+        quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(source_ctx_size);
+
+        if (srce_ctx == NULL) {
+            ret = -1;
         }
         else {
-            qr_ctx->last_source->next_source = srce_ctx;
-            srce_ctx->previous_source = qr_ctx->last_source;
-            qr_ctx->last_source = srce_ctx;
+            memset(srce_ctx, 0, sizeof(quicrq_media_source_ctx_t));
+            srce_ctx->media_url = ((uint8_t*)srce_ctx) + sizeof(quicrq_media_source_ctx_t);
+            srce_ctx->media_url_length = url_length;
+            memcpy(srce_ctx->media_url, url, url_length);
+            if (qr_ctx->last_source == NULL) {
+                qr_ctx->first_source = srce_ctx;
+                qr_ctx->last_source = srce_ctx;
+            }
+            else {
+                qr_ctx->last_source->next_source = srce_ctx;
+                srce_ctx->previous_source = qr_ctx->last_source;
+                qr_ctx->last_source = srce_ctx;
+            }
+            srce_ctx->pub_ctx = pub_ctx;
+            srce_ctx->subscribe_fn = subscribe_fn;
+            srce_ctx->getdata_fn = getdata_fn;
         }
-        srce_ctx->pub_ctx = pub_ctx;
-        srce_ctx->subscribe_fn = subscribe_fn;
-        srce_ctx->getdata_fn = getdata_fn;
     }
 
     return ret;

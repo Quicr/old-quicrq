@@ -504,7 +504,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     char text_log_name[512];
     size_t nb_log_chars = 0;
 
-    picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
 
     if (config == NULL) {
         ret = -1;
