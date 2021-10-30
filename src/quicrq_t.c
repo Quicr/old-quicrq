@@ -22,6 +22,7 @@ typedef enum {
 
 static const quicrq_test_def_t test_table[] =
 {
+    { "proto_msg", proto_msg_test},
     { "basic", quicrq_basic_test },
     { "basic_rt", quicrq_basic_rt_test },
     { "media_video1", quicrq_media_video1_test },
@@ -30,8 +31,7 @@ static const quicrq_test_def_t test_table[] =
     { "media_source_rt", quicrq_media_source_rt_test},
     { "media_disorder", quicrq_media_disorder_test},
     { "datagram_basic", quicrq_datagram_basic_test },
-    { "datagram_loss", quicrq_datagram_loss_test },
-    { "proto_msg", proto_msg_test}
+    { "datagram_loss", quicrq_datagram_loss_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);

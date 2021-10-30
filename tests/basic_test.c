@@ -501,10 +501,14 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     quicrq_test_config_t* config = quicrq_test_basic_config_create(simulate_losses);
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     char media_source_path[512];
+    char result_file_name[512];
+    char result_log_name[512];
     char text_log_name[512];
     size_t nb_log_chars = 0;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(result_file_name, sizeof(text_log_name), &nb_log_chars, "basic_result-%d-%d-%llx.bin", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(result_log_name, sizeof(text_log_name), &nb_log_chars, "basic_log-%d-%d-%llx.bin", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
 
     if (config == NULL) {
         ret = -1;
@@ -541,7 +545,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 
     if (ret == 0) {
         /* Create a subscription to the test source on client */
-        ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, QUICRQ_TEST_BASIC_RESULT, QUICRQ_TEST_BASIC_LOG);
+        ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
         if (ret != 0) {
             DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
@@ -584,7 +588,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     }
     /* Verify that media file was received correctly */
     if (ret == 0) {
-        ret = quicrq_compare_media_file(QUICRQ_TEST_BASIC_RESULT, media_source_path);
+        ret = quicrq_compare_media_file(result_file_name, media_source_path);
     }
     else {
         DBG_PRINTF("Test failed before getting results, ret = %d", ret);
