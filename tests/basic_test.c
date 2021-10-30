@@ -525,6 +525,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         /* Add a test source to the configuration, and to the server */
         ret = test_media_publish(config->nodes[0], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, &config->sources[0].next_source_time);
         config->sources[0].srce_ctx = config->nodes[0]->first_source;
+        if (ret != 0) {
+            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+        }
     }
 
     if (ret == 0) {
@@ -532,12 +535,16 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         cnx_ctx = quicrq_test_basic_create_cnx(config, 1, 0);
         if (cnx_ctx == NULL) {
             ret = -1;
+            DBG_PRINTF("Cannot create client connection, ret = %d", ret);
         }
     }
 
     if (ret == 0) {
         /* Create a subscription to the test source on client */
         ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, QUICRQ_TEST_BASIC_RESULT, QUICRQ_TEST_BASIC_LOG);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+        }
     }
 
     while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
@@ -545,6 +552,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         int is_active = 0;
 
         ret = quicrq_test_loop_step(config, &is_active);
+        if (ret != 0) {
+            DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
+        }
 
         nb_steps++;
         if (is_active) {
@@ -561,6 +571,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
                 /* Client is done. Close connection without waiting for timer */
                 ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
                 is_closed = 1;
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot close client connection, ret = %d", ret);
+                }
             }
         }
     }

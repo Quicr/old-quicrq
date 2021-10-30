@@ -740,27 +740,38 @@ int quicrq_compare_media_file(char const* media_result_file, char const* media_r
                     if (result_ctx->is_finished) {
                         if (!ref_ctx->is_finished) {
                             ret = -1;
+                            DBG_PRINTF("Result file finished before reference: ret=%d", ret);
                         }
                     }
                     else if (ref_ctx->is_finished) {
                         if (!result_ctx->is_finished) {
                             ret = -1;
+                            DBG_PRINTF("Result file not finished with reference: ret=%d", ret);
                         }
                     }
                     else if (ref_ctx->current_header.timestamp != result_ctx->current_header.timestamp) {
                         ret = -1;
+                        DBG_PRINTF("Time stamps differ, %llx vs %llx: ret=%d", (unsigned long long)ref_ctx->current_header.timestamp, 
+                            (unsigned long long)result_ctx->current_header.timestamp, ret);
                     }
                     else if (ref_ctx->current_header.number != result_ctx->current_header.number) {
                         ret = -1;
+                        DBG_PRINTF("Numbers differ, %llu vs %llu: ret=%d", (unsigned long long)ref_ctx->current_header.number,
+                            (unsigned long long)result_ctx->current_header.number, ret);
                     }
                     else if (ref_ctx->current_header.length != result_ctx->current_header.length) {
                         ret = -1;
+                        DBG_PRINTF("Lengths differ, %lu vs %lu: ret=%d", (unsigned long)ref_ctx->current_header.number,
+                            (unsigned long)result_ctx->current_header.number, ret);
                     }
                     else if (ref_ctx->media_frame_size != result_ctx->media_frame_size){
                         ret = -1;
+                        DBG_PRINTF("Frame sizes differ, %zu vs %zu: ret=%d",  ref_ctx->media_frame_size,
+                            result_ctx->media_frame_size, ret);
                     }
                     else if (memcmp(ref_ctx->media_frame, result_ctx->media_frame, ref_ctx->media_frame_size) != 0) {
                         ret = -1;
+                        DBG_PRINTF("Frame contents differ: ret=%d", ret);
                     }
                 }
             }
