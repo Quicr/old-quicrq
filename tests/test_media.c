@@ -551,7 +551,7 @@ int test_media_consumer_data_ready(
         }
     }
 
-    if (ret == 0 && cons_ctx->highest_offset >= offset) {
+    if (ret == 0 && cons_ctx->final_offset > 0 && cons_ctx->highest_offset >= cons_ctx->final_offset) {
         cons_ctx->is_finished = 1;
     }
 
