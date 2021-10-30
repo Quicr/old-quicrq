@@ -134,6 +134,7 @@ int test_media_read_frame_from_file(test_media_publisher_context_t* pub_ctx)
                     nb_read = fread(pub_ctx->media_frame + pub_ctx->media_frame_size, 1, required, pub_ctx->F);
                     if (nb_read != required) {
                         ret = -1;
+                        DBG_PRINTF("Reading %zu frame bytes, required %zu, ret=%d", nb_read, required, ret);
                     }
                     else {
                         pub_ctx->media_frame_size = target_size;
@@ -143,6 +144,7 @@ int test_media_read_frame_from_file(test_media_publisher_context_t* pub_ctx)
             else {
                 /* malformed header ! */
                 ret = -1;
+                DBG_PRINTF("Reading malformed frame header, ret=%d", ret);
             }       
         }
     }
@@ -728,12 +730,15 @@ int quicrq_compare_media_file(char const* media_result_file, char const* media_r
 
     if (result_ctx == NULL || ref_ctx == NULL) {
         ret = -1;
+        DBG_PRINTF("Could not create result(0x%x) or reference(0x%x) publisher contexts, ret=%d", result_ctx, ref_ctx, ret);
     }
     else {
         /* Read the frames on both. They should match, or both should come to an end */
         while (ret == 0 && !result_ctx->is_finished && !ref_ctx->is_finished) {
             ret = test_media_read_frame_from_file(result_ctx);
-            if (ret == 0) {
+            if (ret != 0) {
+                DBG_PRINTF("Could not read frame from results, ret=%d", ret);
+            } else {
                 ret = test_media_read_frame_from_file(ref_ctx);
                 if (ret == 0) {
                     /* Compare the media frames */

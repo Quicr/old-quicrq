@@ -586,6 +586,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     if (ret == 0) {
         ret = quicrq_compare_media_file(QUICRQ_TEST_BASIC_RESULT, media_source_path);
     }
+    else {
+        DBG_PRINTF("Test failed before getting results, ret = %d", ret);
+    }
 
     return ret;
 }

@@ -159,6 +159,7 @@ int main(int argc, char** argv)
         }
         else {
             debug_printf_push_stream(stderr);
+            DBG_PRINTF("%s", "Debug print enabled");
         }
 
         if (ret == 0)
@@ -222,17 +223,20 @@ int main(int argc, char** argv)
             if (disable_debug && retry_failed_test) {
                 /* debug_printf_push_stream(stderr); */
                 debug_printf_resume();
+                fprintf(stdout, "Retrying failed tests.\n");
                 ret = 0;
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (test_status[i] == test_failed) {
                         fprintf(stdout, "Retrying %s:\n", test_table[i].test_name);
                         if (do_one_test(i, stdout) != 0) {
                             test_status[i] = test_failed;
+                            fprintf(stdout, "Test %s: still failing\n", test_table[i].test_name);
                             ret = -1;
                         }
                         else {
                             /* This was a Heisenbug.. */
                             test_status[i] = test_success;
+                            fprintf(stdout, "Test %s: passing now.\n", test_table[i].test_name);
                         }
                     }
                 }
