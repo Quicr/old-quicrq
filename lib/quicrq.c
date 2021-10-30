@@ -628,7 +628,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 ret = -1;
                             }
                             else {
-                                /* TODO: client should only be marked finished if stream is closed. */
+                                /* client should only be marked finished if stream is closed. */
                                 stream_ctx->is_client_finished = 1;
                                 /* Process initial request */
                                 stream_ctx->is_datagram = (incoming.message_type == QUICRQ_ACTION_OPEN_DATAGRAM);
@@ -695,7 +695,10 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
     }
 
     if (is_fin) {
-        /* TODO: The peer is finished. Handling may vary depending on state. */
+        /* TODO: The peer is finished. Differentiate client/server/sender/receiver. */
+        if (stream_ctx->is_client) {
+            stream_ctx->is_server_finished = 1;
+        }
     }
 
 

@@ -49,7 +49,6 @@ typedef struct st_quicrq_test_attach_t {
 } quicrq_test_attach_t;
 
 typedef struct st_quicrq_test_source_t {
-    /* TODO: relation between source and node */
     uint64_t next_source_time;
     quicrq_media_source_ctx_t* srce_ctx;
 } quicrq_test_source_t;
@@ -168,7 +167,6 @@ int quicrq_test_packet_departure(quicrq_test_config_t* config, int node_id, int*
             }
             else {
                 /* packet cannot be routed. */
-                /* TODO: keep track! */
                 free(packet);
             }
         }
@@ -202,9 +200,6 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
                 (struct sockaddr*)&packet->addr_to, 0, 0,
                 config->simulated_time);
         }
-        else {
-            /* TODO: keep track of failures */
-        }
         free(packet);
     }
 
@@ -219,7 +214,6 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
     int next_step_index = 0;
     uint64_t next_time = UINT64_MAX;
 
-    /* TODO: insert source timing in the simulation */
     /* Check which source has the lowest time */
     for (int i = 0; i < config->nb_sources; i++) {
         if (config->sources[i].next_source_time < next_time) {
@@ -435,7 +429,6 @@ quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss)
         config->return_links[0] = 1;
         config->attachments[0].link_id = 0;
         config->attachments[0].node_id = 0;
-        /* TODO: initiate source */
         config->return_links[1] = 0;
         config->attachments[1].link_id = 1;
         config->attachments[1].node_id = 1;

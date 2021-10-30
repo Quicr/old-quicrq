@@ -385,6 +385,9 @@ int test_media_consumer_close(void* media_ctx)
     if ((packet = cons_ctx->first_packet) != NULL) {
         ret = -1;
         DBG_PRINTF("Closing consumer with unprocessed frame, %llu, ret=%d", (unsigned long long)packet->offset, ret);
+    } else if (cons_ctx->final_offset == 0 || cons_ctx->highest_offset != cons_ctx->final_offset) {
+        ret = -1;
+        DBG_PRINTF("Closing consumer at offset: %llu,final= %llu, ret=%d", (unsigned long long)cons_ctx->highest_offset, (unsigned long long)cons_ctx->final_offset, ret);
     }
 
     while ((packet = cons_ctx->first_packet) != NULL) {
@@ -691,15 +694,25 @@ int test_media_consumer_cb(
     size_t data_length)
 {
     int ret = 0;
+    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
+
     switch (action) {
     case quicrq_media_data_ready:
         ret = test_media_consumer_data_ready(media_ctx, current_time, data, offset, data_length);
         break;
     case quicrq_media_datagram_ready:
         ret = test_media_consumer_datagram_ready(media_ctx, current_time, data, offset, data_length);
+
+        if (ret == 0 && cons_ctx->is_finished) {
+            ret = quicrq_consumer_finished;
+        }
         break;
     case quicrq_media_final_offset:
         test_media_consumer_learn_final_offset(media_ctx, offset);
+
+        if (ret == 0 && cons_ctx->is_finished) {
+            ret = quicrq_consumer_finished;
+        }
         break;
     case quicrq_media_close:
         ret = test_media_consumer_close(media_ctx);
@@ -908,6 +921,18 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
         test_media_publisher_close(pub_ctx);
     }
 
+    if (ret == 0) {
+        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL,
+            published_offset, 0);
+        if (ret == quicrq_consumer_finished) {
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Consumer not finished after final offset! ret = %d", ret);
+            ret = -1;
+        }
+    }
+
     if (cons_ctx != NULL) {
         int close_ret = test_media_consumer_close(cons_ctx);
         if (ret == 0) {
@@ -1055,6 +1080,17 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
 
     /* Close publisher by closing the connection context */
     if (ret == 0) {
+        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL,
+            published_offset, 0);
+        if (ret == quicrq_consumer_finished) {
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Consumer not finished after final offset! ret = %d", ret);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
         quicrq_delete_cnx_context(cnx_ctx);
     }
     /* Close consumer */
@@ -1123,6 +1159,7 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
     media_disorder_hole_t* losses = NULL;
     size_t actual_losses = 0;
     size_t losses_size = sizeof(media_disorder_hole_t) * nb_losses;
+    int consumer_properly_finished = 0;
 
     if (nb_losses == 0 || losses_size < sizeof(media_disorder_hole_t)) {
         ret = -1;
@@ -1192,6 +1229,14 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
         current_time += time_step;
     }
 
+    /* Indicate the final offset, to simulate what datagrams would do */
+    if (ret == 0) {
+        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL, published_offset, 0);
+        if (ret != 0) {
+            DBG_PRINTF("Media consumer callback: ret = %d", ret);
+        }
+    }
+
     /* At this point, all blocks have been sent, except for the holes */
     if (ret == 0) {
         if (nb_dup > 0) {
@@ -1211,18 +1256,18 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
             /* Simulate repair of a hole */
             ret = test_media_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, losses[i].media_buffer,
                 losses[i].offset, losses[i].length);
-            if (ret != 0) {
+            if (ret == quicrq_consumer_finished) {
+                consumer_properly_finished = 1;
+                ret = 0;
+            } else if (ret != 0){
                 DBG_PRINTF("Media consumer callback: ret = %d", ret);
             }
         }
     }
 
-    /* Indicate the final offset, to simulate what datagrams would do */
-    if (ret == 0) {
-        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL, published_offset, 0);
-        if (ret != 0) {
-            DBG_PRINTF("Media consumer callback: ret = %d", ret);
-        }
+    if (ret == 0 && !consumer_properly_finished) {
+        ret = -1;
+        DBG_PRINTF("Consumer not properly finished, ret=%d", ret);
     }
 
     /* Close media file */
