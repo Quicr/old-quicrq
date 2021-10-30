@@ -375,11 +375,17 @@ typedef struct st_test_media_consumer_context_t {
     unsigned int header_received : 1;
 } test_media_consumer_context_t;
 
-void test_media_consumer_close(void* media_ctx)
+int test_media_consumer_close(void* media_ctx)
 {
     /* Close result file and log file */
+    int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
     test_media_consumer_packet_t* packet;
+
+    if ((packet = cons_ctx->first_packet) != NULL) {
+        ret = -1;
+        DBG_PRINTF("Closing consumer with unprocessed frame, %llu, ret=%d", (unsigned long long)packet->offset, ret);
+    }
 
     while ((packet = cons_ctx->first_packet) != NULL) {
         cons_ctx->first_packet = packet->next_packet;
@@ -393,6 +399,8 @@ void test_media_consumer_close(void* media_ctx)
         picoquic_file_close(cons_ctx->Log);
     }
     free(media_ctx);
+
+    return ret;
 }
 
 void* test_media_consumer_init(char const* media_result_file, char const * media_result_log)
@@ -404,7 +412,7 @@ void* test_media_consumer_init(char const* media_result_file, char const * media
         cons_ctx->Res = picoquic_file_open(media_result_file, "wb");
         cons_ctx->Log = picoquic_file_open(media_result_log, "w");
         if (cons_ctx->Res == NULL || cons_ctx->Log == NULL) {
-            test_media_consumer_close(cons_ctx);
+            (void)test_media_consumer_close(cons_ctx);
             cons_ctx = NULL;
         }
     }
@@ -694,7 +702,7 @@ int test_media_consumer_cb(
         test_media_consumer_learn_final_offset(media_ctx, offset);
         break;
     case quicrq_media_close:
-        test_media_consumer_close(media_ctx);
+        ret = test_media_consumer_close(media_ctx);
         break;
     default:
         ret = -1;
@@ -901,7 +909,10 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     }
 
     if (cons_ctx != NULL) {
-        test_media_consumer_close(cons_ctx);
+        int close_ret = test_media_consumer_close(cons_ctx);
+        if (ret == 0) {
+            ret = close_ret;
+        }
     }
 
     /* Compare media result to media source */
@@ -1048,7 +1059,10 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     }
     /* Close consumer */
     if (cons_ctx != NULL) {
-        test_media_consumer_close(cons_ctx);
+        int close_ret = test_media_consumer_close(cons_ctx);
+        if (ret == 0) {
+            ret = close_ret;
+        }
     }
 
     /* Compare media result to media source */

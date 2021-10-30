@@ -561,6 +561,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
 
         nb_steps++;
+
         if (is_active) {
             nb_inactive = 0;
         }
