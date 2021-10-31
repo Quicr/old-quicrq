@@ -4,7 +4,11 @@
 #include "quicrq_internal.h"
 #include "quicrq_tests.h"
 #include "quicrq_test_internal.h"
+#include "picoquic.h"
 #include "picoquic_utils.h"
+
+int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir);
+int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
 
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
@@ -45,13 +49,13 @@ typedef struct st_quicrq_test_attach_t {
 } quicrq_test_attach_t;
 
 typedef struct st_quicrq_test_source_t {
-    /* TODO: relation between source and node */
     uint64_t next_source_time;
     quicrq_media_source_ctx_t* srce_ctx;
 } quicrq_test_source_t;
 
 typedef struct st_quicrq_test_config_t {
     uint64_t simulated_time;
+    uint64_t simulate_loss;
     char test_server_cert_file[512];
     char test_server_key_file[512];
     char test_server_cert_store_file[512];
@@ -163,7 +167,6 @@ int quicrq_test_packet_departure(quicrq_test_config_t* config, int node_id, int*
             }
             else {
                 /* packet cannot be routed. */
-                /* TODO: keep track! */
                 free(packet);
             }
         }
@@ -184,8 +187,11 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
     }
     else {
         int node_id = quicrq_test_find_dest_node(config, link_id, (struct sockaddr*)&packet->addr_to);
+        uint64_t loss = (config->simulate_loss & 1);
+        config->simulate_loss >>= 1;
+        config->simulate_loss |= (loss << 63);
 
-        if (node_id >= 0) {
+        if (node_id >= 0 && loss == 0) {
             *is_active = 1;
 
             ret = picoquic_incoming_packet(config->nodes[node_id]->quic,
@@ -193,9 +199,6 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
                 (struct sockaddr*)&packet->addr_from,
                 (struct sockaddr*)&packet->addr_to, 0, 0,
                 config->simulated_time);
-        }
-        else {
-            /* TODO: keep track of failures */
         }
         free(packet);
     }
@@ -211,7 +214,6 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
     int next_step_index = 0;
     uint64_t next_time = UINT64_MAX;
 
-    /* TODO: insert source timing in the simulation */
     /* Check which source has the lowest time */
     for (int i = 0; i < config->nb_sources; i++) {
         if (config->sources[i].next_source_time < next_time) {
@@ -403,7 +405,7 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
     return config;
 }
 
-quicrq_test_config_t* quicrq_test_basic_config_create()
+quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss)
 {
     /* Create a configuration with just two nodes, two links, one source and two attachment points.*/
     quicrq_test_config_t* config = quicrq_test_config_create(2, 2, 2, 1);
@@ -427,10 +429,11 @@ quicrq_test_config_t* quicrq_test_basic_config_create()
         config->return_links[0] = 1;
         config->attachments[0].link_id = 0;
         config->attachments[0].node_id = 0;
-        /* TODO: initiate source */
         config->return_links[1] = 0;
         config->attachments[1].link_id = 1;
         config->attachments[1].node_id = 1;
+        /* Set the desired loss pattern */
+        config->simulate_loss = simulate_loss;
     }
     return config;
 }
@@ -451,6 +454,14 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
     if (addr_to != NULL) {
         cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
             addr_to, config->simulated_time, 0, NULL, QUICRQ_ALPN, 1);
+        /* Set parameters */
+        if (!server_node) {
+            picoquic_tp_t client_parameters;
+
+            quicrq_init_transport_parameters(&client_parameters, 1);
+            picoquic_set_transport_parameters(cnx, &client_parameters);
+        }
+
         if (picoquic_start_client_cnx(cnx) != 0){
             picoquic_delete_cnx(cnx);
             cnx = NULL;
@@ -472,7 +483,7 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
 
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time, int use_datagrams)
+int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -480,10 +491,17 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
     int is_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
-
-    quicrq_test_config_t* config = quicrq_test_basic_config_create();
+    quicrq_test_config_t* config = quicrq_test_basic_config_create(simulate_losses);
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     char media_source_path[512];
+    char result_file_name[512];
+    char result_log_name[512];
+    char text_log_name[512];
+    size_t nb_log_chars = 0;
+
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(result_file_name, sizeof(text_log_name), &nb_log_chars, "basic_result-%d-%d-%llx.bin", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(result_log_name, sizeof(text_log_name), &nb_log_chars, "basic_log-%d-%d-%llx.bin", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
 
     if (config == NULL) {
         ret = -1;
@@ -495,10 +513,18 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
         ret = -1;
     }
 
+    /* Add QUIC level log */
+    if (ret == 0) {
+        ret = picoquic_set_textlog(config->nodes[1]->quic, text_log_name);
+    }
+
     if (ret == 0){
         /* Add a test source to the configuration, and to the server */
         ret = test_media_publish(config->nodes[0], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, &config->sources[0].next_source_time);
         config->sources[0].srce_ctx = config->nodes[0]->first_source;
+        if (ret != 0) {
+            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+        }
     }
 
     if (ret == 0) {
@@ -506,12 +532,16 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
         cnx_ctx = quicrq_test_basic_create_cnx(config, 1, 0);
         if (cnx_ctx == NULL) {
             ret = -1;
+            DBG_PRINTF("Cannot create client connection, ret = %d", ret);
         }
     }
 
     if (ret == 0) {
         /* Create a subscription to the test source on client */
-        ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, QUICRQ_TEST_BASIC_RESULT, QUICRQ_TEST_BASIC_LOG);
+        ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+        }
     }
 
     while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
@@ -519,25 +549,44 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
         int is_active = 0;
 
         ret = quicrq_test_loop_step(config, &is_active);
+        if (ret != 0) {
+            DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
+        }
 
         nb_steps++;
+
         if (is_active) {
             nb_inactive = 0;
         }
         else {
             nb_inactive++;
+            if (nb_inactive >= max_inactive) {
+                DBG_PRINTF("Exit loop after too many inactive: %d", nb_inactive);
+            }
         }
-        /* TODO: if the media is received, exit the loop */
+        /* if the media is received, exit the loop */
         if (config->nodes[1]->first_cnx == NULL) {
+            DBG_PRINTF("%s", "Exit loop after client connection closed.");
             break;
         } else if (config->nodes[1]->first_cnx->first_stream == NULL || config->nodes[1]->first_cnx->first_stream->is_server_finished) {
             if (!is_closed) {
                 /* Client is done. Close connection without waiting for timer */
+                if (config->nodes[1]->first_cnx->first_stream == NULL){
+                    DBG_PRINTF("%s", "Closing client after stream closed");
+                } else {
+                    DBG_PRINTF("%s", "Closing after stream server finished");
+                }
                 ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
                 is_closed = 1;
+                if (ret != 0) {
+                    DBG_PRINTF("Cannot close client connection, ret = %d", ret);
+                }
             }
         }
     }
+
+    DBG_PRINTF("Exit loop after %llu us, ret = %d",
+        (unsigned long long) config->simulated_time, ret);
 
     /* Clear everything. */
     if (config != NULL) {
@@ -545,7 +594,10 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
     }
     /* Verify that media file was received correctly */
     if (ret == 0) {
-        ret = quicrq_compare_media_file(QUICRQ_TEST_BASIC_RESULT, media_source_path);
+        ret = quicrq_compare_media_file(result_file_name, media_source_path);
+    }
+    else {
+        DBG_PRINTF("Test failed before getting results, ret = %d", ret);
     }
 
     return ret;
@@ -554,17 +606,22 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams)
 /* Basic connection test, using streams, not real time. */
 int quicrq_basic_test()
 {
-    return quicrq_basic_test_one(0, 0);
+    return quicrq_basic_test_one(0, 0, 0);
 }
 
 /* Basic connection test, using streams, real time. */
 int quicrq_basic_rt_test()
 {
-    return quicrq_basic_test_one(1, 0);
+    return quicrq_basic_test_one(1, 0, 0);
 }
 
 /* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
-int quicrq_basic_datagram_test()
+int quicrq_datagram_basic_test()
 {
-    return quicrq_basic_test_one(1, 1);
+    return quicrq_basic_test_one(1, 1, 0);
+}
+
+int quicrq_datagram_loss_test()
+{
+    return quicrq_basic_test_one(1, 1, 0x7080);
 }

@@ -22,13 +22,16 @@ typedef enum {
 
 static const quicrq_test_def_t test_table[] =
 {
+    { "proto_msg", proto_msg_test},
     { "basic", quicrq_basic_test },
     { "basic_rt", quicrq_basic_rt_test },
     { "media_video1", quicrq_media_video1_test },
     { "media_video1_rt", quicrq_media_video1_rt_test },
     { "media_source", quicrq_media_source_test },
     { "media_source_rt", quicrq_media_source_rt_test},
-    { "basic_datagram", quicrq_basic_datagram_test }
+    { "media_disorder", quicrq_media_disorder_test},
+    { "datagram_basic", quicrq_datagram_basic_test },
+    { "datagram_loss", quicrq_datagram_loss_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);
@@ -156,6 +159,7 @@ int main(int argc, char** argv)
         }
         else {
             debug_printf_push_stream(stderr);
+            DBG_PRINTF("%s", "Debug print enabled");
         }
 
         if (ret == 0)
@@ -219,17 +223,20 @@ int main(int argc, char** argv)
             if (disable_debug && retry_failed_test) {
                 /* debug_printf_push_stream(stderr); */
                 debug_printf_resume();
+                fprintf(stdout, "Retrying failed tests.\n");
                 ret = 0;
                 for (size_t i = 0; i < nb_tests; i++) {
                     if (test_status[i] == test_failed) {
                         fprintf(stdout, "Retrying %s:\n", test_table[i].test_name);
                         if (do_one_test(i, stdout) != 0) {
                             test_status[i] = test_failed;
+                            fprintf(stdout, "Test %s: still failing\n", test_table[i].test_name);
                             ret = -1;
                         }
                         else {
                             /* This was a Heisenbug.. */
                             test_status[i] = test_success;
+                            fprintf(stdout, "Test %s: passing now.\n", test_table[i].test_name);
                         }
                     }
                 }
