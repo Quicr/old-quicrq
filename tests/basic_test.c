@@ -560,13 +560,22 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
         else {
             nb_inactive++;
+            if (nb_inactive >= max_inactive) {
+                DBG_PRINTF("Exit loop after too many inactive: %d", nb_inactive);
+            }
         }
-        /* TODO: if the media is received, exit the loop */
+        /* if the media is received, exit the loop */
         if (config->nodes[1]->first_cnx == NULL) {
+            DBG_PRINTF("%s", "Exit loop after client connection closed.");
             break;
         } else if (config->nodes[1]->first_cnx->first_stream == NULL || config->nodes[1]->first_cnx->first_stream->is_server_finished) {
             if (!is_closed) {
                 /* Client is done. Close connection without waiting for timer */
+                if (config->nodes[1]->first_cnx->first_stream == NULL){
+                    DBG_PRINTF("%s", "Closing client after stream closed");
+                } else {
+                    DBG_PRINTF("%s", "Closing after stream server finished");
+                }
                 ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
                 is_closed = 1;
                 if (ret != 0) {
@@ -575,6 +584,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             }
         }
     }
+
+    DBG_PRINTF("Exit loop after %llu us, ret = %d",
+        (unsigned long long) config->simulated_time, ret);
 
     /* Clear everything. */
     if (config != NULL) {

@@ -233,6 +233,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             /* Pass data to the media context. */
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, datagram_offset, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
+                DBG_PRINTF("Consumer indicated finished, ret = %d", ret);
                 stream_ctx->is_server_finished = 1;
                 ret = 0;
             }
@@ -587,6 +588,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
             stream_ctx->is_server_finished = 1;
             ret = stream_ctx->consumer_fn(quicrq_media_final_offset, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL, stream_ctx->highest_offset, 0);
             if (ret == quicrq_consumer_finished) {
+                DBG_PRINTF("Consumer is finished, ret = %d", ret);
                 ret = 0;
             }
         }
@@ -656,6 +658,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->final_offset = incoming.offset;
                                 ret = stream_ctx->consumer_fn(quicrq_media_final_offset, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL, stream_ctx->final_offset, 0);
                                 if (ret == quicrq_consumer_finished) {
+                                    DBG_PRINTF("Finish after final offset, ret=%d", ret);
                                     stream_ctx->is_server_finished = 1;
                                     ret = 0;
                                 }
@@ -675,6 +678,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), 
                                     incoming.data, incoming.offset, incoming.length);
                                 if (ret == quicrq_consumer_finished) {
+                                    DBG_PRINTF("Finished after repair, ret=%d", ret);
                                     stream_ctx->is_server_finished = 1;
                                     ret = 0;
                                 }
@@ -697,6 +701,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
     if (is_fin) {
         /* TODO: The peer is finished. Differentiate client/server/sender/receiver. */
         if (stream_ctx->is_client) {
+            DBG_PRINTF("Finished after peer stream is_fin: %d", is_fin);
             stream_ctx->is_server_finished = 1;
         }
     }
