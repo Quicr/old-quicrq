@@ -571,16 +571,25 @@ int test_media_consumer_datagram_ready(
     int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
     /* is this datagram in order? */
-    if (offset + data_length < cons_ctx->highest_offset) {
+    if (offset < cons_ctx->highest_offset) {
         /* Redundant replica of an old packet. Nothing to see. */
+        if (offset + data_length > cons_ctx->highest_offset) {
+            size_t consumed = cons_ctx->highest_offset - offset;
+            data += consumed;
+            offset += consumed;
+            data_length -= consumed;
+        }
+        else {
+            data_length = 0;
+        }
+    }
+
+    if (data_length == 0) {
+        /* everything was already seen, lower than highest offset */
         ret = 0;
     }
-    else if (cons_ctx->first_packet == NULL && offset <= cons_ctx->highest_offset) {
+    else if (cons_ctx->first_packet == NULL && offset == cons_ctx->highest_offset) {
         /* Everything in order so far, just submit the data */
-        size_t consumed = cons_ctx->highest_offset - offset;
-        data += consumed;
-        offset += consumed;
-        data_length -= consumed;
         ret = test_media_consumer_data_ready(media_ctx, current_time, data, offset, data_length);
     }
     else if (cons_ctx->last_packet == NULL || cons_ctx->last_packet->offset <= offset) {

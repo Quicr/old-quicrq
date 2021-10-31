@@ -623,5 +623,5 @@ int quicrq_datagram_basic_test()
 
 int quicrq_datagram_loss_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x80);
+    return quicrq_basic_test_one(1, 1, 0x7080);
 }

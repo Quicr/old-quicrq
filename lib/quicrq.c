@@ -490,7 +490,6 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                         /* Queue the media request message to that stream */
                         message->message_size = message_next - message->buffer;
                         stream_ctx->send_state = quicrq_sending_repair;
-                        more_to_send = (stream_ctx->datagram_repair_first->next_repair != NULL);
                     }
                 }
             }
@@ -509,7 +508,6 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                         /* Queue the media request message to that stream */
                         message->message_size = message_next - message->buffer;
                         stream_ctx->send_state = quicrq_sending_offset;
-                        more_to_send = (stream_ctx->datagram_repair_first != NULL);
                     }
                 }
             }
@@ -535,10 +533,14 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             break;
         case quicrq_sending_initial:
             /* Send available buffer data. Mark state ready after sent. */
+            more_to_send = (stream_ctx->datagram_repair_first != NULL ||
+                (stream_ctx->final_offset > 0 && !stream_ctx->is_final_offset_sent));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             break;
         case quicrq_sending_repair:
             /* Send available buffer data and repair data. Dequeue repair and mark state ready after sent. */
+            more_to_send = (stream_ctx->datagram_repair_first->next_repair != NULL ||
+                (stream_ctx->final_offset > 0 && !stream_ctx->is_final_offset_sent));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 quicrq_remove_repair_in_stream_ctx(stream_ctx, stream_ctx->datagram_repair_first);
@@ -546,6 +548,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             break;
         case quicrq_sending_offset:
             /* Send available buffer data and repair data. Mark offset sent and mark state ready after sent. */
+            more_to_send = (stream_ctx->datagram_repair_first != NULL);
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 stream_ctx->is_final_offset_sent = 1;
