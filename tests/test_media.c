@@ -7,6 +7,7 @@
 #include "quicrq_tests.h"
 #include "quicrq_test_internal.h"
 #include "picoquic_utils.h"
+#include "picosplay.h"
 
 /* Unit test of test_media and media api
  */
@@ -305,6 +306,68 @@ int test_media_publisher_fn(
     return ret;
 }
 
+int test_media_frame_publisher_fn(
+    quicrq_media_source_action_enum action,
+    void* media_ctx,
+    uint8_t* data,
+    size_t data_max_size,
+    size_t* data_length,
+    int* is_frame_finished,
+    int* is_media_finished,
+    uint64_t current_time)
+{
+    int ret = 0;
+    test_media_publisher_context_t* pub_ctx = (test_media_publisher_context_t*)media_ctx;
+
+
+    *is_media_finished = 0;
+    *is_frame_finished = 0;
+    *data_length = 0;
+
+    if (action == quicrq_media_source_get_data) {
+
+        ret = test_media_publisher_check_frame(pub_ctx);
+
+        if (ret == 0) {
+            if (pub_ctx->is_finished) {
+                *is_media_finished = 1;
+            }
+            else if (pub_ctx->media_frame_size > pub_ctx->media_frame_read) {
+                if (!pub_ctx->is_real_time ||
+                    current_time >= pub_ctx->current_header.timestamp) {
+                    /* Copy data from frame in memory */
+                    size_t available = pub_ctx->media_frame_size - pub_ctx->media_frame_read;
+                    size_t copied = data_max_size;
+                    if (data_max_size >= available) {
+                        *is_frame_finished = 1;
+                        copied = available;
+                    }
+                    *data_length = copied;
+                    if (data != NULL) {
+                        /* If data is set to NULL, return the available size but do not copy anything */
+                        memcpy(data, pub_ctx->media_frame + pub_ctx->media_frame_read, copied);
+                        pub_ctx->media_frame_read += copied;
+                    }
+                    *pub_ctx->p_next_time = UINT64_MAX;
+                }
+                else {
+                    *pub_ctx->p_next_time = pub_ctx->current_header.timestamp;
+                    *data_length = 0;
+                }
+            }
+            else
+            {
+                *data_length = 0;
+            }
+        }
+    }
+    else if (action == quicrq_media_source_close) {
+        /* close the context */
+        test_media_publisher_close(media_ctx);
+    }
+    return ret;
+}
+
 uint64_t test_media_publisher_next_time(void * media_ctx, uint64_t current_time)
 {
     test_media_publisher_context_t* pub_ctx = (test_media_publisher_context_t*)media_ctx;
@@ -349,7 +412,12 @@ int test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* url, size_t url_length, c
     return ret;
 }
 
-/* Media receiver definitions */
+/* Media receiver definitions.
+ * Manage a list of frames being reassembled. The list is organized as a splay,
+ * indexed by the frame id and frame offset. When a new segment is received
+ * the code will check whether the frame is already present, and then whether the
+ * segment for that frame has already arrived.
+ */
 typedef struct st_test_media_consumer_packet_t {
     struct st_test_media_consumer_packet_t* next_packet;
     struct st_test_media_consumer_packet_t* previous_packet;
@@ -358,6 +426,17 @@ typedef struct st_test_media_consumer_packet_t {
     uint64_t offset;
     size_t data_length;
 } test_media_consumer_packet_t;
+
+typedef struct st_test_media_consumer_frame_t {
+    picosplay_node_t frame_node;
+    struct st_test_media_consumer_packet_t* first_packet;
+    struct st_test_media_consumer_packet_t* last_packet;
+    uint64_t frame_id;
+    uint64_t final_offset;
+    uint64_t data_received;
+    uint64_t last_update_time;
+    uint8_t* reassembled;
+} test_media_consumer_frame_t;
 
 
 typedef struct st_test_media_consumer_context_t {
@@ -373,7 +452,60 @@ typedef struct st_test_media_consumer_context_t {
     struct st_test_media_consumer_packet_t* last_packet;
     unsigned int is_finished : 1;
     unsigned int header_received : 1;
+
+    picosplay_tree_t frame_tree;
+    uint64_t next_frame_id;
+    uint64_t final_frame_id;
 } test_media_consumer_context_t;
+
+/* WORK IN PROGRESS -- manage the splay of frames waiting reassembly */
+
+static void* test_media_frame_node_value(picosplay_node_t* frame_node)
+{
+    return (frame_node == NULL) ? NULL : (void*)((char*)frame_node - offsetof(struct st_test_media_consumer_frame_t, frame_node));
+}
+
+static int64_t test_media_frame_node_compare(void* l, void* r) {
+    return (int64_t)((test_media_consumer_frame_t*)l)->frame_id - ((test_media_consumer_frame_t*)r)->frame_id;
+}
+
+static picosplay_node_t* test_media_frame_node_create(void* v_media_frame)
+{
+    return &((test_media_consumer_frame_t*)v_media_frame)->frame_node;
+}
+
+static void test_media_frame_node_delete(void* tree, picosplay_node_t* node)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
+    memset(node, 0, sizeof(picosplay_node_t));
+}
+
+static void test_media_frame_tree_init(test_media_consumer_context_t* frame_list)
+{
+    picosplay_init_tree(&frame_list->frame_tree, test_media_frame_node_compare,
+        test_media_frame_node_create, test_media_frame_node_delete, test_media_frame_node_value);
+}
+
+static void test_media_frame_node_delete_hint(test_media_consumer_context_t* frame_list, test_media_consumer_frame_t* frame)
+{
+    picosplay_delete_hint(&frame_list->frame_tree, &frame->frame_node);
+}
+
+static test_media_consumer_frame_t* test_media_frame_find(test_media_consumer_context_t* frame_list, uint64_t frame_id)
+{
+    test_media_consumer_frame_t* frame = NULL;
+    test_media_consumer_frame_t key_frame = { 0 };
+    key_frame.frame_id = frame_id;
+    picosplay_node_t* node = picosplay_find(&frame_list->frame_tree,(void*)&key_frame);
+    if (node != NULL) {
+        frame = (test_media_consumer_frame_t*)test_media_frame_node_value(node);
+    }
+    return frame;
+}
+
+/* TODO: remove old consumer  when new frame id based code is ready. */
 
 int test_media_consumer_close(void* media_ctx)
 {
@@ -411,9 +543,17 @@ void* test_media_consumer_init(char const* media_result_file, char const * media
     /* Open and initialize result file and log file */
     test_media_consumer_context_t * cons_ctx = (test_media_consumer_context_t*)malloc(sizeof(test_media_consumer_context_t));
     if (cons_ctx != NULL) {
+        int last_err;
         memset(cons_ctx, 0, sizeof(test_media_consumer_context_t));
-        cons_ctx->Res = picoquic_file_open(media_result_file, "wb");
-        cons_ctx->Log = picoquic_file_open(media_result_log, "w");
+
+        test_media_frame_tree_init(cons_ctx);
+
+        if ((cons_ctx->Res = picoquic_file_open_ex(media_result_file, "wb", &last_err)) == NULL) {
+            DBG_PRINTF("Cannot open %s, error: %d (0x%x)", media_result_file, last_err, last_err);
+        }
+        if ((cons_ctx->Log = picoquic_file_open_ex(media_result_log, "w", &last_err)) == NULL) {
+            DBG_PRINTF("Cannot open %s, error: %d (0x%x)", media_result_log, last_err, last_err);
+        }
         if (cons_ctx->Res == NULL || cons_ctx->Log == NULL) {
             (void)test_media_consumer_close(cons_ctx);
             cons_ctx = NULL;
@@ -733,6 +873,404 @@ int test_media_consumer_cb(
     return ret;
 }
 
+/* Management of the list of frames undergoing reassembly, frame-id based logic */
+static test_media_consumer_packet_t* test_media_consumer_frame_create_packet(
+    test_media_consumer_frame_t* frame,
+    test_media_consumer_packet_t* previous_packet,
+    uint64_t current_time,
+    const uint8_t* data,
+    uint64_t offset,
+    size_t data_length)
+{
+    test_media_consumer_packet_t* packet = NULL;
+    size_t packet_size = sizeof(test_media_consumer_packet_t) + data_length;
+    if (packet_size >= sizeof(test_media_consumer_packet_t)) {
+        packet = (test_media_consumer_packet_t*)malloc(packet_size);
+        if (packet != NULL) {
+            memset(packet, 0, sizeof(test_media_consumer_packet_t));
+            packet->current_time = current_time;
+            packet->offset = offset;
+            packet->data_length = data_length;
+            packet->data = ((uint8_t*)packet) + sizeof(test_media_consumer_packet_t);
+            memcpy(packet->data, data, data_length);
+
+            packet->previous_packet = previous_packet;
+            if (previous_packet == NULL) {
+                packet->next_packet = frame->first_packet;
+                frame->first_packet = packet;
+            }
+            else {
+                packet->next_packet = previous_packet->next_packet;
+                previous_packet->next_packet = packet;
+            }
+            if (packet->next_packet == NULL) {
+                frame->last_packet = packet;
+            }
+            else {
+                packet->next_packet->previous_packet = packet;
+            }
+            frame->data_received += data_length;
+            frame->last_update_time = current_time;
+        }
+    }
+
+    return packet;
+}
+
+test_media_consumer_frame_t* test_media_consumer_frame_create(test_media_consumer_context_t* cons_ctx, uint64_t frame_id)
+{
+    test_media_consumer_frame_t* frame = (test_media_consumer_frame_t*)malloc(sizeof(test_media_consumer_frame_t));
+    if (frame != NULL) {
+        memset(frame, 0, sizeof(test_media_consumer_frame_t));
+        frame->frame_id = frame_id;
+        picosplay_insert(&cons_ctx->frame_tree, frame);
+    }
+    return frame;
+}
+
+void test_media_consumer_frame_delete(test_media_consumer_context_t* cons_ctx, test_media_consumer_frame_t* frame)
+{
+    /* Free the frame's resource */
+    test_media_consumer_packet_t* packet;
+
+    if (frame->reassembled != NULL) {
+        free(frame->reassembled);
+    }
+
+    while ((packet = frame->first_packet) != NULL) {
+        frame->first_packet = packet->next_packet;
+        free(packet);
+    }
+
+    /* Remove the frame from the list */
+    picosplay_delete_hint(&cons_ctx->frame_tree, &frame->frame_node);
+
+    /* and free the memory */
+    free(frame);
+}
+
+int test_media_consumer_frame_add_packet(
+    test_media_consumer_frame_t* frame,
+    uint64_t current_time,
+    const uint8_t* data,
+    uint64_t offset,
+    size_t data_length)
+{
+    int ret = 0;
+    test_media_consumer_packet_t* packet = frame->first_packet;
+    test_media_consumer_packet_t* previous_packet = NULL;
+
+    while (packet != NULL) {
+        if (packet->offset >= offset) {
+            /* filling a hole */
+            if (offset + data_length <= packet->offset) {
+                /* No overlap. Just insert the packet after the previous one */
+                test_media_consumer_packet_t* new_packet = test_media_consumer_frame_create_packet(frame, previous_packet, current_time, data, offset, data_length);
+                if (new_packet == NULL) {
+                    ret = -1;
+                }
+                else {
+                    data_length = 0;
+                }
+                break;
+            }
+            else if (offset < packet->offset) {
+                /* partial overlap. Create a packet for the non overlapping part, then retain the bytes at the end. */
+                size_t consumed = packet->offset - offset;
+                test_media_consumer_packet_t* new_packet = test_media_consumer_frame_create_packet(frame, previous_packet, current_time, data, offset, consumed);
+                if (new_packet == NULL) {
+                    ret = -1;
+                    break;
+                }
+                else {
+                    /* Trim the data. First remove the part that was consumed */
+                    data += consumed;
+                    offset += consumed;
+                    data_length -= consumed;
+                }
+            }
+        }
+        /* At this point, we know the incoming data is at or after the current packet */
+        if (packet->offset + packet->data_length > offset) {
+            /* at least partial overlap */
+            if (packet->offset + packet->data_length >= offset + data_length) {
+                /* all remaining data is redundant */
+                data_length = 0;
+                break;
+            }
+            else {
+                size_t consumed = packet->offset + packet->data_length - offset;
+                data += consumed;
+                offset += consumed;
+                data_length -= consumed;
+            }
+        }
+        /* after next packet, no overlap, need to continue the loop */
+        previous_packet = packet;
+        packet = packet->next_packet;
+    }
+    /* All packets in store have been checked */
+    if (ret == 0 && data_length > 0) {
+        /* Some of the incoming data was not inserted */
+        test_media_consumer_packet_t* new_packet = test_media_consumer_frame_create_packet(frame, previous_packet, current_time, data, offset, data_length);
+        if (new_packet == NULL) {
+            ret = -1;
+        }
+        else {
+            data_length = 0;
+        }
+    }
+
+    return ret;
+}
+
+int test_media_consumer_frame_reassemble(test_media_consumer_frame_t* frame)
+{
+    int ret = 0;
+
+    /* Check that that the received bytes are in order */
+    if (frame->final_offset == 0 || frame->data_received != frame->final_offset) {
+        ret = -1;
+    }
+    else if (frame->first_packet == NULL || frame->first_packet->offset != 0) {
+        ret = -1;
+    }
+    else if (frame->last_packet == NULL || 
+        frame->last_packet->offset + frame->last_packet->data_length != frame->final_offset) {
+        ret = -1;
+    }
+    else if (frame->final_offset > SIZE_MAX) {
+        ret = -1;
+    }
+    else {
+        frame->reassembled = (uint8_t*)malloc((size_t)frame->final_offset);
+        if (frame->reassembled == NULL) {
+            ret = -1;
+        }
+        else {
+            size_t running_offset = 0;
+            test_media_consumer_packet_t* packet = frame->first_packet;
+            while (packet != NULL && ret == 0) {
+                /* TODO: the "running offset" checks are never supposed to fire, unless
+                 * there is a bug in the segment collection program. Should be removed
+                 * once debugging is complete */
+                if (packet->offset != running_offset) {
+                    ret = -1;
+                }
+                else if (running_offset + packet->data_length > frame->final_offset) {
+                    ret = -1;
+                }
+                else {
+                    memcpy(frame->reassembled + running_offset, packet->data, packet->data_length);
+                    running_offset += packet->data_length;
+                    packet = packet->next_packet;
+                }
+            }
+            /* Final check also is just for debugging, should never fire */
+            if (ret == 0 && running_offset != frame->final_offset) {
+                ret = -1;
+            }
+        }
+    }
+    return ret;
+}
+
+typedef enum {
+    test_media_frame_in_sequence,
+    test_media_frame_peek,
+    test_media_frame_repair
+} test_media_consumer_frame_mode_enum;
+
+int test_media_consumer_frame_ready(
+    void* media_ctx,
+    uint64_t current_time,
+    uint64_t frame_id,
+    const uint8_t* data,
+    size_t data_length,
+    test_media_consumer_frame_mode_enum frame_mode)
+{
+    int ret = 0;
+    size_t processed = 0;
+    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
+
+    /* Find the frame header */
+    if (data_length < QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
+        /* Malformed frame */
+        ret = -1;
+    }
+    else {
+        quicrq_media_frame_header_t current_header;
+        const uint8_t* fh = quicr_decode_frame_header(data,
+            data + QUIRRQ_MEDIA_TEST_HEADER_SIZE, &current_header);
+        if (fh == NULL) {
+            ret = -1;
+        }
+        if (ret == 0) {
+            /* if first time seen, document the delivery in the log */
+            if (frame_mode != test_media_frame_repair) {
+                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu\n",
+                    current_time, current_header.timestamp, current_header.number, current_header.length) <= 0) {
+                    ret = -1;
+                }
+            }
+        }
+        if (ret == 0) {
+            /* if in sequence, write the data to the file. */
+            if (frame_mode != test_media_frame_peek) {
+                if (fwrite(data, 1, data_length, cons_ctx->Res) != data_length) {
+                    ret = -1;
+                }
+            }
+        }
+
+        /* Check whether this was the final frame */
+        if (ret == 0 && cons_ctx->final_frame_id > 0 && frame_id >= cons_ctx->final_frame_id) {
+            cons_ctx->is_finished = 1;
+        }
+    }
+    return ret;
+}
+
+int test_media_datagram_input(
+    void* media_ctx,
+    uint64_t current_time,
+    const uint8_t* data,
+    uint64_t frame_id,
+    uint64_t offset,
+    int is_last_segment,
+    size_t data_length)
+{
+    int ret = 0;
+    size_t processed = 0;
+    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
+    if (frame_id < cons_ctx->next_frame_id) {
+        /* No need for this frame. */
+    }
+    else {
+        test_media_consumer_frame_t* frame = test_media_frame_find(cons_ctx, frame_id);
+
+        if (frame == NULL) {
+            /* Create a media frame for reassembly */
+            frame = test_media_consumer_frame_create(cons_ctx, frame_id);
+        }
+        /* per segment logic */
+        if (frame == NULL) {
+            ret = -1;
+        }
+        else {
+            int in_sequence = 0;
+            /* If this is the last segment, update the frame length */
+            if (is_last_segment) {
+                if (frame->final_offset == 0) {
+                    frame->final_offset = offset + data_length;
+                }
+                else if (frame->final_offset != offset + data_length) {
+                    ret = -1;
+                }
+            }
+            /* Insert the frame at the proper location */
+            ret = test_media_consumer_frame_add_packet(frame, current_time, data, offset, data_length);
+            /* If the frame is complete, verify and submit */
+            if (frame->final_offset > 0 && frame->data_received >= frame->final_offset) {
+                test_media_consumer_frame_mode_enum frame_mode = (cons_ctx->next_frame_id == frame_id) ?
+                    test_media_frame_in_sequence : test_media_frame_peek;
+                if (frame->reassembled == NULL) {
+                    /* Reassemble and verify -- maybe should do that in real time instead of at the end? */
+                    ret = test_media_consumer_frame_reassemble(frame);
+                    if (ret == 0) {
+                        in_sequence = (frame->frame_id == cons_ctx->next_frame_id);
+                        /* If the frame is fully received, pass it to the application, indicating sequence or not. */
+                        ret = test_media_consumer_frame_ready(cons_ctx, current_time, frame_id, frame->reassembled, frame->final_offset, frame_mode);
+                    }
+                    if (ret == 0 && frame_mode == test_media_frame_in_sequence) {
+                        /* delete the frame that was just reassembled. */
+                        test_media_consumer_frame_delete(cons_ctx, frame);
+                        /* update the next_frame id */
+                        cons_ctx->next_frame_id++;
+                        /* try processing all frames that might now be ready */
+                        while (ret == 0 && (frame = test_media_frame_find(cons_ctx, cons_ctx->next_frame_id)) != NULL && frame->reassembled != NULL) {
+                            /* Submit the frame in order */
+                            ret = test_media_consumer_frame_ready(cons_ctx, current_time, frame->frame_id, frame->reassembled, frame->final_offset, test_media_frame_repair);
+                            /* delete the frame that was just repaired. */
+                            test_media_consumer_frame_delete(cons_ctx, frame);
+                            /* update the next_frame id */
+                            cons_ctx->next_frame_id++;
+                        }
+                        /* Mark finished if everything was received */
+                        if (cons_ctx->final_frame_id > 0 && cons_ctx->next_frame_id >= cons_ctx->final_frame_id) {
+                            cons_ctx->is_finished = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+int test_media_consumer_learn_final_frame_id(
+    void* media_ctx,
+    uint64_t final_frame_id)
+{
+    int ret = 0;
+    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
+
+    if (cons_ctx->final_frame_id == 0) {
+        cons_ctx->final_frame_id = final_frame_id;
+    }
+    else if (final_frame_id != cons_ctx->final_frame_id) {
+        ret = -1;
+    }
+
+    if (ret == 0 && cons_ctx->next_frame_id >= final_frame_id) {
+        cons_ctx->is_finished = 1;
+    }
+
+    return ret;
+}
+
+int test_media_frame_consumer_cb(
+    quicrq_media_consumer_enum action,
+    void* media_ctx,
+    uint64_t current_time,
+    const uint8_t* data,
+    uint64_t frame_id,
+    uint64_t offset,
+    int is_last_segment,
+    size_t data_length)
+{
+    int ret = 0;
+    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
+
+    switch (action) {
+    case quicrq_media_data_ready:
+        ret = test_media_consumer_frame_ready(media_ctx, current_time, frame_id, data, offset, data_length);
+        break;
+    case quicrq_media_datagram_ready:
+        ret = test_media_datagram_input(media_ctx, current_time, data, frame_id, offset, is_last_segment, data_length);
+
+        if (ret == 0 && cons_ctx->is_finished) {
+            ret = quicrq_consumer_finished;
+        }
+        break;
+    case quicrq_media_final_offset:
+        test_media_consumer_learn_final_frame_id(media_ctx, frame_id);
+
+        if (ret == 0 && cons_ctx->is_finished) {
+            ret = quicrq_consumer_finished;
+        }
+        break;
+    case quicrq_media_close:
+        ret = test_media_consumer_close(media_ctx);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+    return ret;
+}
+
 int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log)
 {
     int ret = 0;
@@ -976,6 +1514,11 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
 #define QUICRQ_TEST_VIDEO1_RT_LOG    "video1_rt_log.csv"
 #define QUICRQ_TEST_VIDEO1_LOSS_RESULT "video1_loss_result.bin"
 #define QUICRQ_TEST_VIDEO1_LOSS_LOG    "video1_loss_log.csv"
+#define QUICRQ_TEST_MEDIA_FRAME_RESULT "media_frame_result.bin"
+#define QUICRQ_TEST_MEDIA_FRAME_LOG    "media_frame_log.csv"
+#define QUICRQ_TEST_MEDIA_FRAME_LOSS_RESULT "media_frame_loss_result.bin"
+#define QUICRQ_TEST_MEDIA_FRAME_LOSS_LOG    "media_frame_loss_log.csv"
+
 
 
 const generation_parameters_t video_1mps = {
@@ -1148,7 +1691,10 @@ int quicrq_media_source_rt_test()
  */
 
 typedef struct st_media_disorder_hole_t {
+    struct st_media_disorder_hole_t* next_loss;
+    uint64_t frame_id;
     uint64_t offset;
+    int is_last_segment;
     size_t length;
     uint8_t media_buffer[1024];
 } media_disorder_hole_t;
@@ -1309,5 +1855,249 @@ int quicrq_media_disorder_test()
 
     int ret = quicrq_media_disorder_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_LOSS_RESULT, QUICRQ_TEST_VIDEO1_LOSS_LOG,
         sizeof(loss_pattern) / sizeof(uint64_t), loss_pattern, 3);
+    return ret;
+}
+
+/* Media datagram test. Check the datagram API.
+ */
+
+int quicrq_media_datagram_test_one(char const* media_source_name, char const* media_result_file, char const* media_result_log, size_t nb_losses, uint64_t* loss_frame, int * loss_mode, size_t nb_dup)
+{
+
+    int ret = 0;
+    char media_source_path[512];
+    uint8_t media_buffer[1024];
+    uint64_t current_time = 0;
+    uint64_t next_srce_time = 0;
+    const uint64_t time_step = 1000;
+    uint64_t published_offset = 0;
+    size_t data_length;
+    void* srce_ctx = NULL;
+    void* pub_ctx = NULL;
+    void* cons_ctx = NULL;
+    FILE* F = NULL;
+    size_t actual_losses = 0;
+    int consumer_properly_finished = 0;
+    uint64_t frame_id = 0;
+    uint64_t frame_offset = 0;
+    int is_media_finished = 0;
+    int is_last_segment = 0;
+    media_disorder_hole_t* first_loss = NULL;
+    media_disorder_hole_t* last_loss = NULL;
+
+    if (ret == 0) {
+        /* Locate the source and reference file */
+        if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
+            quicrq_test_solution_dir, media_source_name) != 0) {
+            ret = -1;
+        }
+    }
+
+    /* Initialize a consumer context for testing */
+    /* TODO: this should now be a frame consumer */
+    if (ret == 0) {
+        cons_ctx = test_media_consumer_init(media_result_file, media_result_log);
+        if (cons_ctx == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* Init the publisher context for testing */
+    if (ret == 0) {
+        srce_ctx = test_media_create_source(media_source_path, NULL, 1, &next_srce_time);
+        if (srce_ctx != NULL) {
+            if ((pub_ctx = test_media_publisher_subscribe((uint8_t*)media_source_path, strlen(media_source_path), srce_ctx)) == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* Loop through read and consume until finished, marking some frames as lost */
+    while (ret == 0) {
+        /* Get the next frame from the publisher */
+        ret = test_media_frame_publisher_fn(
+            quicrq_media_source_get_data, pub_ctx, media_buffer, sizeof(media_buffer),
+            &data_length, &is_last_segment, &is_media_finished, current_time);
+        if (ret != 0) {
+            DBG_PRINTF("Media published function: ret = %d", ret);
+            break;
+        }
+        if (data_length == 0) {
+            if (is_media_finished) {
+                break;
+            }
+            else {
+                /* Update the simulated time and continue the loop */
+                current_time = test_media_publisher_next_time(pub_ctx, current_time);
+            }
+        }
+        /* Test whether to simulate losses or arrival */
+        if (actual_losses < nb_losses &&
+            (frame_id == loss_frame[actual_losses] || (loss_frame[actual_losses] == UINT64_MAX && is_media_finished)) &&
+            (loss_mode[actual_losses] == 3 ||
+                (loss_mode[actual_losses] == 0 && frame_offset == 0) ||
+                (loss_mode[actual_losses] == 2 && is_last_segment == 0) ||
+                (loss_mode[actual_losses == 1 && frame_offset != 0 && is_last_segment]))) {
+            /* If the frame packet should be seen as lost, store it for repetition */
+            media_disorder_hole_t* loss = (media_disorder_hole_t*)malloc(sizeof(media_disorder_hole_t));
+            if (loss == NULL) {
+                ret = -1;
+                break;
+            }
+            memset(loss, 0, sizeof(media_disorder_hole_t));
+            loss->frame_id = frame_id;
+            loss->offset = frame_offset;
+            loss->length = data_length;
+            loss->is_last_segment = is_last_segment;
+            memcpy(loss->media_buffer, media_buffer, data_length);
+            if (last_loss == NULL) {
+                first_loss = loss;
+            }
+            else {
+                last_loss->next_loss = loss;
+            }
+            last_loss = loss;
+        }
+        else {
+            /* Simulate arrival of packet */
+            ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
+                    frame_id, frame_offset, is_last_segment, data_length);
+            if (ret != 0) {
+                DBG_PRINTF("Media consumer callback: ret = %d", ret);
+                break;
+            }
+        }
+        /* Count the segments and the frames */
+        if (is_last_segment) {
+            frame_id++;
+            frame_offset = 0;
+            if (actual_losses < nb_losses &&
+                (frame_id == loss_frame[actual_losses] || (loss_frame[actual_losses] == UINT64_MAX && is_media_finished))) {
+                actual_losses++;
+            }
+        }
+        else {
+            frame_offset += data_length;
+        }
+    }
+
+    /* Indicate the final frame_id, to simulate what datagrams would do */
+    if (ret == 0) {
+        ret = test_media_frame_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL, frame_id, 0, 0, 0);
+        if (ret == quicrq_consumer_finished) {
+            consumer_properly_finished = 1;
+            if (nb_losses > 0) {
+                ret = -1;
+            }
+            else {
+                ret = 0;
+            }
+        } 
+        if (ret != 0) {
+            DBG_PRINTF("Media consumer callback: ret = %d", ret);
+        }
+    }
+
+    /* At this point, all blocks have been sent, except for the holes */
+    /* TODO: holes should have frame numbers and offset */
+    /* TODO: use the frame APIs */
+    if (ret == 0 && first_loss != NULL) {
+        media_disorder_hole_t* loss = first_loss;
+        if (nb_dup > 0) {
+            /* Fill some holes, in order to simulate duplication of repairs. */
+            size_t actual_dup = 0;
+            while (loss != NULL && actual_dup < nb_dup && ret == 0) {
+                /* Simulate repair of a hole */
+                actual_dup++;
+                ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
+                    loss->frame_id, loss->offset, loss->is_last_segment, loss->length);
+                if (ret != 0) {
+                    DBG_PRINTF("Media consumer callback: ret = %d", ret);
+                }
+                else {
+                    /* skip the next loss */
+                    loss = loss->next_loss;
+                    if (loss != NULL) {
+                        loss = loss->next_loss;
+                    }
+                }
+            }
+        }
+        /* Fill the remaining holes */
+        loss = first_loss;
+        while (loss != NULL && ret == 0) {
+            /* Simulate repair of a hole */
+            ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
+                loss->frame_id, loss->offset, loss->is_last_segment, loss->length);
+            if (ret == quicrq_consumer_finished) {
+                consumer_properly_finished = 1;
+                ret = 0;
+                break;
+            }
+            else if (ret != 0) {
+                DBG_PRINTF("Media consumer callback: ret = %d", ret);
+            }
+            loss = loss->next_loss;
+        }
+    }
+
+    if (ret == 0 && !consumer_properly_finished) {
+        ret = -1;
+        DBG_PRINTF("Consumer not properly finished, ret=%d", ret);
+    }
+
+    /* Close publisher */
+    if (pub_ctx != NULL) {
+        test_media_publisher_close(pub_ctx);
+    }
+
+    /* Close consumer */
+    if (cons_ctx != NULL) {
+        test_media_consumer_close(cons_ctx);
+    }
+
+    /* Free the memory allocated to losses.*/
+    while (first_loss != NULL) {
+        media_disorder_hole_t* loss = first_loss;
+        first_loss = loss->next_loss;
+        free(loss);
+    }
+
+    /* Compare media result to media source */
+#if 0
+    if (ret == 0) {
+        ret = quicrq_compare_log_file(media_result_log, media_log_ref_path);
+    }
+#endif
+
+    if (ret == 0) {
+        ret = quicrq_compare_media_file(media_result_file, media_source_path);
+    }
+
+    return ret;
+}
+
+int quicrq_media_frame_noloss()
+{
+    uint64_t loss_frame[] = { 0, 4, 5, 6, UINT64_MAX };
+
+    int ret = quicrq_media_datagram_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_MEDIA_FRAME_RESULT, QUICRQ_TEST_MEDIA_FRAME_LOG,
+        0, NULL, NULL, 0);
+    return ret;
+}
+
+int quicrq_media_frame_loss()
+{
+#if 0
+    uint64_t loss_frame[] = { 0};
+    int loss_mode[] =       { 3};
+#else
+    uint64_t loss_frame[] = { 0, 4, 5, 6, 9, 11, 15, UINT64_MAX };
+    int loss_mode[] = { 3, 3, 3, 3, 0,  1, 2,  3 };
+#endif
+
+    int ret = quicrq_media_datagram_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_MEDIA_FRAME_LOSS_RESULT, QUICRQ_TEST_MEDIA_FRAME_LOSS_LOG,
+        sizeof(loss_frame) / sizeof(uint64_t), loss_frame, loss_mode, 0);
+
     return ret;
 }

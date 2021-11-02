@@ -31,7 +31,9 @@ static const quicrq_test_def_t test_table[] =
     { "media_source_rt", quicrq_media_source_rt_test},
     { "media_disorder", quicrq_media_disorder_test},
     { "datagram_basic", quicrq_datagram_basic_test },
-    { "datagram_loss", quicrq_datagram_loss_test }
+    { "datagram_loss", quicrq_datagram_loss_test },
+    { "media_frame_no_loss", quicrq_media_frame_noloss },
+    { "media_frame_loss", quicrq_media_frame_loss }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);
