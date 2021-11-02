@@ -1171,7 +1171,6 @@ int test_media_datagram_input(
                     /* Reassemble and verify -- maybe should do that in real time instead of at the end? */
                     ret = test_media_consumer_frame_reassemble(frame);
                     if (ret == 0) {
-                        in_sequence = (frame->frame_id == cons_ctx->next_frame_id);
                         /* If the frame is fully received, pass it to the application, indicating sequence or not. */
                         ret = test_media_consumer_frame_ready(cons_ctx, current_time, frame_id, frame->reassembled, frame->final_offset, frame_mode);
                     }
