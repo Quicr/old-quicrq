@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include "quicrq.h"
 #include "quicrq_internal.h"
 #include "quicrq_tests.h"
@@ -458,7 +459,7 @@ typedef struct st_test_media_consumer_context_t {
     uint64_t final_frame_id;
 } test_media_consumer_context_t;
 
-/* WORK IN PROGRESS -- manage the splay of frames waiting reassembly */
+/* manage the splay of frames waiting reassembly */
 
 static void* test_media_frame_node_value(picosplay_node_t* frame_node)
 {
@@ -486,11 +487,6 @@ static void test_media_frame_tree_init(test_media_consumer_context_t* frame_list
 {
     picosplay_init_tree(&frame_list->frame_tree, test_media_frame_node_compare,
         test_media_frame_node_create, test_media_frame_node_delete, test_media_frame_node_value);
-}
-
-static void test_media_frame_node_delete_hint(test_media_consumer_context_t* frame_list, test_media_consumer_frame_t* frame)
-{
-    picosplay_delete_hint(&frame_list->frame_tree, &frame->frame_node);
 }
 
 static test_media_consumer_frame_t* test_media_frame_find(test_media_consumer_context_t* frame_list, uint64_t frame_id)
@@ -1090,7 +1086,6 @@ int test_media_consumer_frame_ready(
     test_media_consumer_frame_mode_enum frame_mode)
 {
     int ret = 0;
-    size_t processed = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
 
     /* Find the frame header */
@@ -1141,7 +1136,6 @@ int test_media_datagram_input(
     size_t data_length)
 {
     int ret = 0;
-    size_t processed = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
     if (frame_id < cons_ctx->next_frame_id) {
         /* No need for this frame. */
@@ -1158,7 +1152,6 @@ int test_media_datagram_input(
             ret = -1;
         }
         else {
-            int in_sequence = 0;
             /* If this is the last segment, update the frame length */
             if (is_last_segment) {
                 if (frame->final_offset == 0) {
@@ -1869,13 +1862,10 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     uint8_t media_buffer[1024];
     uint64_t current_time = 0;
     uint64_t next_srce_time = 0;
-    const uint64_t time_step = 1000;
-    uint64_t published_offset = 0;
     size_t data_length;
     void* srce_ctx = NULL;
     void* pub_ctx = NULL;
     void* cons_ctx = NULL;
-    FILE* F = NULL;
     size_t actual_losses = 0;
     int consumer_properly_finished = 0;
     uint64_t frame_id = 0;
@@ -2079,8 +2069,6 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
 
 int quicrq_media_frame_noloss()
 {
-    uint64_t loss_frame[] = { 0, 4, 5, 6, UINT64_MAX };
-
     int ret = quicrq_media_datagram_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_MEDIA_FRAME_RESULT, QUICRQ_TEST_MEDIA_FRAME_LOG,
         0, NULL, NULL, 0);
     return ret;
