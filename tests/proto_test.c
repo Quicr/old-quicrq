@@ -24,7 +24,10 @@ static quicrq_message_t stream_rq = {
     url1,
     0,
     0,
-    0
+    0,
+    0,
+    0,
+    NULL
 };
 
 static uint8_t stream_rq_bytes[] = {
@@ -39,7 +42,10 @@ static quicrq_message_t datagram_rq = {
     url1,
     1234,
     0,
-    0
+    0,
+    0,
+    0,
+    NULL
 };
 
 static uint8_t datagram_rq_bytes[] = {
@@ -55,7 +61,10 @@ static quicrq_message_t fin_msg = {
     NULL,
     0,
     123456,
-    0
+    0,
+    0,
+    0,
+    NULL
 };
 
 static uint8_t fin_msg_bytes[] = {
@@ -63,21 +72,46 @@ static uint8_t fin_msg_bytes[] = {
     0x80, 0x01, 0xe2, 0x40
 };
 
-static quicrq_message_t repair_msg = {
+#define REPAIR_BYTES 1,2,3,4,5,6,7,8,9,10,11,12,13
+static uint8_t repair_bytes[] = { REPAIR_BYTES };
+static quicrq_message_t repair_request_msg = {
     QUICRQ_ACTION_REQUEST_REPAIR,
     0,
     NULL,
     0,
     123456,
-    1234
+    1234,
+    1,
+    sizeof(repair_bytes),
+    NULL
+};
+
+static uint8_t repair_request_msg_bytes[] = {
+    QUICRQ_ACTION_REQUEST_REPAIR,
+    0x80, 0x01, 0xe2, 0x40,
+    0x49, 0xa5,
+    (uint8_t)sizeof(repair_bytes)
+};
+
+static quicrq_message_t repair_msg = {
+    QUICRQ_ACTION_REPAIR,
+    0,
+    NULL,
+    0,
+    123456,
+    1234,
+    1,
+    sizeof(repair_bytes),
+    repair_bytes
 };
 
 static uint8_t repair_msg_bytes[] = {
-    QUICRQ_ACTION_REQUEST_REPAIR,
+    QUICRQ_ACTION_REPAIR,
     0x80, 0x01, 0xe2, 0x40,
-    0x44, 0xd2
+    0x49, 0xa5,
+    (uint8_t)sizeof(repair_bytes),
+    REPAIR_BYTES
 };
-
 typedef struct st_proto_test_case_t {
     uint8_t* const data;
     size_t data_length;
@@ -89,6 +123,7 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(stream_rq, stream_rq_bytes),
     PROTO_TEST_ITEM(datagram_rq, datagram_rq_bytes),
     PROTO_TEST_ITEM(fin_msg, fin_msg_bytes),
+    PROTO_TEST_ITEM(repair_request_msg, repair_request_msg_bytes),
     PROTO_TEST_ITEM(repair_msg, repair_msg_bytes)
 };
 
@@ -202,7 +237,13 @@ int proto_msg_test()
         else if (result.url_length != 0 && memcmp(result.url, proto_cases[i].result->url, result.url_length) != 0) {
             ret = -1;
         }
+        else if (result.frame_id != proto_cases[i].result->frame_id) {
+            ret = -1;
+        }
         else if (result.offset != proto_cases[i].result->offset) {
+            ret = -1;
+        }
+        else if (result.is_last_segment != proto_cases[i].result->is_last_segment) {
             ret = -1;
         }
         else if (result.length != proto_cases[i].result->length) {

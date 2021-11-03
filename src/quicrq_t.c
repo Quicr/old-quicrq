@@ -29,7 +29,6 @@ static const quicrq_test_def_t test_table[] =
     { "media_video1_rt", quicrq_media_video1_rt_test },
     { "media_source", quicrq_media_source_test },
     { "media_source_rt", quicrq_media_source_rt_test},
-    { "media_disorder", quicrq_media_disorder_test},
     { "datagram_basic", quicrq_datagram_basic_test },
     { "datagram_loss", quicrq_datagram_loss_test },
     { "media_frame_no_loss", quicrq_media_frame_noloss },

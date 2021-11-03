@@ -78,6 +78,7 @@ void* test_media_publisher_subscribe(const uint8_t* media_url, const size_t medi
     return media_ctx;
 }
 
+
 /* Media publisher callback for stream mode.
  * In stream mode, the frame data is directly copied to the output.
  */
@@ -253,7 +254,7 @@ static int test_media_publisher_check_frame(test_media_publisher_context_t* pub_
 
     return ret;
 }
-
+#if 0
 int test_media_publisher_fn(
     quicrq_media_source_action_enum action,
     void* media_ctx,
@@ -306,6 +307,7 @@ int test_media_publisher_fn(
     }
     return ret;
 }
+#endif
 
 int test_media_frame_publisher_fn(
     quicrq_media_source_action_enum action,
@@ -313,20 +315,18 @@ int test_media_frame_publisher_fn(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
-    int* is_frame_finished,
+    int* is_last_segment,
     int* is_media_finished,
     uint64_t current_time)
 {
     int ret = 0;
     test_media_publisher_context_t* pub_ctx = (test_media_publisher_context_t*)media_ctx;
 
-
-    *is_media_finished = 0;
-    *is_frame_finished = 0;
-    *data_length = 0;
-
     if (action == quicrq_media_source_get_data) {
 
+        *is_media_finished = 0;
+        *is_last_segment = 0;
+        *data_length = 0;
         ret = test_media_publisher_check_frame(pub_ctx);
 
         if (ret == 0) {
@@ -340,7 +340,7 @@ int test_media_frame_publisher_fn(
                     size_t available = pub_ctx->media_frame_size - pub_ctx->media_frame_read;
                     size_t copied = data_max_size;
                     if (data_max_size >= available) {
-                        *is_frame_finished = 1;
+                        *is_last_segment = 1;
                         copied = available;
                     }
                     *data_length = copied;
@@ -408,7 +408,7 @@ int test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* url, size_t url_length, c
         ret = -1;
     }
     else {
-        ret = quicrq_publish_source(qr_ctx, url, url_length, srce_ctx, test_media_publisher_subscribe, test_media_publisher_fn);
+        ret = quicrq_publish_source(qr_ctx, url, url_length, srce_ctx, test_media_publisher_subscribe, test_media_frame_publisher_fn);
     }
     return ret;
 }
@@ -447,10 +447,6 @@ typedef struct st_test_media_consumer_context_t {
     quicrq_media_frame_header_t current_header;
     size_t media_frame_received;
     size_t target_size;
-    uint64_t highest_offset;
-    uint64_t final_offset;
-    struct st_test_media_consumer_packet_t* first_packet;
-    struct st_test_media_consumer_packet_t* last_packet;
     unsigned int is_finished : 1;
     unsigned int header_received : 1;
 
@@ -502,26 +498,11 @@ static test_media_consumer_frame_t* test_media_frame_find(test_media_consumer_co
 }
 
 /* TODO: remove old consumer  when new frame id based code is ready. */
-
 int test_media_consumer_close(void* media_ctx)
 {
     /* Close result file and log file */
     int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-    test_media_consumer_packet_t* packet;
-
-    if ((packet = cons_ctx->first_packet) != NULL) {
-        ret = -1;
-        DBG_PRINTF("Closing consumer with unprocessed frame, %llu, ret=%d", (unsigned long long)packet->offset, ret);
-    } else if (cons_ctx->final_offset == 0 || cons_ctx->highest_offset != cons_ctx->final_offset) {
-        ret = -1;
-        DBG_PRINTF("Closing consumer at offset: %llu,final= %llu, ret=%d", (unsigned long long)cons_ctx->highest_offset, (unsigned long long)cons_ctx->final_offset, ret);
-    }
-
-    while ((packet = cons_ctx->first_packet) != NULL) {
-        cons_ctx->first_packet = packet->next_packet;
-        free(packet);
-    }
 
     if (cons_ctx->Res != NULL) {
         picoquic_file_close(cons_ctx->Res);
@@ -558,6 +539,7 @@ void* test_media_consumer_init(char const* media_result_file, char const * media
     return cons_ctx;
 }
 
+#if 0
 /* Learn the final offset of a stream.
  * This is an opportunity to discover gaps.
  */
@@ -581,7 +563,8 @@ int test_media_consumer_learn_final_offset(
 
     return ret;
 }
-
+#endif
+#if 0
 static test_media_consumer_packet_t* test_media_store_create_packet(
     test_media_consumer_context_t* cons_ctx,
     test_media_consumer_packet_t* previous_packet,
@@ -622,7 +605,8 @@ static test_media_consumer_packet_t* test_media_store_create_packet(
 
     return packet;
 }
-
+#endif
+#if 0
 int test_media_consumer_data_ready(
     void* media_ctx,
     uint64_t current_time,
@@ -696,7 +680,9 @@ int test_media_consumer_data_ready(
 
     return ret;
 }
+#endif
 
+#if 0
 int test_media_consumer_datagram_ready(
     void* media_ctx,
     uint64_t current_time,
@@ -829,7 +815,9 @@ int test_media_consumer_datagram_ready(
 
     return ret;
 }
+#endif
 
+#if 0
 int test_media_consumer_cb(
     quicrq_media_consumer_enum action,
     void* media_ctx,
@@ -852,7 +840,7 @@ int test_media_consumer_cb(
             ret = quicrq_consumer_finished;
         }
         break;
-    case quicrq_media_final_offset:
+    case quicrq_media_final_frame_id:
         test_media_consumer_learn_final_offset(media_ctx, offset);
 
         if (ret == 0 && cons_ctx->is_finished) {
@@ -868,6 +856,7 @@ int test_media_consumer_cb(
     }
     return ret;
 }
+#endif
 
 /* Management of the list of frames undergoing reassembly, frame-id based logic */
 static test_media_consumer_packet_t* test_media_consumer_frame_create_packet(
@@ -1163,8 +1152,11 @@ int test_media_datagram_input(
             }
             /* Insert the frame at the proper location */
             ret = test_media_consumer_frame_add_packet(frame, current_time, data, offset, data_length);
-            /* If the frame is complete, verify and submit */
-            if (frame->final_offset > 0 && frame->data_received >= frame->final_offset) {
+            if (ret != 0) {
+                DBG_PRINTF("Add packet, ret = %d", ret);
+            }
+            else if ( frame->final_offset > 0 && frame->data_received >= frame->final_offset) {
+                /* If the frame is complete, verify and submit */
                 test_media_consumer_frame_mode_enum frame_mode = (cons_ctx->next_frame_id == frame_id) ?
                     test_media_frame_in_sequence : test_media_frame_peek;
                 if (frame->reassembled == NULL) {
@@ -1246,7 +1238,7 @@ int test_media_frame_consumer_cb(
             ret = quicrq_consumer_finished;
         }
         break;
-    case quicrq_media_final_offset:
+    case quicrq_media_final_frame_id:
         test_media_consumer_learn_final_frame_id(media_ctx, frame_id);
 
         if (ret == 0 && cons_ctx->is_finished) {
@@ -1272,7 +1264,7 @@ int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_len
         ret = -1;
     }
     else {
-        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams, test_media_consumer_cb, media_ctx);
+        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams, test_media_frame_consumer_cb, media_ctx);
     }
 
     return ret;
@@ -1410,12 +1402,14 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     uint8_t media_buffer[1024];
     uint64_t current_time = 0;
     uint64_t next_time;
-    uint64_t published_offset = 0;
     size_t data_length;
     void* srce_ctx = NULL;
     void* pub_ctx = NULL;
     void* cons_ctx = NULL;
-    int is_finished = 0;
+    uint64_t frame_id = 0;
+    uint64_t frame_offset = 0;
+    int is_last_segment = 0;
+    int is_media_finished = 0;
     int inactive = 0;
 
     /* Locate the source and reference file */
@@ -1439,19 +1433,31 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     }
 
     /* Loop through publish and consume until finished */
-    while (ret == 0 && !is_finished && inactive < 32) {
-        ret = test_media_publisher_fn(quicrq_media_source_get_data,
+    while (ret == 0 && !is_media_finished && inactive < 32) {
+        ret = test_media_frame_publisher_fn(quicrq_media_source_get_data,
             pub_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_finished, current_time);
-        if (ret == 0 && !is_finished && data_length == 0) {
+            &data_length, &is_last_segment, &is_media_finished, current_time);
+        if (ret != 0) {
+            DBG_PRINTF("Publisher, ret=%d", ret);
+        }
+        else if (!is_media_finished && data_length == 0) {
             /* Update the current time to reflect media time */
             current_time = test_media_publisher_next_time(pub_ctx, current_time);
             inactive++;
-        } else if (ret == 0) {
+        } else {
             inactive = 0;
-            ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
-                published_offset, data_length);
-            published_offset += data_length;
+            ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
+                frame_id, frame_offset, is_last_segment, data_length);
+            if (ret != 0) {
+                DBG_PRINTF("Consumer, ret=%d", ret);
+            }
+            else if (is_last_segment) {
+                frame_id++;
+                frame_offset = 0;
+            }
+            else {
+                frame_offset += data_length;
+            }
         }
     }
 
@@ -1461,8 +1467,8 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     }
 
     if (ret == 0) {
-        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL,
-            published_offset, 0);
+        ret = test_media_frame_consumer_cb(quicrq_media_final_frame_id, cons_ctx, current_time, NULL,
+            frame_id, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
@@ -1533,6 +1539,7 @@ int quicrq_media_video1_rt_test()
     return ret;
 }
 
+
 /* Verify that a media file can be obtained through the local publish API
  */
 
@@ -1547,7 +1554,10 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     uint64_t published_offset = 0;
     size_t data_length;
     void* cons_ctx = NULL;
-    int is_finished = 0;
+    uint64_t frame_id = 0;
+    uint64_t frame_offset = 0;
+    int is_last_segment = 0;
+    int is_media_finished = 0;
     uint64_t simulated_time = 0;
     uint64_t media_next_time = 0;
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
@@ -1604,33 +1614,47 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     }
 
     /* Loop through publish and consume until finished */
-    while (ret == 0 && !is_finished && inactive < 32) {
+    while (ret == 0 && !is_media_finished && inactive < 32) {
         ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_finished, current_time);
+            &data_length, &is_last_segment, &is_media_finished, current_time);
         if (ret == 0) {
-            if (is_finished || data_length > 0) {
-                ret = test_media_consumer_cb(quicrq_media_data_ready, cons_ctx, current_time, media_buffer,
-                    published_offset, data_length);
-                published_offset += data_length;
-                inactive = 0;
+            if (is_media_finished || data_length > 0) {
+                ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
+                    frame_id, frame_offset, is_last_segment, data_length);
+                if (ret == 0) {
+                    published_offset += data_length;
+                    inactive = 0;
+                }
+                else {
+                    DBG_PRINTF("Frame consumer callback, ret: %d", ret);
+                }
             }
             else {
                 current_time = test_media_publisher_next_time(stream_ctx->media_ctx, current_time);
                 inactive++;
             }
+            if (is_last_segment) {
+                frame_id++;
+                frame_offset = 0;
+            }
+            else {
+                frame_offset += data_length;
+            }
+        }
+        else {
+            DBG_PRINTF("Frame publisher callback, ret: %d", ret);
         }
     }
 
     /* Close publisher by closing the connection context */
     if (ret == 0) {
-        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL,
-            published_offset, 0);
+        ret = test_media_frame_consumer_cb(quicrq_media_final_frame_id, cons_ctx, current_time, NULL, frame_id, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
         else {
-            DBG_PRINTF("Consumer not finished after final offset! ret = %d", ret);
+            DBG_PRINTF("Consumer not finished after final frame id! ret = %d", ret);
             ret = -1;
         }
     }
@@ -1678,6 +1702,7 @@ int quicrq_media_source_rt_test()
     return ret;
 }
 
+#if 0
 /* The media disorder test checks whether the test media consumer can properly manage 
  * the repair of holes. 
  */
@@ -1778,7 +1803,7 @@ int quicrq_media_disorder_test_one(char const* media_source_name, char const* me
 
     /* Indicate the final offset, to simulate what datagrams would do */
     if (ret == 0) {
-        ret = test_media_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL, published_offset, 0);
+        ret = test_media_consumer_cb(quicrq_media_final_frame_id, cons_ctx, current_time, NULL, published_offset, 0);
         if (ret != 0) {
             DBG_PRINTF("Media consumer callback: ret = %d", ret);
         }
@@ -1849,9 +1874,19 @@ int quicrq_media_disorder_test()
         sizeof(loss_pattern) / sizeof(uint64_t), loss_pattern, 3);
     return ret;
 }
+#endif
 
 /* Media datagram test. Check the datagram API.
  */
+
+typedef struct st_media_disorder_hole_t {
+    struct st_media_disorder_hole_t* next_loss;
+    uint64_t frame_id;
+    uint64_t offset;
+    int is_last_segment;
+    size_t length;
+    uint8_t media_buffer[1024];
+} media_disorder_hole_t;
 
 int quicrq_media_datagram_test_one(char const* media_source_name, char const* media_result_file, char const* media_result_log, size_t nb_losses, uint64_t* loss_frame, int * loss_mode, size_t nb_dup)
 {
@@ -1972,7 +2007,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
 
     /* Indicate the final frame_id, to simulate what datagrams would do */
     if (ret == 0) {
-        ret = test_media_frame_consumer_cb(quicrq_media_final_offset, cons_ctx, current_time, NULL, frame_id, 0, 0, 0);
+        ret = test_media_frame_consumer_cb(quicrq_media_final_frame_id, cons_ctx, current_time, NULL, frame_id, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             consumer_properly_finished = 1;
             if (nb_losses > 0) {
@@ -2075,13 +2110,8 @@ int quicrq_media_frame_noloss()
 
 int quicrq_media_frame_loss()
 {
-#if 0
-    uint64_t loss_frame[] = { 0};
-    int loss_mode[] =       { 3};
-#else
     uint64_t loss_frame[] = { 0, 4, 5, 6, 9, 11, 15, UINT64_MAX };
     int loss_mode[] = { 3, 3, 3, 3, 0,  1, 2,  3 };
-#endif
 
     int ret = quicrq_media_datagram_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_MEDIA_FRAME_LOSS_RESULT, QUICRQ_TEST_MEDIA_FRAME_LOSS_LOG,
         sizeof(loss_frame) / sizeof(uint64_t), loss_frame, loss_mode, 0);

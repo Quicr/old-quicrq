@@ -15,7 +15,6 @@ extern "C" {
     int quicrq_media_video1_rt_test();
     int quicrq_media_source_test();
     int quicrq_media_source_rt_test();
-    int quicrq_media_disorder_test();
     int quicrq_basic_rt_test();
     int quicrq_datagram_basic_test();
     int quicrq_datagram_loss_test();
