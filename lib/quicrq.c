@@ -156,38 +156,125 @@ int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* con
     return ret;
 }
 
-/* send the media using the provider supplied function */
+/* Sending in sequence on a stream. 
+ * We do not want to spend too much effort there, so we are going to reuse the "send repair" frame
+ * to send data segments of sufficient length. This is a bit of a hack, and it does add some overhead.
+ * Need to maintain variables, e.g.:
+ * - next frame ID to send
+ * - current frame offset
+ * - next 
+ */
 int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space, uint64_t current_time)
 {
     /* Find how much data is available on the media stream */
-    int is_finished = 0;
+    int is_media_finished = 0;
+    int is_last_segment = 0;
     size_t available = 0;
     size_t data_length = 0;
-    int ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space, &available, &is_finished, current_time);
-    /* Ask the media stream to fill the buffer.
-     * Do this even if the stream is finished and there is no data to send, as this is a way
-     * to communicate the FIN of stream to the stack.
-     */
-    if (ret == 0) {
-        if (available == 0) {
-            /* Mark stream as not ready */
-            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
-        }
-        void * buffer = picoquic_provide_stream_data_buffer(context, available, is_finished, !is_finished);
-        if (buffer == NULL) {
+    uint8_t stream_header[QUICRQ_STREAM_HEADER_MAX];
+    size_t h_size;
+    int ret = 0;
+
+    /* First, create a "mock" buffer based on the available space instead of the actual number of bytes.
+     * By design, we are creating a "repair" frame, but using the "repair request" encoding. */
+    uint8_t* h_byte = quicrq_repair_request_encode(stream_header+2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_REPAIR,
+        stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 0, space);
+    if (h_byte == NULL) {
+        /* That should not happen, unless the stream_header size is way too small */
+        ret = -1;
+    }
+    else {
+        h_size = h_byte - stream_header;
+        if (h_size > space) {
+            /* That should not happen either, picoquic should never provide less than 17 bytes. */
             ret = -1;
         }
         else {
-            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, buffer, available, &data_length, &is_finished, current_time);
-            if (ret == 0 && available != data_length) {
+            /* Find how much data is actually available */
+            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, current_time);
+        }
+    }
+
+    if (ret == 0) {
+        if (available == 0) {
+            if (is_media_finished) {
+                /* Send the fin frame immediately, because it would be very hard to get
+                 * a new "prepare to send" callback after an empty response.
+                 */
+                stream_ctx->final_frame_id = stream_ctx->next_frame_id;
+                h_byte = quicrq_fin_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FIN_DATAGRAM,
+                    stream_ctx->final_frame_id);
+                if (h_byte == NULL || h_byte > stream_header + space) {
+                    ret = -1;
+                }
+                else {
+                    uint8_t* buffer;
+                    h_size = h_byte - stream_header;
+                    buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, h_size, 1, 0);
+                    if (buffer == NULL) {
+                        ret = -1;
+                    }
+                    else {
+                        stream_header[0] = (uint8_t)(h_size >> 8);
+                        stream_header[1] = (uint8_t)(h_size & 0xff);
+                        memcpy(buffer, stream_header, h_size);
+                        stream_ctx->is_final_frame_id_sent = 1;
+                        stream_ctx->is_server_finished = 1;
+                    }
+                }
+            }
+            else {
+                /* Mark stream as not ready. It will be awakened when data becomse available */
+                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
+            }
+        }
+        else {
+            /* Encode the actual header, instead of a prediction */
+            h_byte = quicrq_repair_request_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_REPAIR,
+                stream_ctx->next_frame_id, stream_ctx->next_frame_offset, is_last_segment, available);
+            if (h_byte == NULL) {
+                /* That should not happen, unless the stream_header size was way too small */
                 ret = -1;
             }
-            else if (is_finished) {
-                stream_ctx->is_server_finished = 1;
-                /* TODO: Should at this point close the publishing service */
+            else {
+                uint8_t* buffer;
+                h_size = h_byte - stream_header;
+                buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, h_size + available, 0, 1);
+                if (buffer == NULL) {
+                    ret = -1;
+                }
+                else {
+                    /* copy the stream header to the packet */
+                    memcpy(buffer, stream_header, h_size);
+                    ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, buffer + h_size, available, &data_length,
+                        &is_last_segment, &is_media_finished, current_time);
+                    if (ret == 0 && available != data_length) {
+                        ret = -1;
+                    }
+                    else
+                    {
+                        /* Set the message length */
+                        size_t message_length = h_size - 2 + available;
+                        buffer[0] = (uint8_t)(message_length >> 8);
+                        buffer[1] = (uint8_t)(message_length&0xff);
+
+                        if (is_last_segment) {
+                            stream_ctx->next_frame_id++;
+                            stream_ctx->next_frame_offset = 0;
+                        } else {
+                            stream_ctx->next_frame_offset += available;
+                        }
+
+                        if (is_media_finished) {
+                            stream_ctx->final_frame_id = stream_ctx->next_frame_id;
+                            stream_ctx->send_state = quicrq_sending_ready;
+                        }
+                    }
+                }
             }
         }
     }
+
     return ret;
 }
 
@@ -216,10 +303,12 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     /* Parse the datagram header */
     const uint8_t* bytes_max = bytes + length;
     uint64_t datagram_stream_id;
-    uint64_t datagram_offset;
+    uint64_t frame_id;
+    uint64_t frame_offset;
+    int is_last_segment;
     const uint8_t* next_bytes;
 
-    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &datagram_offset);
+    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &frame_id, &frame_offset, &is_last_segment);
     if (next_bytes == NULL) {
         ret = -1;
     }
@@ -231,7 +320,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
         }
         else {
             /* Pass data to the media context. */
-            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, datagram_offset, bytes_max - next_bytes);
+            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, frame_id, frame_offset, is_last_segment, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
                 DBG_PRINTF("Consumer indicated finished, ret = %d", ret);
                 stream_ctx->is_server_finished = 1;
@@ -262,7 +351,8 @@ void quicrq_remove_repair_in_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_
     free(repair);
 }
 
-int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, const uint8_t* bytes, size_t length, uint64_t offset)
+int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, const uint8_t* bytes, size_t length,
+    uint64_t frame_id, uint64_t frame_offset, int is_last_segment)
 {
     int ret = 0;
     size_t target_size = sizeof(quicrq_datagram_queued_repair_t) + length;
@@ -277,7 +367,9 @@ int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx
         }
         else {
             memset(repair, 0, sizeof(quicrq_datagram_queued_repair_t));
-            repair->offset = offset;
+            repair->frame_id = frame_id;
+            repair->frame_offset = frame_offset;
+            repair->is_last_segment = is_last_segment;
             repair->length = length;
             repair->datagram = ((uint8_t*)repair) + sizeof(quicrq_datagram_queued_repair_t);
             memcpy(repair->datagram, bytes, length);
@@ -297,13 +389,15 @@ int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx
     return ret;
 }
 
-int quicrq_check_spurious_repair_in_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, size_t length, uint64_t offset)
+int quicrq_check_spurious_repair_in_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, size_t length,
+    uint64_t frame_id, uint64_t frame_offset, int is_last_segment)
 {
     int ret = 0;
     quicrq_datagram_queued_repair_t* repair = stream_ctx->datagram_repair_first;
 
     while (repair != NULL) {
-        if (repair->offset == offset && repair->length == length) {
+        if (repair->frame_id == frame_id && repair->frame_offset == frame_offset &&
+            repair->length == length && repair->is_last_segment == is_last_segment) {
             break;
         }
         else {
@@ -325,14 +419,16 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     /* Obtain the datagram ID */
     const uint8_t* bytes_max = bytes + length;
     uint64_t datagram_stream_id;
-    uint64_t datagram_offset;
+    uint64_t frame_id;
+    uint64_t frame_offset;
+    int is_last_segment;
     const uint8_t* next_bytes;
 
     if (bytes == NULL) {
         ret = -1;
     }
     else {
-        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &datagram_offset);
+        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &frame_id, &frame_offset, &is_last_segment);
         /* Retrieve the stream context for the datagram */
         if (next_bytes == NULL) {
             ret = -1;
@@ -348,10 +444,10 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
                 ret = -1;
                 break;
             case picoquic_callback_datagram_lost: /* Packet carrying datagram-frame probably lost */
-                ret = quicrq_add_repair_to_stream_ctx(cnx_ctx, stream_ctx, next_bytes, bytes_max - next_bytes, datagram_offset);
+                ret = quicrq_add_repair_to_stream_ctx(cnx_ctx, stream_ctx, next_bytes, bytes_max - next_bytes, frame_id, frame_offset, is_last_segment);
                 break;
             case picoquic_callback_datagram_spurious: /* Packet carrying datagram-frame was not really lost */
-                ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, datagram_offset);
+                ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, frame_id, frame_offset, is_last_segment);
             default:
                 ret = -1;
             }
@@ -374,13 +470,19 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
     while (stream_ctx != NULL) {
         if (stream_ctx->is_datagram && !stream_ctx->is_client && stream_ctx->is_active_datagram) {
             /* Check how much data is ready */
-            int is_finished = 0;
             size_t available = 0;
             size_t data_length = 0;
-            /* Compute length of datagram_stream_id + length of offset */
+            /* Predict length of datagram_stream_id + length of offset.
+             * TODO: the number of bytes available depends on the header size, which depends on
+             * frame_id, and offset. The frame size and frame offset are managed by the
+             * sender code and are known in advance, but the "last_segment" value is not.
+             * We do a first encoding supposing last_segment = 0. If this turns out
+             * to be the actual last segment, the coding will have to be fixed.
+             */
             uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
-            uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id, stream_ctx->highest_offset);
             size_t h_size;
+            uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
+                stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 0);
             if (h_byte == NULL) {
                 ret = -1;
                 break;
@@ -391,14 +493,15 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 /* Can't do anything there */
                 at_least_one_active = 1;
             } else {
-                ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_finished, current_time);
+                int is_last_segment = 0;
+                int is_media_finished = 0;
+                ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, current_time);
+
                 /* Get a buffer inside the datagram packet */
                 if (ret == 0){
-                    if (is_finished) {
-                        /* Mark the stream as finished */
-                        /* Consider how to send an end-of-stream mark to the peer, maybe on the control flow. */
-                        stream_ctx->is_active_datagram = 0;
-                        stream_ctx->final_offset = stream_ctx->highest_offset + available;
+                    if (is_media_finished) {
+                        /* Mark the stream as finished, prepare sending a final message */
+                        stream_ctx->final_frame_id = stream_ctx->next_frame_id;
                         /* Wake up the control stream so the final message can be sent. */
                         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                         stream_ctx->is_active_datagram = 0;
@@ -411,14 +514,33 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                         }
                         else {
                             /* Push the header */
-                            memcpy(buffer, datagram_header, h_size);
-                            /* Get the media */
-                            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, ((uint8_t*)buffer) + h_size, available, &data_length, &is_finished, current_time);
-                            if (ret == 0 && available != data_length) {
-                                ret = -1;
+                            if (is_last_segment) {
+                                h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
+                                    stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 1);
+                                if (h_byte != datagram_header + h_size) {
+                                    /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
+                                    ret = -1;
+                                }
+                            }
+                            if (ret == 0) {
+                                memcpy(buffer, datagram_header, h_size);
+                                /* Get the media */
+                                ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, ((uint8_t*)buffer) + h_size, available, &data_length,
+                                    &is_last_segment, &is_media_finished, current_time);
+                                if (ret == 0 && available != data_length) {
+                                    ret = -1;
+                                }
                             }
                             /* Update offset based on what is sent. */
-                            stream_ctx->highest_offset += available;
+                            if (ret == 0) {
+                                if (is_last_segment) {
+                                    stream_ctx->next_frame_id++;
+                                    stream_ctx->next_frame_offset = 0;
+                                }
+                                else {
+                                    stream_ctx->next_frame_offset += available;
+                                }
+                            }
                         }
                         /* Exit the loop, since data was copied */
                         break;
@@ -477,12 +599,15 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         if (stream_ctx->is_sender) {
             if (stream_ctx->datagram_repair_first != NULL) {
                 /* Encode the first repair in queue in the protocol buffer */
-                if (quicrq_msg_buffer_alloc(message, quicrq_repair_msg_reserve(stream_ctx->datagram_repair_first->offset, stream_ctx->datagram_repair_first->length), 0) != 0) {
+                if (quicrq_msg_buffer_alloc(message, quicrq_repair_msg_reserve(stream_ctx->datagram_repair_first->frame_id,
+                    stream_ctx->datagram_repair_first->frame_offset, stream_ctx->datagram_repair_first->is_last_segment,
+                    stream_ctx->datagram_repair_first->length), 0) != 0) {
                     ret = -1;
                 }
                 else {
                     uint8_t* message_next = quicrq_repair_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_REPAIR,
-                        stream_ctx->datagram_repair_first->offset, stream_ctx->datagram_repair_first->length, stream_ctx->datagram_repair_first->datagram);
+                        stream_ctx->datagram_repair_first->frame_id, stream_ctx->datagram_repair_first->frame_offset, stream_ctx->datagram_repair_first->is_last_segment,
+                        stream_ctx->datagram_repair_first->length, stream_ctx->datagram_repair_first->datagram);
                     if (message_next == NULL) {
                         ret = -1;
                     }
@@ -493,14 +618,14 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-            else if (stream_ctx->final_offset > 0 && !stream_ctx->is_final_offset_sent) {
+            else if (stream_ctx->final_frame_id > 0 && !stream_ctx->is_final_frame_id_sent) {
                 /* TODO: encode the final offset message in the protocol buffer */
-                if (quicrq_msg_buffer_alloc(message, quicrq_fin_msg_reserve(stream_ctx->final_offset), 0) != 0) {
+                if (quicrq_msg_buffer_alloc(message, quicrq_fin_msg_reserve(stream_ctx->final_frame_id), 0) != 0) {
                     ret = -1;
                 }
                 else {
                     uint8_t* message_next = quicrq_fin_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_FIN_DATAGRAM,
-                        stream_ctx->final_offset);
+                        stream_ctx->final_frame_id);
                     if (message_next == NULL) {
                         ret = -1;
                     }
@@ -534,13 +659,13 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         case quicrq_sending_initial:
             /* Send available buffer data. Mark state ready after sent. */
             more_to_send = (stream_ctx->datagram_repair_first != NULL ||
-                (stream_ctx->final_offset > 0 && !stream_ctx->is_final_offset_sent));
+                (stream_ctx->final_frame_id > 0 && !stream_ctx->is_final_frame_id_sent));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             break;
         case quicrq_sending_repair:
             /* Send available buffer data and repair data. Dequeue repair and mark state ready after sent. */
             more_to_send = (stream_ctx->datagram_repair_first->next_repair != NULL ||
-                (stream_ctx->final_offset > 0 && !stream_ctx->is_final_offset_sent));
+                (stream_ctx->final_frame_id > 0 && !stream_ctx->is_final_frame_id_sent));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 quicrq_remove_repair_in_stream_ctx(stream_ctx, stream_ctx->datagram_repair_first);
@@ -551,7 +676,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             more_to_send = (stream_ctx->datagram_repair_first != NULL);
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
-                stream_ctx->is_final_offset_sent = 1;
+                stream_ctx->is_final_frame_id_sent = 1;
             }
             break;
         default:
@@ -581,121 +706,104 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
 int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, size_t length, int is_fin)
 {
     int ret = 0;
-    if (stream_ctx->receive_state == quicrq_receive_stream) {
-        /* In the basic protocol, the media is received as stream data data until end of stream */
-        if (length > 0) {
-            ret = stream_ctx->consumer_fn(quicrq_media_data_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), bytes, stream_ctx->highest_offset, length);
-            stream_ctx->highest_offset += length;
+
+    while (ret == 0 && length > 0) {
+        /* There may be a set of messages back to back, and all have to be received. */
+        if (stream_ctx->receive_state == quicrq_receive_done) {
+            /* Protocol violation, was not expecting any message */
+            ret = -1;
+            break;
         }
-        if (ret == 0 && is_fin && !stream_ctx->is_server_finished) {
-            stream_ctx->is_server_finished = 1;
-            ret = stream_ctx->consumer_fn(quicrq_media_final_offset, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL, stream_ctx->highest_offset, 0);
-            if (ret == quicrq_consumer_finished) {
-                DBG_PRINTF("Consumer is finished, ret = %d", ret);
-                ret = 0;
-            }
-        }
-    }
-    else
-    {
-        while (ret == 0 && length > 0) {
-            /* There may be a set of messages back to back, and all have to be received. */
-            if (stream_ctx->receive_state == quicrq_receive_done) {
-                /* Protocol violation, was not expecting any message */
+        else {
+            /* Receive the next message on the stream, if any */
+            int is_finished = 0;
+            uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &stream_ctx->message_receive, &is_finished);
+            if (next_bytes == NULL) {
+                /* Something went wrong */
                 ret = -1;
-                break;
             }
-            else {
-                /* Receive the next message on the stream, if any */
-                int is_finished = 0;
-                uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &stream_ctx->message_receive, &is_finished);
-                if (next_bytes == NULL) {
-                    /* Something went wrong */
-                    ret = -1;
-                }
-                else
-                {
-                    length = (bytes + length) - next_bytes;
-                    bytes = next_bytes;
-                    if (is_finished) {
-                        /* Decode the incoming message */
-                        quicrq_message_t incoming = { 0 };
-                        const uint8_t* r_bytes = quicrq_msg_decode(stream_ctx->message_receive.buffer, stream_ctx->message_receive.buffer + stream_ctx->message_receive.message_size, &incoming);
+            else
+            {
+                length = (bytes + length) - next_bytes;
+                bytes = next_bytes;
+                if (is_finished) {
+                    /* Decode the incoming message */
+                    quicrq_message_t incoming = { 0 };
+                    const uint8_t* r_bytes = quicrq_msg_decode(stream_ctx->message_receive.buffer, stream_ctx->message_receive.buffer + stream_ctx->message_receive.message_size, &incoming);
 
-                        if (r_bytes == NULL) {
-                            /* Message was incorrect */
-                            ret = -1;
-                        }
-                        else switch (incoming.message_type) {
-                        case QUICRQ_ACTION_OPEN_STREAM:
-                        case QUICRQ_ACTION_OPEN_DATAGRAM:
-                            if (stream_ctx->receive_state != quicrq_receive_initial) {
-                                ret = -1;
-                            }
-                            else {
-                                /* client should only be marked finished if stream is closed. */
-                                stream_ctx->is_client_finished = 1;
-                                /* Process initial request */
-                                stream_ctx->is_datagram = (incoming.message_type == QUICRQ_ACTION_OPEN_DATAGRAM);
-                                /* Open the media -- TODO, variants with different actions. */
-                                ret = quicrq_subscribe_local_media(stream_ctx, incoming.url, incoming.url_length);
-                                stream_ctx->is_sender = 1;
-                                if (incoming.message_type == QUICRQ_ACTION_OPEN_STREAM) {
-                                    stream_ctx->send_state = quicrq_sending_stream;
-                                    stream_ctx->receive_state = quicrq_receive_done;
-                                    picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-                                }
-                                else {
-                                    stream_ctx->send_state = quicrq_sending_ready;
-                                    stream_ctx->receive_state = quicrq_receive_done;
-                                }
-                            }
-                            break;
-                        case QUICRQ_ACTION_FIN_DATAGRAM:
-                            if (stream_ctx->receive_state != quicrq_receive_repair || stream_ctx->final_offset != 0) {
-                                /* Protocol error */
-                                ret = -1;
-                            }
-                            else {
-                                /* Pass the final offset to the media consumer. */
-                                stream_ctx->final_offset = incoming.offset;
-                                ret = stream_ctx->consumer_fn(quicrq_media_final_offset, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL, stream_ctx->final_offset, 0);
-                                if (ret == quicrq_consumer_finished) {
-                                    DBG_PRINTF("Finish after final offset, ret=%d", ret);
-                                    stream_ctx->is_server_finished = 1;
-                                    ret = 0;
-                                }
-                            }
-                            break;
-                        case QUICRQ_ACTION_REQUEST_REPAIR:
-                            /* TODO - implement that */
-                            ret = -1;
-                            break;
-                        case QUICRQ_ACTION_REPAIR:
-                            if (stream_ctx->receive_state != quicrq_receive_repair) {
-                                /* Protocol error */
-                                ret = -1;
-                            }
-                            else {
-                                /* Pass the repair data to the media consumer. */
-                                ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), 
-                                    incoming.data, incoming.offset, incoming.length);
-                                if (ret == quicrq_consumer_finished) {
-                                    DBG_PRINTF("Finished after repair, ret=%d", ret);
-                                    stream_ctx->is_server_finished = 1;
-                                    ret = 0;
-                                }
-                            }
-                            break;
-                        default:
-                            /* Some unknown message, maybe not implemented yet */
-                            ret = -1;
-                            break;
-                        }
-                        /* As the message was processed, reset the message buffer. */
-                        quicrq_msg_buffer_reset(&stream_ctx->message_receive);
-
+                    if (r_bytes == NULL) {
+                        /* Message was incorrect */
+                        ret = -1;
                     }
+                    else switch (incoming.message_type) {
+                    case QUICRQ_ACTION_OPEN_STREAM:
+                    case QUICRQ_ACTION_OPEN_DATAGRAM:
+                        if (stream_ctx->receive_state != quicrq_receive_initial) {
+                            ret = -1;
+                        }
+                        else {
+                            /* client should only be marked finished if stream is closed. */
+                            stream_ctx->is_client_finished = 1;
+                            /* Process initial request */
+                            stream_ctx->is_datagram = (incoming.message_type == QUICRQ_ACTION_OPEN_DATAGRAM);
+                            /* Open the media -- TODO, variants with different actions. */
+                            ret = quicrq_subscribe_local_media(stream_ctx, incoming.url, incoming.url_length);
+                            stream_ctx->is_sender = 1;
+                            if (incoming.message_type == QUICRQ_ACTION_OPEN_STREAM) {
+                                stream_ctx->send_state = quicrq_sending_stream;
+                                stream_ctx->receive_state = quicrq_receive_done;
+                                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+                            }
+                            else {
+                                stream_ctx->send_state = quicrq_sending_ready;
+                                stream_ctx->receive_state = quicrq_receive_done;
+                            }
+                        }
+                        break;
+                    case QUICRQ_ACTION_FIN_DATAGRAM:
+                        if (stream_ctx->receive_state != quicrq_receive_repair || stream_ctx->final_frame_id != 0) {
+                            /* Protocol error */
+                            ret = -1;
+                        }
+                        else {
+                            /* Pass the final offset to the media consumer. */
+                            stream_ctx->final_frame_id = incoming.frame_id;
+                            ret = stream_ctx->consumer_fn(quicrq_media_final_frame_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
+                                stream_ctx->final_frame_id, 0, 0, 0);
+                            if (ret == quicrq_consumer_finished) {
+                                DBG_PRINTF("Finish after final offset, ret=%d", ret);
+                                stream_ctx->is_server_finished = 1;
+                                ret = 0;
+                            }
+                        }
+                        break;
+                    case QUICRQ_ACTION_REQUEST_REPAIR:
+                        /* TODO - implement that */
+                        ret = -1;
+                        break;
+                    case QUICRQ_ACTION_REPAIR:
+                        if (stream_ctx->receive_state != quicrq_receive_repair) {
+                            /* Protocol error */
+                            ret = -1;
+                        }
+                        else {
+                            /* Pass the repair data to the media consumer. */
+                            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
+                                incoming.data, incoming.frame_id, incoming.offset, incoming.is_last_segment, incoming.length);
+                            if (ret == quicrq_consumer_finished) {
+                                DBG_PRINTF("Finished after repair, ret=%d", ret);
+                                stream_ctx->is_server_finished = 1;
+                                ret = 0;
+                            }
+                        }
+                        break;
+                    default:
+                        /* Some unknown message, maybe not implemented yet */
+                        ret = -1;
+                        break;
+                    }
+                    /* As the message was processed, reset the message buffer. */
+                    quicrq_msg_buffer_reset(&stream_ctx->message_receive);
                 }
             }
         }
@@ -998,12 +1106,12 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
     if (stream_ctx->media_ctx != NULL) {
         if (stream_ctx->is_client) {
             if (stream_ctx->consumer_fn != NULL) {
-                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0);
+                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 0, 0);
             }
         }
         else {
             if (stream_ctx->publisher_fn != NULL) {
-                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, 0);
+                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, 0);
             }
         }
     }

@@ -80,9 +80,15 @@ typedef enum {
 } quicrq_media_source_action_enum;
 
 typedef void* (*quicrq_media_publisher_subscribe_fn)(const uint8_t* media_url, const size_t media_url_length, void* pub_ctx);
-typedef int (*quicrq_media_publisher_fn)(quicrq_media_source_action_enum action,
-    void* media_ctx, uint8_t* data, size_t data_max_size, size_t* data_length,
-    int* is_finished, uint64_t current_time);
+typedef int (*quicrq_media_publisher_fn)(
+    quicrq_media_source_action_enum action,
+    void* media_ctx,
+    uint8_t* data,
+    size_t data_max_size,
+    size_t* data_length,
+    int* is_last_segment,
+    int* is_media_finished,
+    uint64_t current_time);
 
 int quicrq_publish_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn);
 int quicrq_close_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, void* pub_ctx);
@@ -100,7 +106,7 @@ int quicrq_close_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, v
 typedef enum {
     quicrq_media_data_ready = 0,
     quicrq_media_datagram_ready,
-    quicrq_media_final_offset,
+    quicrq_media_final_frame_id,
     quicrq_media_close
 } quicrq_media_consumer_enum;
 
@@ -113,8 +119,10 @@ typedef int (*quicrq_media_consumer_fn)(
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
+    uint64_t frame_id,
     uint64_t offset,
-    uint64_t data_length);
+    int is_last_segment,
+    size_t data_length);
 
 int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx,
     uint8_t* url, size_t url_length, int use_datagrams,
