@@ -69,6 +69,8 @@ typedef struct st_quicrq_test_config_t {
     quicrq_test_attach_t* attachments;
     int nb_sources;
     quicrq_test_source_t* sources;
+    uint64_t cnx_error_client;
+    uint64_t cnx_error_server;
 } quicrq_test_config_t;
 
 /* Find arrival context by link ID and destination address */
@@ -587,6 +589,11 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 
     DBG_PRINTF("Exit loop after %llu us, ret = %d",
         (unsigned long long) config->simulated_time, ret);
+
+    if (ret == 0 && (!is_closed || config->simulated_time > 12000000)) {
+        DBG_PRINTF("Session was not properly closed, time = %" PRIu64, config->simulated_time);
+        ret = -1;
+    }
 
     /* Clear everything. */
     if (config != NULL) {
