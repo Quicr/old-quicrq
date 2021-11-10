@@ -78,7 +78,7 @@ typedef struct st_quicrq_message_t {
     uint64_t frame_id;
     uint64_t offset;
     int is_last_segment;
-    uint64_t length;
+    size_t length;
     const uint8_t* data;
 } quicrq_message_t;
 
