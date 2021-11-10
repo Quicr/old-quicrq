@@ -20,7 +20,8 @@ jobs:
 
       # Build picotls and picoquic.
       - run: |
-          sudo apt-get install -y libssl-dev
+          brew reinstall openssl
+          export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
           ./ci/build_picotls.sh
           ./ci/build_picoquic.sh
      
