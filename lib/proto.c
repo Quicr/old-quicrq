@@ -95,7 +95,7 @@ const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_
     return bytes;
 }
 
-size_t quicrq_repair_request_reserve(uint64_t repair_frame_id, uint64_t repair_offset, int is_last_segment, uint64_t repair_length)
+size_t quicrq_repair_request_reserve(uint64_t repair_frame_id, uint64_t repair_offset, int is_last_segment, size_t repair_length)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(repair_frame_id);
@@ -113,7 +113,7 @@ size_t quicrq_repair_request_reserve(uint64_t repair_frame_id, uint64_t repair_o
  *     offset(i),
  *     length(i)
  */
-uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_frame_id, uint64_t repair_offset, int is_last_segment, uint64_t repair_length)
+uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_frame_id, uint64_t repair_offset, int is_last_segment, size_t repair_length)
 {
     uint64_t offset_and_fin = (repair_offset << 1) | (uint64_t)(is_last_segment & 1);
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
@@ -125,7 +125,7 @@ uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64
 }
 
 const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, 
-    uint64_t * repair_frame_id, uint64_t* repair_offset, int * is_last_segment, uint64_t* repair_length)
+    uint64_t * repair_frame_id, uint64_t* repair_offset, int * is_last_segment, size_t* repair_length)
 {
     uint64_t offset_and_fin = 0;
     *repair_frame_id = 0;
@@ -135,7 +135,7 @@ const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t*
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, repair_frame_id)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &offset_and_fin)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, repair_length)) != NULL) {
+        (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, repair_length)) != NULL) {
         *repair_offset = (offset_and_fin >> 1);
         *is_last_segment = (int)(offset_and_fin & 1);
     }

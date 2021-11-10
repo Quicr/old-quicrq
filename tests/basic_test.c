@@ -587,9 +587,6 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
     }
 
-    DBG_PRINTF("Exit loop after %llu us, ret = %d",
-        (unsigned long long) config->simulated_time, ret);
-
     if (ret == 0 && (!is_closed || config->simulated_time > 12000000)) {
         DBG_PRINTF("Session was not properly closed, time = %" PRIu64, config->simulated_time);
         ret = -1;
