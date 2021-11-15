@@ -28,7 +28,9 @@ jobs:
       # Build quicdoq and run tests
       - run: |
           mkdir build
-          cmake .
+          cd build
+          cmake ..
+          cmake --build .
           make
           ulimit -c unlimited -S
           pwd
