@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.11)
 cmake_policy(SET CMP0003 NEW)
 project(quicrq C CXX)
 find_package (Threads REQUIRED)
+FIND_PACKAGE(PkgConfig REQUIRED)
 
 set(CMAKE_C_STANDARD 11)
 
