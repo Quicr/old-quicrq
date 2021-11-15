@@ -588,7 +588,7 @@ int test_media_consumer_frame_add_packet(
             }
             else if (offset < packet->offset) {
                 /* partial overlap. Create a packet for the non overlapping part, then retain the bytes at the end. */
-                size_t consumed = packet->offset - offset;
+                size_t consumed = (size_t)(packet->offset - offset);
                 test_media_consumer_packet_t* new_packet = test_media_consumer_frame_create_packet(frame, previous_packet, current_time, data, offset, consumed);
                 if (new_packet == NULL) {
                     ret = -1;
@@ -611,7 +611,7 @@ int test_media_consumer_frame_add_packet(
                 break;
             }
             else {
-                size_t consumed = packet->offset + packet->data_length - offset;
+                size_t consumed = (size_t)(packet->offset + packet->data_length - offset);
                 data += consumed;
                 offset += consumed;
                 data_length -= consumed;
@@ -791,7 +791,7 @@ int test_media_datagram_input(
                     ret = test_media_consumer_frame_reassemble(frame);
                     if (ret == 0) {
                         /* If the frame is fully received, pass it to the application, indicating sequence or not. */
-                        ret = test_media_consumer_frame_ready(cons_ctx, current_time, frame_id, frame->reassembled, frame->final_offset, frame_mode);
+                        ret = test_media_consumer_frame_ready(cons_ctx, current_time, frame_id, frame->reassembled, (size_t)frame->final_offset, frame_mode);
                     }
                     if (ret == 0 && frame_mode == test_media_frame_in_sequence) {
                         /* delete the frame that was just reassembled. */
@@ -801,7 +801,7 @@ int test_media_datagram_input(
                         /* try processing all frames that might now be ready */
                         while (ret == 0 && (frame = test_media_frame_find(cons_ctx, cons_ctx->next_frame_id)) != NULL && frame->reassembled != NULL) {
                             /* Submit the frame in order */
-                            ret = test_media_consumer_frame_ready(cons_ctx, current_time, frame->frame_id, frame->reassembled, frame->final_offset, test_media_frame_repair);
+                            ret = test_media_consumer_frame_ready(cons_ctx, current_time, frame->frame_id, frame->reassembled, (size_t)frame->final_offset, test_media_frame_repair);
                             /* delete the frame that was just repaired. */
                             test_media_consumer_frame_delete(cons_ctx, frame);
                             /* update the next_frame id */
@@ -856,10 +856,10 @@ int test_media_frame_consumer_cb(
 
     switch (action) {
     case quicrq_media_data_ready:
-        ret = test_media_consumer_frame_ready(media_ctx, current_time, frame_id, data, offset, data_length);
+        ret = test_media_consumer_frame_ready(media_ctx, current_time, frame_id, data, (size_t)offset, data_length);
         break;
     case quicrq_media_datagram_ready:
-        ret = test_media_datagram_input(media_ctx, current_time, data, frame_id, offset, is_last_segment, data_length);
+        ret = test_media_datagram_input(media_ctx, current_time, data, frame_id, (size_t)offset, is_last_segment, data_length);
 
         if (ret == 0 && cons_ctx->is_finished) {
             ret = quicrq_consumer_finished;
