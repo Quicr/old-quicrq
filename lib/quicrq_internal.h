@@ -66,6 +66,8 @@ void quicrq_msg_buffer_reset(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
 #define QUICRQ_ACTION_REPAIR 5
+#define QUICRQ_ACTION_POST 6
+#define QUICRQ_ACTION_ACCEPT 7
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -80,6 +82,7 @@ typedef struct st_quicrq_message_t {
     int is_last_segment;
     size_t length;
     const uint8_t* data;
+    unsigned int use_datagram;
 } quicrq_message_t;
 
 /* Encode and decode protocol messages */

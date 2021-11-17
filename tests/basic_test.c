@@ -485,7 +485,7 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
 
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses)
+int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -501,9 +501,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     char text_log_name[512];
     size_t nb_log_chars = 0;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
-    (void)picoquic_sprintf(result_file_name, sizeof(text_log_name), &nb_log_chars, "basic_result-%d-%d-%llx.bin", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
-    (void)picoquic_sprintf(result_log_name, sizeof(text_log_name), &nb_log_chars, "basic_log-%d-%d-%llx.bin", is_real_time, use_datagrams, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%llx.txt", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(result_file_name, sizeof(result_file_name), &nb_log_chars, "basic_result-%d-%d-%d-%llx.bin", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(result_log_name, sizeof(result_log_name), &nb_log_chars, "basic_log-%d-%d-%d-%llx.bin", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
 
     if (config == NULL) {
         ret = -1;
@@ -520,6 +520,18 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         ret = picoquic_set_textlog(config->nodes[1]->quic, text_log_name);
     }
 
+#if 1
+    if (ret == 0) {
+        /* Add a test source to the configuration, and to the either the client or the server */
+        int publish_node = (is_from_client) ? 1 : 0;
+
+        ret = test_media_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, &config->sources[0].next_source_time);
+        config->sources[0].srce_ctx = config->nodes[publish_node]->first_source;
+        if (ret != 0) {
+            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+        }
+    }
+#else
     if (ret == 0){
         /* Add a test source to the configuration, and to the server */
         ret = test_media_publish(config->nodes[0], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, &config->sources[0].next_source_time);
@@ -528,6 +540,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
     }
+#endif
 
     if (ret == 0) {
         /* Create a quirq connection context on client */
@@ -538,6 +551,21 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
     }
 
+#if 1
+    if (ret == 0) {
+        if (is_from_client) {
+            /* Set up a default receiver on the server */
+            /* Start pushing from the client */
+        }
+        else {
+            /* Create a subscription to the test source on client */
+            ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+            }
+        }
+    }
+#else
     if (ret == 0) {
         /* Create a subscription to the test source on client */
         ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
@@ -545,6 +573,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
     }
+#endif
 
     while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
         /* Run the simulation. Monitor the connection. Monitor the media. */
@@ -610,22 +639,35 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 /* Basic connection test, using streams, not real time. */
 int quicrq_basic_test()
 {
-    return quicrq_basic_test_one(0, 0, 0);
+    return quicrq_basic_test_one(0, 0, 0, 0);
 }
 
 /* Basic connection test, using streams, real time. */
 int quicrq_basic_rt_test()
 {
-    return quicrq_basic_test_one(1, 0, 0);
+    return quicrq_basic_test_one(1, 0, 0, 0);
 }
 
 /* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
 int quicrq_datagram_basic_test()
 {
-    return quicrq_basic_test_one(1, 1, 0);
+    return quicrq_basic_test_one(1, 1, 0, 0);
 }
 
+/* Datagram test, with forced packet losses. */
 int quicrq_datagram_loss_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x7080);
+    return quicrq_basic_test_one(1, 1, 0x7080, 0);
+}
+
+/* Publish from client, using streams */
+int quicrq_basic_client_test()
+{
+    return quicrq_basic_test_one(1, 0, 0, 1);
+}
+
+/* Publish from client, using datagrams */
+int quicrq_datagram_client_test()
+{
+    return quicrq_basic_test_one(1, 0, 0, 1);
 }
