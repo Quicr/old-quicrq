@@ -748,6 +748,9 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             stream_ctx->is_datagram = (incoming.message_type == QUICRQ_ACTION_OPEN_DATAGRAM);
                             /* Open the media -- TODO, variants with different actions. */
                             ret = quicrq_subscribe_local_media(stream_ctx, incoming.url, incoming.url_length);
+                            if (ret == 0) {
+                                quicrq_wakeup_media_stream(stream_ctx);
+                            }
                             stream_ctx->is_sender = 1;
                             if (incoming.message_type == QUICRQ_ACTION_OPEN_STREAM) {
                                 stream_ctx->send_state = quicrq_sending_stream;
@@ -759,6 +762,22 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->receive_state = quicrq_receive_done;
                             }
                         }
+                        break;
+                    case QUICRQ_ACTION_POST:
+                        if (stream_ctx->receive_state != quicrq_receive_initial) {
+                            ret = -1;
+                        }
+                        else {
+                            /* Decide whether to receive the data as stream or as datagrams */
+                            /* Prepare a consumer for the data. */
+                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.use_datagram);
+                        }
+                        break;
+                    case QUICRQ_ACTION_ACCEPT:
+                        /* Verify that the client just started a "post" -- if (stream_ctx->receive_state != quicrq_receive_initial) { */
+                        /* Open the media provider */
+                        /* Depending on mode, set media ready or datagram ready */
+                        ret = quicrq_cnx_post_accepted(stream_ctx, incoming.use_datagram, incoming.datagram_stream_id);
                         break;
                     case QUICRQ_ACTION_FIN_DATAGRAM:
                         if (stream_ctx->receive_state != quicrq_receive_repair || stream_ctx->final_frame_id != 0) {
@@ -1166,21 +1185,6 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
  * - media_ctx: media context managed by the publisher
  */
 
-
-/* Subscribe to a media segment using QUIC streams.
- * Simplified API for now:
- * - cnx_ctx: context of the QUICR connection
- * - media_url: URL of the media segment
- * - 
- */
-int quicrq_subscribe_media_stream(
-    quicrq_cnx_ctx_t* cnx_ctx,
-    char const* url,
-    quicrq_media_consumer_fn media_consumer_fn,
-    void* media_ctx)
-{
-    return -1;
-}
 
 /* Utility function, encode or decode a frame header.
  */

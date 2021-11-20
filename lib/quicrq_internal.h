@@ -125,7 +125,7 @@ typedef struct st_quicrq_media_source_ctx_t {
 } quicrq_media_source_ctx_t;
 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
-
+void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
 void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 
 /* Quicrq stream handling.
@@ -200,7 +200,7 @@ struct st_quicrq_stream_ctx_t {
     quicrq_message_buffer_t message_sent;
     quicrq_message_buffer_t message_receive;
 
-    quicrq_media_consumer_fn consumer_fn; /* Callback function for data arrival on client */
+    quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
     quicrq_media_publisher_fn publisher_fn; /* Data providing function for source */
     void* media_ctx; /* Callback argument for receiving or sending data */
 };
@@ -227,7 +227,8 @@ struct st_quicrq_ctx_t {
     /* Local media sources */
     quicrq_media_source_ctx_t* first_source;
     quicrq_media_source_ctx_t* last_source;
-    /* Todo: message passing and synchronization */
+    /* Local media receiver function */
+    quicrq_media_consumer_init_fn consumer_media_init_fn;
     /* Todo: sockets, etc */
     struct st_quicrq_cnx_ctx_t* first_cnx; /* First in double linked list of open connections in this context */
     struct st_quicrq_cnx_ctx_t* last_cnx; /* last in list of open connections in this context */
@@ -257,6 +258,13 @@ int quicrq_set_default_tp(quicrq_ctx_t* quicrq_ctx);
 /* Encode and decode the frame header */
 const uint8_t* quicr_decode_frame_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_frame_header_t* hdr);
 uint8_t* quicr_encode_frame_header(uint8_t* fh, const uint8_t* fh_max, const quicrq_media_frame_header_t* hdr);
+
+/* Process a receive POST command */
+int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, uint8_t* url, size_t url_length,
+    int use_datagrams);
+
+/*  Process a received ACCEPT response */
+int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_datagrams, uint64_t datagram_stream_id);
 
 #ifdef __cplusplus
 }

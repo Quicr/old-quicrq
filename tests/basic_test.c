@@ -502,8 +502,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     size_t nb_log_chars = 0;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%llx.txt", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
-    (void)picoquic_sprintf(result_file_name, sizeof(result_file_name), &nb_log_chars, "basic_result-%d-%d-%d-%llx.bin", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
-    (void)picoquic_sprintf(result_log_name, sizeof(result_log_name), &nb_log_chars, "basic_log-%d-%d-%d-%llx.bin", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
+    ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
+        use_datagrams, is_real_time, is_from_client,
+        result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
         ret = -1;
@@ -555,7 +556,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     if (ret == 0) {
         if (is_from_client) {
             /* Set up a default receiver on the server */
+            quicrq_set_media_init_callback(config->nodes[0], test_media_consumer_init_callback);
             /* Start pushing from the client */
+            ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
         }
         else {
             /* Create a subscription to the test source on client */

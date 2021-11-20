@@ -485,6 +485,82 @@ void* test_media_consumer_init(char const* media_result_file, char const * media
     return cons_ctx;
 }
 
+int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_datagram, int is_real_time, int is_post,
+    char * result_file_name, char * result_log_name, size_t result_name_size)
+{
+    int ret = 0;
+    int last_sep = 0;
+    int last_dot = (int)url_length;
+    int name_length = 0;
+    for (size_t i = 0; i < url_length; i++) {
+        if (url[i] == (uint8_t)'\\' || url[i] == (uint8_t)'/') {
+            last_sep = (int)(i + 1);
+            last_dot = (int)url_length;
+        }
+        else if (url[i] == (uint8_t)'.') {
+            last_dot = (int)i;
+        }
+    }
+    name_length = last_dot - last_sep;
+    if (name_length <= 0 || name_length + 10 >= result_name_size) {
+        ret = -1;
+    }
+    else {
+        /* Derive file names from URL */
+        memcpy(result_file_name, url + last_sep, name_length);
+        result_file_name[name_length + 0] = '_';
+        result_file_name[name_length + 1] = (is_post) ? 'P' : 'G';
+        result_file_name[name_length + 2] = '_';
+        result_file_name[name_length + 3] = (is_real_time) ? 'r' : 'n';
+        result_file_name[name_length + 4] = '_';
+        result_file_name[name_length + 5] = (is_datagram) ? 'd' : 's';
+        result_file_name[name_length + 6] = '.';
+        result_file_name[name_length + 7] = 'b';
+        result_file_name[name_length + 8] = 'i';
+        result_file_name[name_length + 9] = 'n';
+        result_file_name[name_length + 10] = 0;
+        memcpy(result_log_name, url + last_sep, name_length);
+        result_log_name[name_length + 0] = '_';
+        result_log_name[name_length + 1] = (is_post) ? 'P' : 'G';
+        result_log_name[name_length + 2] = '_';
+        result_log_name[name_length + 3] = (is_real_time) ? 'r' : 's';
+        result_log_name[name_length + 4] = '_';
+        result_log_name[name_length + 5] = (is_datagram) ? 'd' : 's';
+        result_log_name[name_length + 6] = '.';
+        result_log_name[name_length + 7] = 'c';
+        result_log_name[name_length + 8] = 's';
+        result_log_name[name_length + 9] = 'v';
+        result_log_name[name_length + 10] = 0;
+    }
+    return ret;
+}
+
+int test_media_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length)
+{
+    int ret = 0;
+    void* media_ctx;
+    char result_file_name[512];
+    char result_log_name[512];
+
+    ret = test_media_derive_file_names(url, url_length, stream_ctx->is_datagram, 1, 1, result_file_name, result_log_name, sizeof(result_file_name));
+
+    if (ret == 0) {
+        /* Init the local media consumer */
+        media_ctx = test_media_consumer_init(result_file_name, result_log_name);
+
+        if (media_ctx == NULL) {
+            ret = -1;
+        }
+        else
+        {
+            /* set the parameter in the stream context. */
+            ret = quicrq_set_media_stream_ctx(stream_ctx, test_media_frame_consumer_cb, media_ctx);
+        }
+    }
+
+    return ret;
+}
+
 /* Management of the list of frames undergoing reassembly, frame-id based logic */
 static test_media_consumer_packet_t* test_media_consumer_frame_create_packet(
     test_media_consumer_frame_t* frame,
@@ -897,6 +973,8 @@ int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_len
     return ret;
 }
 
+
+
 /* Compare media file.
  * These are binary files composed of sequences of frames.
  */
@@ -1231,6 +1309,9 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     /* Connect the stream context to the publisher */
     if (ret == 0) {
         ret = quicrq_subscribe_local_media(stream_ctx, (uint8_t*)media_source_name, strlen(media_source_name));
+        if (ret == 0) {
+            quicrq_wakeup_media_stream(stream_ctx);
+        }
     }
     /* Initialize a consumer context for testing */
     if (ret == 0) {

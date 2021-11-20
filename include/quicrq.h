@@ -102,7 +102,15 @@ int quicrq_close_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, v
  */
 /* TBD */
 
- /* Quic media consumer */
+ /* Quic media consumer.
+  * The application sets a "media consumer function" and a "media consumer context" for
+  * the media stream. On the client side, this is done by a call to "quicrq_cnx_subscribe_media"
+  * which will trigger the opening of the media stream through the protocol.
+  * 
+  * For client published streams, the client uses "quicrq_cnx_post_media"
+  * to start the media stream. The server will receive an initial command
+  * containing the media URL, and use 
+  */
 typedef enum {
     quicrq_media_data_ready = 0,
     quicrq_media_datagram_ready,
@@ -128,11 +136,13 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx,
     uint8_t* url, size_t url_length, int use_datagrams,
     quicrq_media_consumer_fn media_consumer_fn, void* media_ctx);
 
-int quicrq_subscribe_media_stream(
-    quicrq_cnx_ctx_t* cnx_ctx,
-    char const* url,
-    quicrq_media_consumer_fn media_consumer_fn,
-    void* media_ctx);
+int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length,
+    int use_datagrams);
+
+typedef int (*quicrq_media_consumer_init_fn)(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length);
+int quicrq_set_media_init_callback(quicrq_ctx_t* ctx, quicrq_media_consumer_init_fn media_init_fn);
+
+int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_consumer_fn media_fn, void* media_ctx);
 
 /* Quic media source */
 
