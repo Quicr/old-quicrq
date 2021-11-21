@@ -66,6 +66,8 @@ void quicrq_msg_buffer_reset(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
 #define QUICRQ_ACTION_REPAIR 5
+#define QUICRQ_ACTION_POST 6
+#define QUICRQ_ACTION_ACCEPT 7
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -80,6 +82,7 @@ typedef struct st_quicrq_message_t {
     int is_last_segment;
     size_t length;
     const uint8_t* data;
+    unsigned int use_datagram;
 } quicrq_message_t;
 
 /* Encode and decode protocol messages */
@@ -122,7 +125,7 @@ typedef struct st_quicrq_media_source_ctx_t {
 } quicrq_media_source_ctx_t;
 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
-
+void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
 void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 
 /* Quicrq stream handling.
@@ -141,7 +144,9 @@ typedef enum {
     quicrq_sending_stream,
     quicrq_sending_initial,
     quicrq_sending_repair,
-    quicrq_sending_offset
+    quicrq_sending_offset,
+    quicrq_sending_fin,
+    quicrq_sending_no_more
 } quicrq_stream_sending_state_enum;
 
 typedef enum {
@@ -185,8 +190,15 @@ struct st_quicrq_stream_ctx_t {
 
     unsigned int is_client : 1;
     unsigned int is_sender : 1;
-    unsigned int is_client_finished : 1;
-    unsigned int is_server_finished : 1;
+    /* For the sender, receiver finished happens if the client closes the control stream.
+     * In that case, the server should close the stream and mark itself finished.
+     * For the receiver, the transfer finishes if everything was received. In that
+     * case, the receiver shall close the control stream. If the sender closes the
+     * control stream before that, we have an abnormal close.
+     */
+    unsigned int is_peer_finished : 1;
+    unsigned int is_local_finished : 1;
+    unsigned int is_receive_complete: 1;
     unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
     unsigned int is_final_frame_id_sent : 1;
@@ -197,7 +209,7 @@ struct st_quicrq_stream_ctx_t {
     quicrq_message_buffer_t message_sent;
     quicrq_message_buffer_t message_receive;
 
-    quicrq_media_consumer_fn consumer_fn; /* Callback function for data arrival on client */
+    quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
     quicrq_media_publisher_fn publisher_fn; /* Data providing function for source */
     void* media_ctx; /* Callback argument for receiving or sending data */
 };
@@ -224,7 +236,8 @@ struct st_quicrq_ctx_t {
     /* Local media sources */
     quicrq_media_source_ctx_t* first_source;
     quicrq_media_source_ctx_t* last_source;
-    /* Todo: message passing and synchronization */
+    /* Local media receiver function */
+    quicrq_media_consumer_init_fn consumer_media_init_fn;
     /* Todo: sockets, etc */
     struct st_quicrq_cnx_ctx_t* first_cnx; /* First in double linked list of open connections in this context */
     struct st_quicrq_cnx_ctx_t* last_cnx; /* last in list of open connections in this context */
@@ -243,17 +256,27 @@ int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
-int quicrq_callback_prepare_to_send(picoquic_cnx_t* cnx, uint64_t stream_id, quicrq_stream_ctx_t* stream_ctx,
-    void* bytes, size_t length, quicrq_cnx_ctx_t* cnx_ctx);
-
+#if 0
+/* TODO: actually set these paramters... */
 /* Set the parameters to the preferred Quicrq values for the client */
 void quicrq_set_tp(picoquic_cnx_t* cnx);
 /* Set default transport parameters to adequate value for quicrq server. */
 int quicrq_set_default_tp(quicrq_ctx_t* quicrq_ctx);
+#endif
 
 /* Encode and decode the frame header */
 const uint8_t* quicr_decode_frame_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_frame_header_t* hdr);
 uint8_t* quicr_encode_frame_header(uint8_t* fh, const uint8_t* fh_max, const quicrq_media_frame_header_t* hdr);
+
+/* Process a receive POST command */
+int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length,
+    int use_datagrams);
+
+/*  Process a received ACCEPT response */
+int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_datagrams, uint64_t datagram_stream_id);
+
+/* Handle closure of stream after receiving the last bit of data */
+int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int is_datagram, int ret);
 
 #ifdef __cplusplus
 }

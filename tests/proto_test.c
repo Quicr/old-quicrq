@@ -27,7 +27,8 @@ static quicrq_message_t stream_rq = {
     0,
     0,
     0,
-    NULL
+    NULL,
+    0
 };
 
 static uint8_t stream_rq_bytes[] = {
@@ -45,7 +46,8 @@ static quicrq_message_t datagram_rq = {
     0,
     0,
     0,
-    NULL
+    NULL,
+    0
 };
 
 static uint8_t datagram_rq_bytes[] = {
@@ -64,7 +66,8 @@ static quicrq_message_t fin_msg = {
     0,
     0,
     0,
-    NULL
+    NULL,
+    0
 };
 
 static uint8_t fin_msg_bytes[] = {
@@ -83,7 +86,8 @@ static quicrq_message_t repair_request_msg = {
     1234,
     1,
     sizeof(repair_bytes),
-    NULL
+    NULL,
+    0
 };
 
 static uint8_t repair_request_msg_bytes[] = {
@@ -102,7 +106,8 @@ static quicrq_message_t repair_msg = {
     1234,
     1,
     sizeof(repair_bytes),
-    repair_bytes
+    repair_bytes,
+    0
 };
 
 static uint8_t repair_msg_bytes[] = {
@@ -112,6 +117,65 @@ static uint8_t repair_msg_bytes[] = {
     (uint8_t)sizeof(repair_bytes),
     REPAIR_BYTES
 };
+
+static quicrq_message_t post_msg = {
+    QUICRQ_ACTION_POST,
+    sizeof(url1),
+    url1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    3
+};
+
+static uint8_t post_msg_bytes[] = {
+    QUICRQ_ACTION_POST,
+    sizeof(url1),
+    URL1_BYTES,
+    3
+};
+
+static quicrq_message_t accept_dg = {
+    QUICRQ_ACTION_ACCEPT,
+    0,
+    NULL,
+    17,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    1
+};
+
+static uint8_t accept_dg_bytes[] = {
+    QUICRQ_ACTION_ACCEPT,
+    1,
+    17
+};
+
+
+static quicrq_message_t accept_st = {
+    QUICRQ_ACTION_ACCEPT,
+    0,
+    NULL,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    0
+};
+
+static uint8_t accept_st_bytes[] = {
+    QUICRQ_ACTION_ACCEPT,
+    0
+};
+
 typedef struct st_proto_test_case_t {
     uint8_t* const data;
     size_t data_length;
@@ -124,7 +188,10 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(datagram_rq, datagram_rq_bytes),
     PROTO_TEST_ITEM(fin_msg, fin_msg_bytes),
     PROTO_TEST_ITEM(repair_request_msg, repair_request_msg_bytes),
-    PROTO_TEST_ITEM(repair_msg, repair_msg_bytes)
+    PROTO_TEST_ITEM(repair_msg, repair_msg_bytes),
+    PROTO_TEST_ITEM(post_msg, post_msg_bytes),
+    PROTO_TEST_ITEM(accept_dg, accept_dg_bytes),
+    PROTO_TEST_ITEM(accept_st, accept_st_bytes)
 };
 
 static uint8_t bad_bytes1[] = {
@@ -154,7 +221,7 @@ static uint8_t bad_bytes4[] = {
 static uint8_t bad_bytes5[] = {
     QUICRQ_ACTION_OPEN_STREAM,
     sizeof(url1) + 1,
-    URL1_BYTES
+    URL1_BYTES,
 };
 
 static uint8_t bad_bytes6[] = {
@@ -185,6 +252,32 @@ static uint8_t bad_bytes9[] = {
     0x44, 0xd2
 };
 
+static uint8_t bad_bytes10[] = {
+    QUICRQ_ACTION_POST,
+    sizeof(url1),
+    URL1_BYTES,
+    17
+};
+
+static uint8_t bad_bytes11[] = {
+    QUICRQ_ACTION_POST,
+    0x4F,
+    0xFF,
+    URL1_BYTES,
+    17
+};
+
+static uint8_t bad_bytes12[] = {
+    QUICRQ_ACTION_ACCEPT,
+    17,
+    17
+};
+
+static uint8_t bad_bytes13[] = {
+    QUICRQ_ACTION_ACCEPT,
+    1
+};
+
 
 typedef struct st_proto_test_bad_case_t {
     uint8_t* const data;
@@ -204,7 +297,11 @@ static proto_test_bad_case_t proto_bad_cases[] = {
     PROTO_TEST_BAD_ITEM(bad_bytes6),
     PROTO_TEST_BAD_ITEM(bad_bytes7),
     PROTO_TEST_BAD_ITEM(bad_bytes8),
-    PROTO_TEST_BAD_ITEM(bad_bytes9)
+    PROTO_TEST_BAD_ITEM(bad_bytes9),
+    PROTO_TEST_BAD_ITEM(bad_bytes10),
+    PROTO_TEST_BAD_ITEM(bad_bytes11),
+    PROTO_TEST_BAD_ITEM(bad_bytes12),
+    PROTO_TEST_BAD_ITEM(bad_bytes13)
 };
 
 int proto_msg_test()
