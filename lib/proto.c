@@ -595,6 +595,8 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     }
+
+    return ret;
 }
 
 /* Post a local media */
@@ -653,7 +655,7 @@ int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_co
 }
 
 /* Accept a media post and connect it to the local consumer */
-int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, uint8_t* url, size_t url_length,
+int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url, size_t url_length,
     int use_datagrams)
 {
     int ret = 0;

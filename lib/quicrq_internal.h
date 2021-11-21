@@ -269,7 +269,7 @@ const uint8_t* quicr_decode_frame_header(const uint8_t* fh, const uint8_t* fh_ma
 uint8_t* quicr_encode_frame_header(uint8_t* fh, const uint8_t* fh_max, const quicrq_media_frame_header_t* hdr);
 
 /* Process a receive POST command */
-int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, uint8_t* url, size_t url_length,
+int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length,
     int use_datagrams);
 
 /*  Process a received ACCEPT response */
