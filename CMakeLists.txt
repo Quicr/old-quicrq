@@ -14,8 +14,9 @@ endif()
 
 set(QUICRQ_LIBRARY_FILES
     lib/quicrq.c
-    lib/segment.c
     lib/proto.c
+    lib/reassembly.c
+    lib/relay.c
 )
 
 set(QUICRQ_TEST_LIBRARY_FILES

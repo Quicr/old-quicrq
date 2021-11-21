@@ -112,8 +112,7 @@ int quicrq_close_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, v
   * containing the media URL, and use 
   */
 typedef enum {
-    quicrq_media_data_ready = 0,
-    quicrq_media_datagram_ready,
+    quicrq_media_datagram_ready = 0,
     quicrq_media_final_frame_id,
     quicrq_media_close
 } quicrq_media_consumer_enum;
