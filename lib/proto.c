@@ -579,7 +579,7 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
 {
     int ret = 0;
     /* todo: client should only be marked finished if stream is closed. */
-    stream_ctx->is_client_finished = 1;
+    stream_ctx->is_receiver_finished = 1;
     /* Process initial request */
     stream_ctx->is_datagram = use_datagram;
     /* Open the media -- TODO, variants with different actions. */
@@ -627,7 +627,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_le
                 }
                 else {
                     /* Queue the post messageto that stream */
-                    stream_ctx->is_client = 1;
+                    stream_ctx->is_client = 0;
                     message->message_size = message_next - message->buffer;
                     stream_ctx->send_state = quicrq_sending_initial;
                     stream_ctx->receive_state = quicrq_receive_confirmation;
@@ -675,6 +675,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, uint8_t* url, size
         else {
             /* Queue the accept message to that stream */
             stream_ctx->is_client = 1;
+            stream_ctx->is_datagram = use_datagrams;
             message->message_size = message_next - message->buffer;
             stream_ctx->send_state = quicrq_sending_initial;
             stream_ctx->receive_state = quicrq_receive_repair;
@@ -695,14 +696,30 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
     stream_ctx->receive_state = quicrq_receive_repair;
     stream_ctx->is_sender = 1;
     if (use_datagrams) {
+        stream_ctx->is_datagram = 1;
         stream_ctx->send_state = quicrq_sending_ready;
         stream_ctx->receive_state = quicrq_receive_done;
+        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
     }
     else {
+        stream_ctx->is_datagram = 0;
         stream_ctx->send_state = quicrq_sending_stream;
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     }
     quicrq_wakeup_media_stream(stream_ctx);
+    return ret;
+}
+
+/* Mark a stream as finished after receiving the repair indication */
+int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int ret)
+{
+    if (ret == quicrq_consumer_finished) {
+        DBG_PRINTF("Finished after %s, ret=%d", (is_final)?"final offset":"repair", ret);
+        stream_ctx->is_sender_finished = 1;
+        stream_ctx->send_state = quicrq_sending_fin;
+        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        ret = 0;
+    }
     return ret;
 }

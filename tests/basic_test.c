@@ -521,7 +521,6 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         ret = picoquic_set_textlog(config->nodes[1]->quic, text_log_name);
     }
 
-#if 1
     if (ret == 0) {
         /* Add a test source to the configuration, and to the either the client or the server */
         int publish_node = (is_from_client) ? 1 : 0;
@@ -532,16 +531,6 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
     }
-#else
-    if (ret == 0){
-        /* Add a test source to the configuration, and to the server */
-        ret = test_media_publish(config->nodes[0], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, &config->sources[0].next_source_time);
-        config->sources[0].srce_ctx = config->nodes[0]->first_source;
-        if (ret != 0) {
-            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
-        }
-    }
-#endif
 
     if (ret == 0) {
         /* Create a quirq connection context on client */
@@ -552,7 +541,6 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
     }
 
-#if 1
     if (ret == 0) {
         if (is_from_client) {
             /* Set up a default receiver on the server */
@@ -568,15 +556,6 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             }
         }
     }
-#else
-    if (ret == 0) {
-        /* Create a subscription to the test source on client */
-        ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
-        if (ret != 0) {
-            DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
-        }
-    }
-#endif
 
     while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
         /* Run the simulation. Monitor the connection. Monitor the media. */
@@ -602,7 +581,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         if (config->nodes[1]->first_cnx == NULL) {
             DBG_PRINTF("%s", "Exit loop after client connection closed.");
             break;
-        } else if (config->nodes[1]->first_cnx->first_stream == NULL || config->nodes[1]->first_cnx->first_stream->is_server_finished) {
+        } else if (config->nodes[1]->first_cnx->first_stream == NULL || config->nodes[1]->first_cnx->first_stream->is_sender_finished) {
             if (!is_closed) {
                 /* Client is done. Close connection without waiting for timer */
                 if (config->nodes[1]->first_cnx->first_stream == NULL){
@@ -672,5 +651,5 @@ int quicrq_basic_client_test()
 /* Publish from client, using datagrams */
 int quicrq_datagram_client_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 1);
+    return quicrq_basic_test_one(1, 1, 0, 1);
 }

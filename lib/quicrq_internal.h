@@ -144,7 +144,9 @@ typedef enum {
     quicrq_sending_stream,
     quicrq_sending_initial,
     quicrq_sending_repair,
-    quicrq_sending_offset
+    quicrq_sending_offset,
+    quicrq_sending_fin,
+    quicrq_sending_no_more
 } quicrq_stream_sending_state_enum;
 
 typedef enum {
@@ -188,8 +190,14 @@ struct st_quicrq_stream_ctx_t {
 
     unsigned int is_client : 1;
     unsigned int is_sender : 1;
-    unsigned int is_client_finished : 1;
-    unsigned int is_server_finished : 1;
+    /* For the sender, receiver finished happens if the client closes the control stream.
+     * In that case, the server should close the stream and mark itself finished.
+     * For the receiver, the transfer finishes if everything was received. In that
+     * case, the receiver shall close the control stream. If the sender closes the
+     * control stream before that, we have an abnormal close.
+     */
+    unsigned int is_receiver_finished : 1;
+    unsigned int is_sender_finished : 1;
     unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
     unsigned int is_final_frame_id_sent : 1;
@@ -265,6 +273,9 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, uint8_t* url, size_
 
 /*  Process a received ACCEPT response */
 int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_datagrams, uint64_t datagram_stream_id);
+
+/* Handle closure of stream after receiving the last bit of data */
+int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int ret);
 
 #ifdef __cplusplus
 }

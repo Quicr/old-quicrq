@@ -219,7 +219,8 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         stream_header[1] = (uint8_t)(h_size & 0xff);
                         memcpy(buffer, stream_header, h_size);
                         stream_ctx->is_final_frame_id_sent = 1;
-                        stream_ctx->is_server_finished = 1;
+                        /* TODO: sender is only finished if receiver closes the control stream */
+                        stream_ctx->is_sender_finished = 1;
                     }
                 }
             }
@@ -323,7 +324,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, frame_id, frame_offset, is_last_segment, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
                 DBG_PRINTF("Consumer indicated finished, ret = %d", ret);
-                stream_ctx->is_server_finished = 1;
+                stream_ctx->is_sender_finished = 1;
                 ret = 0;
             }
         }
@@ -468,7 +469,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
     quicrq_stream_ctx_t* stream_ctx = cnx_ctx->first_stream;
 
     while (stream_ctx != NULL) {
-        if (stream_ctx->is_datagram && !stream_ctx->is_client && stream_ctx->is_active_datagram) {
+        if (stream_ctx->is_datagram && stream_ctx->is_sender && stream_ctx->is_active_datagram) {
             /* Check how much data is ready */
             size_t available = 0;
             size_t data_length = 0;
@@ -679,6 +680,10 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                 stream_ctx->is_final_frame_id_sent = 1;
             }
             break;
+        case quicrq_sending_fin:
+            (void) picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+            stream_ctx->send_state = quicrq_sending_no_more;
+            break;
         default:
             /* Someone forgot to upgrade this code... */
             ret = -1;
@@ -743,7 +748,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         }
                         else {
                             /* client should only be marked finished if stream is closed. */
-                            stream_ctx->is_client_finished = 1;
+                            stream_ctx->is_receiver_finished = 1;
                             /* Process initial request */
                             stream_ctx->is_datagram = (incoming.message_type == QUICRQ_ACTION_OPEN_DATAGRAM);
                             /* Open the media -- TODO, variants with different actions. */
@@ -789,11 +794,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             stream_ctx->final_frame_id = incoming.frame_id;
                             ret = stream_ctx->consumer_fn(quicrq_media_final_frame_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
                                 stream_ctx->final_frame_id, 0, 0, 0);
-                            if (ret == quicrq_consumer_finished) {
-                                DBG_PRINTF("Finish after final offset, ret=%d", ret);
-                                stream_ctx->is_server_finished = 1;
-                                ret = 0;
-                            }
+                            ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 1, ret);
                         }
                         break;
                     case QUICRQ_ACTION_REQUEST_REPAIR:
@@ -809,11 +810,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
                                 incoming.data, incoming.frame_id, incoming.offset, incoming.is_last_segment, incoming.length);
-                            if (ret == quicrq_consumer_finished) {
-                                DBG_PRINTF("Finished after repair, ret=%d", ret);
-                                stream_ctx->is_server_finished = 1;
-                                ret = 0;
-                            }
+                            ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, ret);
                         }
                         break;
                     default:
@@ -830,14 +827,26 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
 
     if (is_fin) {
         /* TODO: The peer is finished. Differentiate client/server/sender/receiver. */
-        if (stream_ctx->is_client) {
+        if (!stream_ctx->is_sender) {
             DBG_PRINTF("Finished after peer stream is_fin: %d", is_fin);
-            stream_ctx->is_server_finished = 1;
+            stream_ctx->is_sender_finished = 1;
+        }
+        else {
+            if (stream_ctx->send_state == quicrq_sending_no_more) {
+                /* Close at both ends -- delete the stream */
+                stream_ctx->is_receiver_finished = 1;
+                stream_ctx->is_sender_finished = 1;
+            }
+            else {
+                stream_ctx->is_sender_finished = 1;
+                stream_ctx->send_state = quicrq_sending_fin;
+                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            }
         }
     }
 
 
-    if (stream_ctx->is_client_finished && stream_ctx->is_server_finished) {
+    if (stream_ctx->is_receiver_finished && stream_ctx->is_sender_finished) {
         quicrq_cnx_ctx_t* cnx_ctx = stream_ctx->cnx_ctx;
         quicrq_delete_stream_ctx(cnx_ctx, stream_ctx);
     }
@@ -1123,14 +1132,14 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
         (void)picoquic_mark_active_stream(cnx_ctx->cnx, stream_ctx->stream_id, 0, NULL);
     }
     if (stream_ctx->media_ctx != NULL) {
-        if (stream_ctx->is_client) {
-            if (stream_ctx->consumer_fn != NULL) {
-                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 0, 0);
+        if (stream_ctx->is_sender) {
+            if (stream_ctx->publisher_fn != NULL) {
+                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, 0);
             }
         }
         else {
-            if (stream_ctx->publisher_fn != NULL) {
-                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, 0);
+            if (stream_ctx->consumer_fn != NULL) {
+                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 0, 0);
             }
         }
     }
