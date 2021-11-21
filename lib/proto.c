@@ -578,8 +578,6 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t u
 int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * url, size_t url_length, unsigned int use_datagram)
 {
     int ret = 0;
-    /* todo: client should only be marked finished if stream is closed. */
-    stream_ctx->is_receiver_finished = 1;
     /* Process initial request */
     stream_ctx->is_datagram = use_datagram;
     /* Open the media -- TODO, variants with different actions. */
@@ -712,11 +710,11 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
 }
 
 /* Mark a stream as finished after receiving the repair indication */
-int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int ret)
+int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int is_datagram, int ret)
 {
     if (ret == quicrq_consumer_finished) {
-        DBG_PRINTF("Finished after %s, ret=%d", (is_final)?"final offset":"repair", ret);
-        stream_ctx->is_sender_finished = 1;
+        DBG_PRINTF("Finished after %s, ret=%d", (is_final)?"final offset":((is_datagram)?"datagram":"repair"), ret);
+        stream_ctx->is_receive_complete = 1;
         stream_ctx->send_state = quicrq_sending_fin;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
         ret = 0;

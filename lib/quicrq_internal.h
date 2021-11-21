@@ -196,8 +196,9 @@ struct st_quicrq_stream_ctx_t {
      * case, the receiver shall close the control stream. If the sender closes the
      * control stream before that, we have an abnormal close.
      */
-    unsigned int is_receiver_finished : 1;
-    unsigned int is_sender_finished : 1;
+    unsigned int is_peer_finished : 1;
+    unsigned int is_local_finished : 1;
+    unsigned int is_receive_complete: 1;
     unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
     unsigned int is_final_frame_id_sent : 1;
@@ -275,7 +276,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, uint8_t* url, size_
 int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_datagrams, uint64_t datagram_stream_id);
 
 /* Handle closure of stream after receiving the last bit of data */
-int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int ret);
+int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int is_datagram, int ret);
 
 #ifdef __cplusplus
 }
