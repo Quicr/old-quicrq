@@ -256,13 +256,13 @@ int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
-int quicrq_callback_prepare_to_send(picoquic_cnx_t* cnx, uint64_t stream_id, quicrq_stream_ctx_t* stream_ctx,
-    void* bytes, size_t length, quicrq_cnx_ctx_t* cnx_ctx);
-
+#if 0
+/* TODO: actually set these paramters... */
 /* Set the parameters to the preferred Quicrq values for the client */
 void quicrq_set_tp(picoquic_cnx_t* cnx);
 /* Set default transport parameters to adequate value for quicrq server. */
 int quicrq_set_default_tp(quicrq_ctx_t* quicrq_ctx);
+#endif
 
 /* Encode and decode the frame header */
 const uint8_t* quicr_decode_frame_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_frame_header_t* hdr);

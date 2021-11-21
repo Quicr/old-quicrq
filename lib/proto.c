@@ -281,7 +281,7 @@ const uint8_t* quicrq_accept_msg_decode(const uint8_t* bytes, const uint8_t* byt
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &use_dg)) != NULL) {
         if (use_dg == 1) {
             *use_datagram = 1;
-            bytes = picoquic_frames_varlen_decode(bytes, bytes_max, datagram_stream_id);
+            bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id);
         }
         else if (use_dg) {
             bytes = NULL;
