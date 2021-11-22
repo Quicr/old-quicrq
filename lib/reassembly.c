@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include "picoquic_utils.h"
 #include "picosplay.h"
 #include "quicrq.h"
