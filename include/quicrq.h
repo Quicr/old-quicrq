@@ -143,11 +143,9 @@ int quicrq_set_media_init_callback(quicrq_ctx_t* ctx, quicrq_media_consumer_init
 
 int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_consumer_fn media_fn, void* media_ctx);
 
-/* Quic media source */
-
 #ifdef __cplusplus
 }
 #endif
 
 
-#endif
+#endif /* QUICRQ_H */

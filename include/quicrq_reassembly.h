@@ -1,5 +1,5 @@
-/* Handling of a relay
- */
+#ifndef QUICRQ_REASSEMBLY_H
+#define QUICRQ_REASSEMBLY_H
 
 #include "quicrq.h"
 #include "quicrq_internal.h"
@@ -7,9 +7,11 @@
 #include "picosplay.h"
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-
- /* Media receiver definitions.
+ /* Handling of frame reassembly
   * Manage a list of frames being reassembled. The list is organized as a splay,
   * indexed by the frame id and frame offset. When a new segment is received
   * the code will check whether the frame is already present, and then whether the
@@ -63,3 +65,9 @@ void quicrq_reassembly_init(quicrq_reassembly_context_t* reassembly_ctx);
 /* Free the reassembly context
  */
 void quicrq_reassembly_release(quicrq_reassembly_context_t* reassembly_ctx);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* QUICRQ_REASSEMBLY_H */

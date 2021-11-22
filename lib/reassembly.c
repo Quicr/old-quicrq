@@ -1,6 +1,8 @@
 /* Handling of a relay
  */
 
+#include <stdlib.h>
+#include <string.h>
 #include "picoquic_utils.h"
 #include "picosplay.h"
 #include "quicrq.h"
