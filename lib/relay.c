@@ -192,7 +192,7 @@ int quicrq_relay_consumer_cb(
         ret = quicrq_reassembly_learn_final_frame_id(&cons_ctx->reassembly_ctx, frame_id);
         if (ret == 0) {
             cons_ctx->cached_ctx->final_frame_id = frame_id;
-            if (cons_ctx->is_finished) {
+            if (cons_ctx->reassembly_ctx.is_finished) {
                 ret = quicrq_consumer_finished;
             }
             if (ret == 0) {

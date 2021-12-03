@@ -23,6 +23,7 @@ extern "C" {
     int quicrq_media_frame_noloss();
     int quicrq_media_frame_loss();
     int quicrq_relay_basic_test();
+    int quicrq_relay_datagram_test();
 
 #ifdef __cplusplus
 }
