@@ -1,4 +1,4 @@
-
+#include <string.h>
 #include "picoquic_set_textlog.h"
 #include "picoquic_set_binlog.h"
 #include "quicrq.h"
