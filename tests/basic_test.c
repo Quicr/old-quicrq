@@ -397,8 +397,6 @@ quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss)
 quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, int client_node, int server_node)
 {
     quicrq_ctx_t* qr_ctx = config->nodes[client_node];
-    picoquic_quic_t * quic = quicrq_get_quic_ctx(qr_ctx);
-    picoquic_cnx_t* cnx = NULL;
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     struct sockaddr* addr_to = NULL;
     
