@@ -14,15 +14,16 @@ endif()
 
 set(QUICRQ_LIBRARY_FILES
     lib/quicrq.c
-    lib/segment.c
     lib/proto.c
+    lib/reassembly.c
+    lib/relay.c
 )
 
 set(QUICRQ_TEST_LIBRARY_FILES
     tests/basic_test.c
-    tests/network_test.c
-    tests/test_media.c
     tests/proto_test.c
+    tests/relay_test.c
+    tests/test_media.c
 )
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

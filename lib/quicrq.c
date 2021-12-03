@@ -1093,6 +1093,35 @@ quicrq_cnx_ctx_t* quicrq_create_cnx_context(quicrq_ctx_t* qr_ctx, picoquic_cnx_t
     return cnx_ctx;
 }
 
+/* Create a client connection.
+ */
+quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
+    const char* sni, struct sockaddr* addr)
+{
+    quicrq_cnx_ctx_t* cnx_ctx = NULL;
+    picoquic_tp_t client_parameters;
+    picoquic_cnx_t * cnx = picoquic_create_cnx(qr_ctx->quic,
+        picoquic_null_connection_id, picoquic_null_connection_id,
+        addr, picoquic_get_quic_time(qr_ctx->quic), 0, sni, QUICRQ_ALPN, 1);
+    /* Set parameters */
+    if (cnx != NULL) {
+        quicrq_init_transport_parameters(&client_parameters, 1);
+        picoquic_set_transport_parameters(cnx, &client_parameters);
+
+        if (picoquic_start_client_cnx(cnx) != 0) {
+            picoquic_delete_cnx(cnx);
+            cnx = NULL;
+        }
+        if (cnx != NULL) {
+            cnx_ctx = quicrq_create_cnx_context(qr_ctx, cnx);
+            if (cnx_ctx == NULL) {
+                picoquic_delete_cnx(cnx);
+            }
+        }
+    }
+    return cnx_ctx;
+}
+
 void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->next_stream == NULL) {

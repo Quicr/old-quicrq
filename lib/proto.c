@@ -389,7 +389,7 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 /* Publish local source API.
  */
 
-int quicrq_publish_source(quicrq_ctx_t * qr_ctx, uint8_t * url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn)
+int quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn)
 {
     int ret = 0;
     size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
@@ -426,6 +426,12 @@ int quicrq_publish_source(quicrq_ctx_t * qr_ctx, uint8_t * url, size_t url_lengt
     return ret;
 }
 
+void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn default_source_fn, void* default_source_ctx)
+{
+    qr_ctx->default_source_fn = default_source_fn;
+    qr_ctx->default_source_ctx = default_source_ctx;
+}
+
 void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_ctx)
 {
     quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
@@ -452,8 +458,25 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
     else {
         srce_ctx->previous_source->next_source = srce_ctx->previous_source;
     }
-
+    /* TODO: should there be a call to the publisher function to explicitly close the source? */
     free(srce_ctx);
+}
+
+/* Set the default source, when appropriate */
+quicrq_media_source_ctx_t* quicrq_create_default_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length)
+{
+    quicrq_media_source_ctx_t* srce_ctx = NULL;
+    int ret = 0;
+
+    /* Call the default publisher function */
+    if ((ret = qr_ctx->default_source_fn(qr_ctx->default_source_ctx, qr_ctx, url, url_length)) != 0) {
+        /* Failure. The source returned an error */
+    }
+    else {
+        /* Assume that the quicrq_publish_source function added the new source at the end of the list */
+        srce_ctx = qr_ctx->last_source;
+    }
+    return srce_ctx;
 }
 
 /* Parse incoming request, connect incoming stream to media source
@@ -471,6 +494,9 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
             break;
         }
         srce_ctx = srce_ctx->next_source;
+    }
+    if (srce_ctx == NULL && qr_ctx->default_source_fn != NULL) {
+        srce_ctx = quicrq_create_default_source(qr_ctx, url, url_length);
     }
     if (srce_ctx == NULL) {
         ret = -1;
@@ -490,18 +516,10 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         /* Document media function. */
         stream_ctx->publisher_fn = srce_ctx->getdata_fn;
         /* Create a subscribe media context */
-        stream_ctx->media_ctx = srce_ctx->subscribe_fn(url, url_length, srce_ctx->pub_ctx);
+        stream_ctx->media_ctx = srce_ctx->subscribe_fn(/*url, url_length, */ srce_ctx->pub_ctx);
         if (stream_ctx->media_ctx == NULL) {
             ret = -1;
         }
-#if 0
-        else if (stream_ctx->is_datagram) {
-            stream_ctx->is_active_datagram = 1;
-            picoquic_mark_datagram_ready(stream_ctx->cnx_ctx->cnx, 1);
-        } else {
-            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-        }
-#endif
     }
     return ret;
 }
@@ -534,7 +552,7 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
  * Send a media request to the server.
  * TODO: mention datagram stream.
  */
-int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length,
+int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
     int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx)
 {
     /* Create a stream for the media */

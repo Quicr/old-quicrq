@@ -21,7 +21,8 @@
   <ItemGroup>
     <ClCompile Include="..\lib\proto.c" />
     <ClCompile Include="..\lib\quicrq.c" />
-    <ClCompile Include="..\lib\segment.c" />
+    <ClCompile Include="..\lib\reassembly.c" />
+    <ClCompile Include="..\lib\relay.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\lib\quicrq_internal.h" />
