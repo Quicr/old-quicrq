@@ -58,6 +58,9 @@ int quicrq_reassembly_learn_final_frame_id(
     quicrq_reassembly_context_t* reassembly_ctx,
     uint64_t final_frame_id);
 
+/* Find the frame number of the last reassembled frame */
+uint64_t quicrq_reassembly_frame_id_last(quicrq_reassembly_context_t* reassembly_ctx);
+
 /* Initialize the reassembly context, supposedly zero on input.
  */
 void quicrq_reassembly_init(quicrq_reassembly_context_t* reassembly_ctx);

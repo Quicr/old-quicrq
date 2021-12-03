@@ -6,9 +6,8 @@
 #include "quicrq_test_internal.h"
 #include "picoquic.h"
 #include "picoquic_utils.h"
-
-int picoquic_set_binlog(picoquic_quic_t* quic, char const* binlog_dir);
-int picoquic_set_textlog(picoquic_quic_t* quic, char const* textlog_file);
+#include "picoquic_set_textlog.h"
+#include "picoquic_set_binlog.h"
 
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
@@ -27,51 +26,6 @@ char const* quicrq_test_picoquic_solution_dir = QUICRQ_PICOQUIC_DEFAULT_SOLUTION
 char const* quicrq_test_solution_dir = QUICRQ_DEFAULT_SOLUTION_DIR;
 
 
-/* Test configuration: nodes, sources, addresses and links.
- * Each source is connected to a node, identified by a node_id
- * Nodes are connected via one-way links, identified by a link_id.
- * The links can be either symmetric or asymmetric. The link context
- * includes for each link the "return link" -- either itself or
- * a different link.
- * Each link can deliver data to a set of nodes. The relation between
- * the link and the nodes is an "attachment", which identifies the
- * link and a node, plus the IP address at which the node can receive data.
- * When a packet arrives on a node, the packet's IP address is used to
- * find which node shall receive it.
- * When a packet is posted on a link, the source IP address is posted
- * to the IP address of the attachment between that link and the return link.
- */
-
-typedef struct st_quicrq_test_attach_t {
-    int node_id;
-    int link_id;
-    struct sockaddr_storage node_addr;
-} quicrq_test_attach_t;
-
-typedef struct st_quicrq_test_source_t {
-    uint64_t next_source_time;
-    quicrq_media_source_ctx_t* srce_ctx;
-} quicrq_test_source_t;
-
-typedef struct st_quicrq_test_config_t {
-    uint64_t simulated_time;
-    uint64_t simulate_loss;
-    char test_server_cert_file[512];
-    char test_server_key_file[512];
-    char test_server_cert_store_file[512];
-    uint8_t ticket_encryption_key[16];
-    int nb_nodes;
-    quicrq_ctx_t** nodes;
-    int nb_links;
-    picoquictest_sim_link_t** links;
-    int* return_links;
-    int nb_attachments;
-    quicrq_test_attach_t* attachments;
-    int nb_sources;
-    quicrq_test_source_t* sources;
-    uint64_t cnx_error_client;
-    uint64_t cnx_error_server;
-} quicrq_test_config_t;
 
 /* Find arrival context by link ID and destination address */
 int quicrq_test_find_dest_node(quicrq_test_config_t* config, int link_id, struct sockaddr* addr)
@@ -235,7 +189,7 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
         }
     }
     /* Check which link has the lowest arrival time */
-    for (int i = 0; i < config->nb_nodes; i++) {
+    for (int i = 0; i < config->nb_links; i++) {
         if (config->links[i]->first_packet != NULL &&
             config->links[i]->first_packet->arrival_time < next_time) {
             next_time = config->links[i]->first_packet->arrival_time;
@@ -440,7 +394,7 @@ quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss)
     return config;
 }
 
-quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int client_node, int server_node)
+quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, int client_node, int server_node)
 {
     quicrq_ctx_t* qr_ctx = config->nodes[client_node];
     picoquic_quic_t * quic = quicrq_get_quic_ctx(qr_ctx);
@@ -450,39 +404,14 @@ quicrq_cnx_ctx_t* quicrq_test_basic_create_cnx(quicrq_test_config_t* config, int
     
     /* Find an attachment leading to server node */
     for (int i = 0; i < config->nb_attachments; i++) {
-        addr_to = quicrq_test_find_send_addr(config, 1, 0);
+        addr_to = quicrq_test_find_send_addr(config, client_node, server_node);
     }
 
     if (addr_to != NULL) {
-        cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
-            addr_to, config->simulated_time, 0, NULL, QUICRQ_ALPN, 1);
-        /* Set parameters */
-        if (!server_node) {
-            picoquic_tp_t client_parameters;
-
-            quicrq_init_transport_parameters(&client_parameters, 1);
-            picoquic_set_transport_parameters(cnx, &client_parameters);
-        }
-
-        if (picoquic_start_client_cnx(cnx) != 0){
-            picoquic_delete_cnx(cnx);
-            cnx = NULL;
-        }
-        if (cnx != NULL) {
-            cnx_ctx = quicrq_create_cnx_context(qr_ctx, cnx);
-        }
+        cnx_ctx = quicrq_create_client_cnx(qr_ctx, NULL, addr_to);
     }
     return cnx_ctx;
 }
-
-#ifdef _WINDOWS
-#define QUICRQ_TEST_BASIC_SOURCE "tests\\video1_source.bin"
-#else
-#define QUICRQ_TEST_BASIC_SOURCE "tests/video1_source.bin"
-#endif
-#define QUICRQ_TEST_BASIC_RESULT "basic_result.bin"
-#define QUICRQ_TEST_BASIC_LOG    "basic_log.csv"
-
 
 /* Basic connection test */
 int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client)
@@ -534,7 +463,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 
     if (ret == 0) {
         /* Create a quirq connection context on client */
-        cnx_ctx = quicrq_test_basic_create_cnx(config, 1, 0);
+        cnx_ctx = quicrq_test_create_client_cnx(config, 1, 0);
         if (cnx_ctx == NULL) {
             ret = -1;
             DBG_PRINTF("Cannot create client connection, ret = %d", ret);

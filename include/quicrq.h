@@ -48,6 +48,8 @@ picoquic_quic_t* quicrq_get_quic_ctx(quicrq_ctx_t* ctx);
 void quicrq_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
 
 quicrq_cnx_ctx_t* quicrq_create_cnx_context(quicrq_ctx_t* qr_ctx, picoquic_cnx_t* cnx);
+quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
+    const char* sni, struct sockaddr* addr);
 void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx);
 
 /* Media stream definition.
@@ -79,7 +81,7 @@ typedef enum {
     quicrq_media_source_close
 } quicrq_media_source_action_enum;
 
-typedef void* (*quicrq_media_publisher_subscribe_fn)(const uint8_t* media_url, const size_t media_url_length, void* pub_ctx);
+typedef void* (*quicrq_media_publisher_subscribe_fn)(/*const uint8_t* media_url, const size_t media_url_length,*/ void* pub_ctx);
 typedef int (*quicrq_media_publisher_fn)(
     quicrq_media_source_action_enum action,
     void* media_ctx,
@@ -90,8 +92,20 @@ typedef int (*quicrq_media_publisher_fn)(
     int* is_media_finished,
     uint64_t current_time);
 
-int quicrq_publish_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn);
-int quicrq_close_source(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, void* pub_ctx);
+int quicrq_publish_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length, 
+    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn);
+int quicrq_close_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length, void* pub_ctx);
+
+/* Management of default sources, used for example by proxies or relays.
+ * The callback creates a context for the specified URL, returning the parameters that would be otherwise
+ * specified in the function "quicrq_publish_source".
+ * When a quicrq context is deleted, the stack calls the default source function one last time, setting
+ * all parameters except the default_source_ctx to zero or NULL values. This gives the application
+ * an opportunity to clear memory and resource used by the default publication function.
+ */
+
+typedef int (*quicrq_default_source_fn)(void * default_source_ctx, quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length);
+void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn default_source_fn, void * default_source_ctx);
 
 /* Subscribe to a media segment using QUIC streams.
  * Simplified API for now:
@@ -132,7 +146,7 @@ typedef int (*quicrq_media_consumer_fn)(
     size_t data_length);
 
 int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx,
-    uint8_t* url, size_t url_length, int use_datagrams,
+    const uint8_t* url, size_t url_length, int use_datagrams,
     quicrq_media_consumer_fn media_consumer_fn, void* media_ctx);
 
 int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length,

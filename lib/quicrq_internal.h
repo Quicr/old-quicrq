@@ -121,7 +121,6 @@ typedef struct st_quicrq_media_source_ctx_t {
     void* pub_ctx;
     quicrq_media_publisher_subscribe_fn subscribe_fn;
     quicrq_media_publisher_fn getdata_fn;
-
 } quicrq_media_source_ctx_t;
 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
@@ -236,6 +235,9 @@ struct st_quicrq_ctx_t {
     /* Local media sources */
     quicrq_media_source_ctx_t* first_source;
     quicrq_media_source_ctx_t* last_source;
+    /* Default publisher function, used for example by relays */
+    quicrq_default_source_fn default_source_fn;
+    void* default_source_ctx;
     /* Local media receiver function */
     quicrq_media_consumer_init_fn consumer_media_init_fn;
     /* Todo: sockets, etc */

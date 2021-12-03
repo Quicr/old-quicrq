@@ -87,9 +87,14 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(proto_msg)
-		{
+		TEST_METHOD(proto_msg) {
 			int ret = proto_msg_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(relay_basic) {
+			int ret = quicrq_relay_basic_test();
 
 			Assert::AreEqual(ret, 0);
 		}

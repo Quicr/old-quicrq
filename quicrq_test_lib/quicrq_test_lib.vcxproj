@@ -144,7 +144,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\tests\basic_test.c" />
-    <ClCompile Include="..\tests\network_test.c" />
+    <ClCompile Include="..\tests\relay_test.c" />
     <ClCompile Include="..\tests\proto_test.c" />
     <ClCompile Include="..\tests\test_media.c" />
   </ItemGroup>

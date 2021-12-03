@@ -390,3 +390,8 @@ int quicrq_reassembly_learn_final_frame_id(
 
     return ret;
 }
+
+uint64_t quicrq_reassembly_frame_id_last(quicrq_reassembly_context_t* reassembly_ctx)
+{
+    return reassembly_ctx->next_frame_id;
+}

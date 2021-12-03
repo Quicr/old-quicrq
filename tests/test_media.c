@@ -66,7 +66,7 @@ void* test_media_publisher_init(char const* media_source_path, const generation_
     return media_ctx;
 }
 
-void* test_media_publisher_subscribe(const uint8_t* media_url, const size_t media_url_length, void* v_srce_ctx)
+void* test_media_publisher_subscribe(void* v_srce_ctx)
 {
     test_media_source_context_t* srce_ctx = (test_media_source_context_t*)v_srce_ctx;
     test_media_publisher_context_t* media_ctx = test_media_publisher_init(srce_ctx->file_path, srce_ctx->generation_context, srce_ctx->is_real_time);
@@ -348,13 +348,13 @@ static test_media_source_context_t* test_media_create_source(char const* media_s
 int test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* url, size_t url_length, char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time, uint64_t * p_next_time)
 {
     int ret = 0; 
-    test_media_source_context_t* srce_ctx = test_media_create_source(media_source_path, generation_model, is_real_time, p_next_time);
+    test_media_source_context_t* pub_source_ctx = test_media_create_source(media_source_path, generation_model, is_real_time, p_next_time);
 
-    if (srce_ctx == NULL) {
+    if (pub_source_ctx == NULL) {
         ret = -1;
     }
     else {
-        ret = quicrq_publish_source(qr_ctx, url, url_length, srce_ctx, test_media_publisher_subscribe, test_media_frame_publisher_fn);
+        ret = quicrq_publish_source(qr_ctx, url, url_length, pub_source_ctx, test_media_publisher_subscribe, test_media_frame_publisher_fn);
     }
     return ret;
 }
@@ -780,7 +780,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     if (ret == 0) {
         srce_ctx = test_media_create_source(media_source_path, generation_model, is_real_time, &next_time);
         if (srce_ctx != NULL) {
-            pub_ctx = test_media_publisher_subscribe((uint8_t*)media_source_path, strlen(media_source_path), srce_ctx);
+            pub_ctx = test_media_publisher_subscribe(srce_ctx);
         }
         cons_ctx = test_media_consumer_init(media_result_file, media_result_log);
         if (pub_ctx == NULL || cons_ctx == NULL){
@@ -1115,7 +1115,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     if (ret == 0) {
         srce_ctx = test_media_create_source(media_source_path, NULL, 1, &next_srce_time);
         if (srce_ctx != NULL) {
-            if ((pub_ctx = test_media_publisher_subscribe((uint8_t*)media_source_path, strlen(media_source_path), srce_ctx)) == NULL) {
+            if ((pub_ctx = test_media_publisher_subscribe(srce_ctx)) == NULL) {
                 ret = -1;
             }
         }
