@@ -466,11 +466,6 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
 quicrq_media_source_ctx_t* quicrq_create_default_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length)
 {
     quicrq_media_source_ctx_t* srce_ctx = NULL;
-
-    /* Document publisher context, */
-    void* pub_ctx = NULL;
-    quicrq_media_publisher_subscribe_fn subscribe_fn = NULL;
-    quicrq_media_publisher_fn getdata_fn = NULL;
     int ret = 0;
 
     /* Call the default publisher function */
