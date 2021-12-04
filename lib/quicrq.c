@@ -444,6 +444,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
                 break;
             case picoquic_callback_datagram_spurious: /* Packet carrying datagram-frame was not really lost */
                 ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, frame_id, frame_offset, is_last_segment);
+                break;
             default:
                 ret = -1;
             }
@@ -951,6 +952,11 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             break;
         }
     }
+
+    if (ret != 0) {
+        DBG_PRINTF("QUICRQ callback returns %d, event %d", ret, fin_or_event);
+    }
+
 
     return ret;
 }
