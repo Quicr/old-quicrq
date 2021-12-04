@@ -635,14 +635,14 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             }
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
-                DBG_PRINTF("Nothing to send on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
-                    stream_ctx->final_frame_id);
-                ret = -1;
+                DBG_PRINTF("Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64, 
+                    stream_ctx->stream_id, stream_ctx->send_state, stream_ctx->final_frame_id);
+                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
             }
         }
         else {
             /* TODO: consider receiver messages */
-            DBG_PRINTF("NConsider receiver messages on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
+            DBG_PRINTF("Consider receiver messages on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
                 stream_ctx->final_frame_id);
         }
     }
