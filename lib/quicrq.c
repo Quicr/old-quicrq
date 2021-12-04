@@ -444,6 +444,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
                 break;
             case picoquic_callback_datagram_spurious: /* Packet carrying datagram-frame was not really lost */
                 ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, frame_id, frame_offset, is_last_segment);
+                break;
             default:
                 ret = -1;
             }
@@ -634,11 +635,15 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             }
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
-                ret = -1;
+                DBG_PRINTF("Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64, 
+                    stream_ctx->stream_id, stream_ctx->send_state, stream_ctx->final_frame_id);
+                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
             }
         }
         else {
             /* TODO: consider receiver messages */
+            DBG_PRINTF("Consider receiver messages on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
+                stream_ctx->final_frame_id);
         }
     }
 
@@ -685,6 +690,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             break;
         default:
             /* Someone forgot to upgrade this code... */
+            DBG_PRINTF("Unexpected state %s on stream %" PRIu64, stream_ctx->send_state, stream_ctx->stream_id);
             ret = -1;
             break;
         }
@@ -894,6 +900,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             /* Active sending API */
             if (stream_ctx == NULL) {
                 /* This should never happen */
+                DBG_PRINTF("Prepare to send on NULL context, steam: %" PRIu64, stream_id);
                 ret = -1;
             }
             else {
@@ -951,6 +958,11 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             break;
         }
     }
+
+    if (ret != 0) {
+        DBG_PRINTF("QUICRQ callback returns %d, event %d", ret, fin_or_event);
+    }
+
 
     return ret;
 }
@@ -1039,15 +1051,16 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
 /* Delete a connection context */
 void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx)
 {
+    /* Delete the stream contexts */
+    while (cnx_ctx->first_stream != NULL) {
+        quicrq_delete_stream_ctx(cnx_ctx, cnx_ctx->first_stream);
+    }
+
     /* Delete the quic connection */
     if (cnx_ctx->cnx != NULL) {
         picoquic_set_callback(cnx_ctx->cnx, NULL, NULL);
         picoquic_delete_cnx(cnx_ctx->cnx);
         cnx_ctx->cnx = NULL;
-    }
-    /* Delete the stream contexts */
-    while (cnx_ctx->first_stream != NULL) {
-        quicrq_delete_stream_ctx(cnx_ctx, cnx_ctx->first_stream);
     }
     /* Remove the connection from the double linked list */
     if (cnx_ctx->qr_ctx != NULL) {
