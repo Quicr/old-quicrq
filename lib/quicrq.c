@@ -635,11 +635,15 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             }
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
+                DBG_PRINTF("Nothing to send on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
+                    stream_ctx->final_frame_id);
                 ret = -1;
             }
         }
         else {
             /* TODO: consider receiver messages */
+            DBG_PRINTF("NConsider receiver messages on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
+                stream_ctx->final_frame_id);
         }
     }
 
@@ -686,6 +690,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             break;
         default:
             /* Someone forgot to upgrade this code... */
+            DBG_PRINTF("Unexpected state %s on stream %" PRIu64, stream_ctx->send_state, stream_ctx->stream_id);
             ret = -1;
             break;
         }
@@ -895,6 +900,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             /* Active sending API */
             if (stream_ctx == NULL) {
                 /* This should never happen */
+                DBG_PRINTF("Prepare to send on NULL context, steam: %" PRIu64, stream_id);
                 ret = -1;
             }
             else {
