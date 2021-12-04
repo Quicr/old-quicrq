@@ -156,6 +156,9 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
                 (struct sockaddr*)&packet->addr_to, 0, 0,
                 config->simulated_time);
         }
+        else {
+            /* simulated loss */
+        }
         free(packet);
     }
 

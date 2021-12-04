@@ -207,3 +207,10 @@ int quicrq_relay_datagram_test()
 
     return ret;
 }
+
+int quicrq_relay_datagram_loss_test()
+{
+    int ret = quicrq_relay_test_one(1, 1, 0x7080, 0);
+
+    return ret;
+}

@@ -36,7 +36,8 @@ static const quicrq_test_def_t test_table[] =
     { "media_frame_no_loss", quicrq_media_frame_noloss },
     { "media_frame_loss", quicrq_media_frame_loss },
     { "relay_basic", quicrq_relay_basic_test },
-    { "relay_datagram", quicrq_relay_datagram_test }
+    { "relay_datagram", quicrq_relay_datagram_test },
+    { "relay_datagram_loss", quicrq_relay_datagram_loss_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);

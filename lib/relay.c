@@ -314,6 +314,7 @@ int quicrq_relay_publisher_fn(
             }
             else {
                 /* Error, data is not yet available */
+                DBG_PRINTF("%s", "Out of order");
             }
         }
     }
