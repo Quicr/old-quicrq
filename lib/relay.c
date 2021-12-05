@@ -217,37 +217,6 @@ int quicrq_relay_consumer_cb(
     return ret;
 }
 
-/* Initialize a media acquisition context on client post */
-int quicrq_relay_consumer_init_fn(const uint8_t* url, size_t url_length)
-{
-
-    int ret = 0;
-#if 0
-    /* Create a media context for the URL */
-    void* media_ctx;
-    char result_file_name[512];
-    char result_log_name[512];
-
-    ret = test_media_derive_file_names(url, url_length, stream_ctx->is_datagram, 1, 1, result_file_name, result_log_name, sizeof(result_file_name));
-
-    if (ret == 0) {
-        /* Init the local media consumer */
-        media_ctx = test_media_consumer_init(result_file_name, result_log_name);
-
-        if (media_ctx == NULL) {
-            ret = -1;
-        }
-        else
-        {
-            /* set the parameter in the stream context. */
-            ret = quicrq_set_media_stream_ctx(stream_ctx, test_media_frame_consumer_cb, media_ctx);
-        }
-    }
-#endif
-
-    return ret;
-}
-
 /* Server part of the relay.
  * The publisher functions tested at client and server delivers data in sequence.
  * We can do that as a first approximation, but proper relay handling needs to consider
@@ -342,10 +311,54 @@ void* quicrq_relay_publisher_subscribe(void* v_srce_ctx)
  * the server. Possibly, starting a connection if there is no server available.
  */
 
-
-void quicr_relay_clear_ctx(quicrq_relay_context_t* relay_ctx)
+int quicrq_relay_check_server_cnx(quicrq_relay_context_t* relay_ctx, quicrq_ctx_t* qr_ctx)
 {
-    free(relay_ctx);
+    int ret = 0;
+    /* If there is no valid connection to the server, create one. */
+    /* TODO: check for expiring connection */
+    if (relay_ctx->cnx_ctx == NULL) {
+        relay_ctx->cnx_ctx = quicrq_create_client_cnx(qr_ctx, relay_ctx->sni,
+            (struct sockaddr*)&relay_ctx->server_addr);
+    }
+    if (relay_ctx->cnx_ctx == NULL) {
+        ret = -1;
+    }
+    return ret;
+}
+
+quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx()
+{
+    quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)malloc(
+        sizeof(quicrq_relay_cached_media_t));
+    if (cache_ctx != NULL) {
+        memset(cache_ctx, 0, sizeof(quicrq_relay_cached_media_t));
+        quicrq_relay_cache_media_init(cache_ctx);
+    }
+    return cache_ctx;
+}
+
+quicrq_relay_consumer_context_t* quicrq_relay_create_cons_ctx()
+{
+    quicrq_relay_consumer_context_t* cons_ctx = (quicrq_relay_consumer_context_t*)
+        malloc(sizeof(quicrq_relay_consumer_context_t));
+    if (cons_ctx != NULL) {
+        memset(cons_ctx, 0, sizeof(quicrq_relay_consumer_context_t));
+        quicrq_reassembly_init(&cons_ctx->reassembly_ctx);
+    }
+    return cons_ctx;
+}
+
+int quicrq_relay_publish_cached_media(quicrq_ctx_t* qr_ctx,
+    quicrq_relay_cached_media_t* cache_ctx, const uint8_t* url, const size_t url_length)
+{
+    /* if succeeded, publish the source */
+    int ret = quicrq_publish_source(qr_ctx, url, url_length, cache_ctx,
+        quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn);
+    if (ret == 0) {
+        /* Assume that the quicrq_publish_source function added the new source at the end of the list */
+        cache_ctx->srce_ctx = qr_ctx->last_source;
+    }
+    return ret;
 }
 
 int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ctx,
@@ -359,30 +372,17 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
     }
     else {
         /* If there is no valid connection to the server, create one. */
-        /* TODO: check for expiring connection */
-        if (relay_ctx->cnx_ctx == NULL) {
-            relay_ctx->cnx_ctx = quicrq_create_client_cnx(qr_ctx, relay_ctx->sni,
-                (struct sockaddr*)&relay_ctx->server_addr);
-        }
-        if (relay_ctx->cnx_ctx == NULL) {
-            ret = -1;
-        }
-        else {
-            /* Create a cache context for the URL */
-            quicrq_relay_consumer_context_t* cons_ctx = (quicrq_relay_consumer_context_t*)
-                malloc(sizeof(quicrq_relay_consumer_context_t));
-            quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)malloc(
-                sizeof(quicrq_relay_cached_media_t));
+        ret = quicrq_relay_check_server_cnx(relay_ctx, qr_ctx);
+        if (ret == 0) {
+            /* Create a cache context for the URL and a consumer context for the server connection */
+            quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx();
+            quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
+
             if (cache_ctx == NULL || cons_ctx == NULL) {
                 ret = -1;
             }
             else {
-                memset(cache_ctx, 0, sizeof(quicrq_relay_cached_media_t));
-                quicrq_relay_cache_media_init(cache_ctx);
-
-                memset(cons_ctx, 0, sizeof(quicrq_relay_consumer_context_t));
                 cons_ctx->cached_ctx = cache_ctx;
-                quicrq_reassembly_init(&cons_ctx->reassembly_ctx);
 
                 /* Request a URL on a new stream on that connection */
                 ret = quicrq_cnx_subscribe_media(relay_ctx->cnx_ctx, url, url_length,
@@ -391,12 +391,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
 
             if (ret == 0) {
                 /* if succeeded, publish the source */
-                ret = quicrq_publish_source(qr_ctx, url, url_length, cache_ctx,
-                    quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn);
-                if (ret == 0) {
-                    /* Assume that the quicrq_publish_source function added the new source at the end of the list */
-                    cache_ctx->srce_ctx = qr_ctx->last_source;
-                }
+                ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
             }
 
             if (ret != 0){
@@ -406,6 +401,55 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
                 if (cons_ctx != NULL) {
                     free(cons_ctx);
                 }
+            }
+        }
+    }
+    return ret;
+}
+
+
+/* The relay consumer callback is called when receiving a "post" request from
+ * a client. It will initialize a cached media context for the posted url.
+ * The media will be received on the specified stream, as either stream or datagram.
+ * The media shall be stored in a local cache entry.
+ * The cached entry shall be pushed on a connection to the server.
+ */
+
+int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length)
+{
+    int ret = 0;
+    quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
+    quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)qr_ctx->default_source_ctx;
+
+    /* If there is no valid connection to the server, create one. */
+    ret = quicrq_relay_check_server_cnx(relay_ctx, qr_ctx);
+    if (ret == 0) {
+        /* Create a cache context for the URL */
+        quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
+        quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx();
+        if (cache_ctx == NULL || cons_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            /* if succeeded, publish the source */
+            ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
+            if (ret == 0) {
+                ret = quicrq_cnx_post_media(relay_ctx->cnx_ctx, url, url_length, relay_ctx->use_datagrams);
+                if (ret != 0) {
+                    /* TODO: unpublish the media context */
+                    DBG_PRINTF("Should unpublish media context, ret = %d", ret);
+                }
+                else {
+                    /* set the parameter in the stream context. */
+                    cons_ctx->cached_ctx = cache_ctx;
+                    ret = quicrq_set_media_stream_ctx(stream_ctx, quicrq_relay_consumer_cb, cons_ctx);
+                }
+            }
+
+            if (ret != 0) {
+                /* Could not publish the media, free the resource. */
+                free(cache_ctx);
+                cache_ctx = NULL;
             }
         }
     }
@@ -434,6 +478,8 @@ int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sock
         relay_ctx->use_datagrams = use_datagrams;
         /* set the relay as default provider */
         quicrq_set_default_source(qr_ctx, quicrq_relay_default_source_fn, relay_ctx);
+        /* set a default post client on the relay */
+        quicrq_set_media_init_callback(qr_ctx, quicrq_relay_consumer_init_callback);
     }
     return ret;
 }
