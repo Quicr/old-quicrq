@@ -25,6 +25,8 @@ extern "C" {
     int quicrq_relay_basic_test();
     int quicrq_relay_datagram_test();
     int quicrq_relay_datagram_loss_test();
+    int quicrq_relay_basic_client_test();
+    int quicrq_relay_datagram_client_test();
 
 #ifdef __cplusplus
 }

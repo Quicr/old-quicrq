@@ -110,5 +110,17 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(relay_basic_client) {
+			int ret = quicrq_relay_basic_client_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(relay_datagram_client) {
+			int ret = quicrq_relay_datagram_client_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

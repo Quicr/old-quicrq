@@ -639,7 +639,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_le
             if (ret == 0) {
                 /* Format the post message */
                 uint8_t* message_next = quicrq_post_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
-                    QUICRQ_ACTION_POST, url_length, url, use_datagrams);
+                    QUICRQ_ACTION_POST, url_length, url, (use_datagrams)?1:0);
                 if (message_next == NULL) {
                     ret = -1;
                 }
