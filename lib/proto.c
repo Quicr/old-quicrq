@@ -618,7 +618,7 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
 }
 
 /* Post a local media */
-int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length,
+int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
     int use_datagrams)
 {
     /* Create a stream for the media */
