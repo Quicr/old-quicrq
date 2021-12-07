@@ -38,6 +38,8 @@ typedef struct st_quicrq_ctx_t quicrq_ctx_t;
 typedef struct st_quicrq_cnx_ctx_t quicrq_cnx_ctx_t;
 typedef struct st_quicrq_stream_ctx_t quicrq_stream_ctx_t;
 
+quicrq_ctx_t* quicrq_create_empty();
+void quicrq_set_quic(quicrq_ctx_t* qr_ctx, picoquic_quic_t* quic);
 quicrq_ctx_t* quicrq_create(char const* alpn,
     char const* cert_file_name, char const* key_file_name, char const* cert_root_file_name,
     char const* ticket_store_file_name, char const* token_store_file_name,
@@ -92,7 +94,8 @@ typedef int (*quicrq_media_publisher_fn)(
     int* is_media_finished,
     uint64_t current_time);
 
-int quicrq_publish_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length, 
+typedef struct st_quicrq_media_source_ctx_t quicrq_media_source_ctx_t;
+quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
     void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn);
 int quicrq_close_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length, void* pub_ctx);
 
@@ -156,6 +159,16 @@ typedef int (*quicrq_media_consumer_init_fn)(quicrq_stream_ctx_t* stream_ctx, co
 int quicrq_set_media_init_callback(quicrq_ctx_t* ctx, quicrq_media_consumer_init_fn media_init_fn);
 
 int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_consumer_fn media_fn, void* media_ctx);
+
+quicrq_cnx_ctx_t* quicrq_first_connection(quicrq_ctx_t* qr_ctx);
+int quicrq_cnx_has_stream(quicrq_cnx_ctx_t* cnx_ctx);
+int quicrq_close_cnx(quicrq_cnx_ctx_t* cnx_ctx);
+int quicrq_is_cnx_disconnected(quicrq_cnx_ctx_t* cnx_ctx);
+void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
+
+int quicrq_callback(picoquic_cnx_t* cnx,
+    uint64_t stream_id, uint8_t* bytes, size_t length,
+    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 #ifdef __cplusplus
 }

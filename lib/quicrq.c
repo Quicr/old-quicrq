@@ -1023,18 +1023,31 @@ void quicrq_delete(quicrq_ctx_t* qr_ctx)
 /* Create a QUICRQ context
  * TODO: consider passing a picoquic configuration object 
  */
+quicrq_ctx_t* quicrq_create_empty()
+{
+    quicrq_ctx_t* qr_ctx = (quicrq_ctx_t*)malloc(sizeof(quicrq_ctx_t));
+
+    if (qr_ctx != NULL) {
+        memset(qr_ctx, 0, sizeof(quicrq_ctx_t));
+    }
+    return qr_ctx;
+}
+
+void quicrq_set_quic(quicrq_ctx_t* qr_ctx, picoquic_quic_t* quic)
+{
+    qr_ctx->quic = quic;
+}
+
 quicrq_ctx_t* quicrq_create(char const* alpn,
     char const* cert_file_name, char const* key_file_name, char const* cert_root_file_name,
     char const* ticket_store_file_name, char const* token_store_file_name,
     const uint8_t* ticket_encryption_key, size_t ticket_encryption_key_length,
     uint64_t* p_simulated_time)
 {
-    quicrq_ctx_t* qr_ctx = (quicrq_ctx_t*)malloc(sizeof(quicrq_ctx_t));
+    quicrq_ctx_t* qr_ctx = quicrq_create_empty();
     uint64_t current_time = (p_simulated_time == NULL) ? picoquic_current_time() : *p_simulated_time;
 
     if (qr_ctx != NULL) {
-        memset(qr_ctx, 0, sizeof(quicrq_ctx_t));
-
         qr_ctx->quic = picoquic_create(QUICRQ_MAX_CONNECTIONS, cert_file_name, key_file_name, cert_root_file_name, alpn,
             quicrq_callback, qr_ctx, NULL, NULL, NULL, current_time, p_simulated_time,
             ticket_store_file_name, ticket_encryption_key, ticket_encryption_key_length);
@@ -1135,6 +1148,11 @@ quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
     return cnx_ctx;
 }
 
+quicrq_cnx_ctx_t* quicrq_first_connection(quicrq_ctx_t* qr_ctx)
+{
+    return qr_ctx->first_cnx;
+}
+
 void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->next_stream == NULL) {
@@ -1211,6 +1229,22 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
 
     return stream_ctx;
 }
+
+int quicrq_cnx_has_stream(quicrq_cnx_ctx_t* cnx_ctx)
+{
+    return (cnx_ctx->first_stream != NULL);
+}
+
+int quicrq_close_cnx(quicrq_cnx_ctx_t* cnx_ctx)
+{
+    return  picoquic_close(cnx_ctx->cnx, 0);
+}
+
+int quicrq_is_cnx_disconnected(quicrq_cnx_ctx_t* cnx_ctx)
+{
+    return  (cnx_ctx->cnx == NULL || picoquic_get_cnx_state(cnx_ctx->cnx) == picoquic_state_disconnected);
+}
+
 
 /* Media publisher API.
  * Simplified API for now:

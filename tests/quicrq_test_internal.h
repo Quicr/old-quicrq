@@ -94,6 +94,7 @@ typedef struct st_test_media_publisher_context_t {
     FILE* F;
     generation_parameters_t* generation_context;
     quicrq_media_frame_header_t current_header;
+    uint64_t start_time;
     uint64_t* p_next_time;
     uint8_t* media_frame;
     size_t media_frame_alloc;
@@ -109,10 +110,12 @@ typedef struct st_test_media_source_context_t {
     char const* file_path;
     const generation_parameters_t* generation_context;
     unsigned int is_real_time : 1;
+    uint64_t start_time;
     uint64_t* p_next_time; /* Pointer for signalling next available time */
 } test_media_source_context_t;
 
-int test_media_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time, uint64_t* p_next_time);
+quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, char const* media_source_path,
+    const generation_parameters_t* generation_model, int is_real_time, uint64_t* p_next_time, uint64_t start_time);
 int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log);
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file);
 
@@ -125,7 +128,7 @@ int test_media_frame_consumer_cb(
     uint64_t offset,
     int is_last_segment,
     size_t data_length);
-void* test_media_publisher_init(char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time);
+void* test_media_publisher_init(char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time, uint64_t start_time);
 
 void* test_media_consumer_init(char const* media_result_file, char const* media_result_log);
 int test_media_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length);

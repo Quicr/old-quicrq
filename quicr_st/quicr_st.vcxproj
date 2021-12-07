@@ -18,6 +18,10 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\getopt.c" />
+    <ClCompile Include="..\src\quicrq_app.c" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -78,6 +82,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <TargetName>quicrq_app</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -88,13 +93,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\include\;$(SolutionDir)..\lib\;$(SolutionDir)..\src\;$(SolutionDir)..\tests\;$(SolutionDir)..\..\picoquic\picoquic\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)UnitTest\include;$(SolutionDir)src;$(SolutionDir)include\;$(SolutionDir)lib\;$(SolutionDir)tests\;$(SolutionDir)..\picoquic\picoquic\;$(SolutionDir)..\picoquic\loglib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;$(OutDir);$(SolutionDir)..\picoquic\$(Configuration)\;$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>quicrq_lib.lib;quicrq_test_lib.lib;picoquic.lib;picotls-core.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;picotls-fusion.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>quicrq_lib.lib;quicrq_test_lib.lib;picoquic.lib;loglib.lib;picotls-core.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;picotls-fusion.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -105,7 +110,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\include\;$(SolutionDir)..\lib\;$(SolutionDir)..\src\;$(SolutionDir)..\tests\;$(SolutionDir)..\..\picoquic\picoquic\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)UnitTest\include;$(SolutionDir)src;$(SolutionDir)include\;$(SolutionDir)lib\;$(SolutionDir)tests\;$(SolutionDir)..\picoquic\picoquic\;$(SolutionDir)..\picoquic\loglib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -113,7 +118,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;$(OutDir);$(SolutionDir)..\picoquic\$(Configuration)\;$(SolutionDir)..\picotls\picotlsvs\$(Configuration)\;$(OPENSSLDIR);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>quicrq_lib.lib;quicrq_test_lib.lib;picoquic.lib;picotls-core.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;picotls-fusion.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>quicrq_lib.lib;quicrq_test_lib.lib;picoquic.lib;loglib.lib;picotls-core.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;picotls-fusion.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -122,13 +127,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\include\;$(SolutionDir)..\lib\;$(SolutionDir)..\src\;$(SolutionDir)..\tests\;$(SolutionDir)..\..\picoquic\picoquic\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)UnitTest\include;$(SolutionDir)src;$(SolutionDir)include\;$(SolutionDir)lib\;$(SolutionDir)tests\;$(SolutionDir)..\picoquic\picoquic\;$(SolutionDir)..\picoquic\loglib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;$(OutDir);$(SolutionDir)..\..\picoquic\$(Platform)\$(Configuration);$(SolutionDir)..\..\picotls\picotlsvs\$(Platform)\$(Configuration);$(OPENSSL64DIR);$(OPENSSL64DIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>quicrq_lib.lib;quicrq_test_lib.lib;picoquic.lib;picotls-core.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;picotls-fusion.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;$(OutDir);$(SolutionDir)..\picoquic\$(Platform)\$(Configuration);$(SolutionDir)..\picotls\picotlsvs\$(Platform)\$(Configuration);$(OPENSSL64DIR);$(OPENSSL64DIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>quicrq_lib.lib;quicrq_test_lib.lib;picoquic.lib;loglib.lib;picotls-core.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;picotls-fusion.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -139,7 +144,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;_WINDOWS;_WINDOWS64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\include\;$(SolutionDir)..\lib\;$(SolutionDir)..\src\;$(SolutionDir)..\tests\;$(SolutionDir)..\..\picoquic\picoquic\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)UnitTest\include;$(SolutionDir)src;$(SolutionDir)include\;$(SolutionDir)lib\;$(SolutionDir)tests\;$(SolutionDir)..\picoquic\picoquic\;$(SolutionDir)..\picoquic\loglib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -147,7 +152,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;$(OutDir);$(SolutionDir)..\..\picoquic\$(Platform)\$(Configuration);$(SolutionDir)..\..\picotls\picotlsvs\$(Platform)\$(Configuration);$(OPENSSL64DIR);$(OPENSSL64DIR)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>quicrq_lib.lib;quicrq_test_lib.lib;picoquic.lib;picotls-core.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;picotls-fusion.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>quicrq_lib.lib;quicrq_test_lib.lib;picoquic.lib;loglib.lib;picotls-core.lib;picotls-minicrypto.lib;picotls-minicrypto-deps.lib;picotls-openssl.lib;picotls-fusion.lib;ws2_32.lib;libcrypto.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

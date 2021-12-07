@@ -125,7 +125,6 @@ typedef struct st_quicrq_media_source_ctx_t {
 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
-void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 
 /* Quicrq stream handling.
  * Media stream come in two variants.
@@ -253,10 +252,6 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
 quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id);
 
 void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx);
-
-int quicrq_callback(picoquic_cnx_t* cnx,
-    uint64_t stream_id, uint8_t* bytes, size_t length,
-    picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
 #if 0
 /* TODO: actually set these paramters... */
