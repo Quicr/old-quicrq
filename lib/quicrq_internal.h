@@ -111,7 +111,7 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 
  /* Quicrq per media source context.
   */
-typedef struct st_quicrq_media_source_ctx_t {
+struct st_quicrq_media_source_ctx_t {
     struct st_quicrq_media_source_ctx_t* next_source;
     struct st_quicrq_media_source_ctx_t* previous_source;
     struct st_quicrq_stream_ctx_t* first_stream;
@@ -121,7 +121,7 @@ typedef struct st_quicrq_media_source_ctx_t {
     void* pub_ctx;
     quicrq_media_publisher_subscribe_fn subscribe_fn;
     quicrq_media_publisher_fn getdata_fn;
-} quicrq_media_source_ctx_t;
+};
 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
