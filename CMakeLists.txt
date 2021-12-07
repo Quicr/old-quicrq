@@ -67,8 +67,6 @@ target_link_libraries(quicrq_app
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-set(TEST_EXES quicrq_t)
-
 add_executable(quicrq_t
     src/quicrq_t.c
 )
