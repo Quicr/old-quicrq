@@ -355,7 +355,6 @@ quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* ur
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
     uint64_t * p_next_time, uint64_t start_time)
 {
-    int ret = 0;
     quicrq_media_source_ctx_t* srce_ctx = NULL;
     test_media_source_context_t* pub_source_ctx = test_media_create_source(media_source_path, generation_model, is_real_time, p_next_time, start_time);
 

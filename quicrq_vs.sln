@@ -4,6 +4,10 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 16.0.31613.86
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "quicr_st", "quicr_st\quicr_st.vcxproj", "{E4BCB10B-9B48-401E-8ADF-D989F66201B6}"
+	ProjectSection(ProjectDependencies) = postProject
+		{5F9A9F68-AA73-42B9-B050-1B348C117801} = {5F9A9F68-AA73-42B9-B050-1B348C117801}
+		{C8C675E2-3173-487E-AC27-5438A0D07166} = {C8C675E2-3173-487E-AC27-5438A0D07166}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "quicrq_test", "quicrq_test\quicrq_test.vcxproj", "{5B20B34A-487B-4F2B-BBC2-482A598CD7CD}"
 	ProjectSection(ProjectDependencies) = postProject
