@@ -49,7 +49,7 @@ add_library(quicrq-core
     ${QUICRQ_LIBRARY_FILES}
 )
 
-add_library(quicrq-test
+add_library(quicrq-tests
     ${QUICRQ_TEST_LIBRARY_FILES}
 )
 
@@ -59,7 +59,7 @@ add_executable(quicrq_app
 
 target_link_libraries(quicrq_app
     quicrq-core
-    quicrq-test
+    quicrq-tests
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
@@ -73,7 +73,7 @@ add_executable(quicrq_t
 
 target_link_libraries(quicrq_t
     quicrq-core
-    quicrq-test
+    quicrq-tests
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
