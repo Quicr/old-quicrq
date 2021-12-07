@@ -1,14 +1,14 @@
 #include <stdlib.h>
 #include <string.h>
+#include <picoquic.h>
+#include <picoquic_utils.h>
+#include <picoquic_set_textlog.h>
+#include <picoquic_set_binlog.h>
+
 #include "quicrq.h"
 #include "quicrq_internal.h"
 #include "quicrq_tests.h"
 #include "quicrq_test_internal.h"
-#include "picoquic.h"
-#include "picoquic_utils.h"
-#include "picoquic_set_textlog.h"
-#include "picoquic_set_binlog.h"
-
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
 #define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\..\\picoquic\\"

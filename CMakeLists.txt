@@ -69,11 +69,11 @@ target_link_libraries(quicrq_app
 
 add_executable(quicrq_t
     src/quicrq_t.c
+    ${QUICRQ_TEST_LIBRARY_FILES}
 )
 
 target_link_libraries(quicrq_t
     quicrq-core
-    quicrq-tests
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}
     ${OPENSSL_LIBRARIES}
