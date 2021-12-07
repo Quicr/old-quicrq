@@ -391,7 +391,6 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 
 quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn)
 {
-    int ret = 0;
     quicrq_media_source_ctx_t* srce_ctx = NULL;
     size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
 
