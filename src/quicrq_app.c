@@ -288,7 +288,7 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
                 path, current_time) != 0) {
                 next_char = NULL;
             }
-            else if (cb_ctx->mode = quicrq_app_mode_client) {
+            else if (cb_ctx->mode == quicrq_app_mode_client) {
                 /* Post the media */
                 ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)url, url_length, use_datagrams);
                 if (ret != 0) {
@@ -298,7 +298,7 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
         }
         else {
             /* This is a get */
-            if (cb_ctx->mode = quicrq_app_mode_client) {
+            if (cb_ctx->mode == quicrq_app_mode_client) {
                 /* Subscribe to the media */
                 ret = test_media_subscribe(cnx_ctx, (uint8_t*)url, url_length, use_datagrams, path,
                     (log_path[0] == 0) ? NULL : log_path);
@@ -430,7 +430,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
         ret = picoquic_packet_loop_win(quic, config->server_port, 0, config->dest_if,
             config->socket_buffer_size, quicrq_app_loop_cb, &cb_ctx);
 #else
-        ret = picoquic_packet_loop(quc, config->server_port, 0, config->dest_if,
+        ret = picoquic_packet_loop(quic, config->server_port, 0, config->dest_if,
             config->socket_buffer_size, config->do_not_use_gso, quicrq_app_loop_cb, &cb_ctx);
 #endif
     }
