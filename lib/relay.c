@@ -352,13 +352,9 @@ int quicrq_relay_publish_cached_media(quicrq_ctx_t* qr_ctx,
     quicrq_relay_cached_media_t* cache_ctx, const uint8_t* url, const size_t url_length)
 {
     /* if succeeded, publish the source */
-    int ret = quicrq_publish_source(qr_ctx, url, url_length, cache_ctx,
+    cache_ctx->srce_ctx = quicrq_publish_source(qr_ctx, url, url_length, cache_ctx,
         quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn);
-    if (ret == 0) {
-        /* Assume that the quicrq_publish_source function added the new source at the end of the list */
-        cache_ctx->srce_ctx = qr_ctx->last_source;
-    }
-    return ret;
+    return (cache_ctx->srce_ctx == NULL)?-1:0;
 }
 
 int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ctx,

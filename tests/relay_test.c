@@ -91,9 +91,10 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         /* Add a test source to the configuration, and to the either the client or the server */
         int publish_node = (is_from_client) ? 2 : 0;
 
-        ret = test_media_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, &config->sources[0].next_source_time);
-        config->sources[0].srce_ctx = config->nodes[publish_node]->first_source;
-        if (ret != 0) {
+        config->sources[0].srce_ctx = test_media_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
+            media_source_path, NULL, is_real_time, &config->sources[0].next_source_time, 0);
+        if (config->sources[0].srce_ctx == NULL) {
+            ret = -1;
             DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
     }

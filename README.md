@@ -1,9 +1,25 @@
 # quicrq
 
-Exploring QUIC Realtime transports as part of the QUICR project. The prototypes are developed using
+Exploring QUIC Realtime transports as part of the QUICR project. The QUICR project explores a new
+media transport architecture in which both realtime and streaming media can be delivered over
+a "realtime content delivery network", in which clients access or post media segments through relays,
+and relays get the data from other relays or from an origin server. Relays manage caches of media
+segment.
+
+The prototypes are developed using
 [picoquic](https://github.com/private-octopus/picoquic)
 
-At this stage, the code only runs on a simulation, as part of the test suite.
+The project builds:
+
+* a library implementing the `quicrq` protocol,
+* a test tool, `quicrq_t`, for running unit tests and verifying ports,
+* a demo application, `quicrq_app`, for testing the protocol over real networks.
+
+The demo application implements the server, client and relay functions of the protocol.
+Server and clients can publish simulated media segments, using the same "simulated media files" format
+as the test library. The relay does not make assumptions on the type of media files.
+The server is a very simplified version of the "origin server" implemented in the architecture.
+The demo application has multiple options, which can be listed by calling `quicrq_app -h`.
 
 ## Installing on Linux 
 

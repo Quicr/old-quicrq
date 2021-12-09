@@ -49,11 +49,16 @@ add_library(quicrq-core
     ${QUICRQ_LIBRARY_FILES}
 )
 
+add_library(quicrq-tests
+    ${QUICRQ_TEST_LIBRARY_FILES}
+)
+
 add_executable(quicrq_app
     src/quicrq_app.c
 )
 
 target_link_libraries(quicrq_app
+    quicrq-tests
     quicrq-core
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}
@@ -62,14 +67,12 @@ target_link_libraries(quicrq_app
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-set(TEST_EXES quicrq_t)
-
 add_executable(quicrq_t
     src/quicrq_t.c
-    ${QUICRQ_TEST_LIBRARY_FILES}
 )
 
 target_link_libraries(quicrq_t
+    quicrq-tests
     quicrq-core
     ${Picoquic_LIBRARIES}
     ${PTLS_LIBRARIES}

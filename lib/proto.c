@@ -389,21 +389,15 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 /* Publish local source API.
  */
 
-int quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn)
+quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn)
 {
-    int ret = 0;
+    quicrq_media_source_ctx_t* srce_ctx = NULL;
     size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
 
-    if (source_ctx_size < sizeof(quicrq_media_source_ctx_t)) {
-        ret = -1;
-    }
-    else {
-        quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(source_ctx_size);
+    if (source_ctx_size >= sizeof(quicrq_media_source_ctx_t)) {
+        srce_ctx = (quicrq_media_source_ctx_t*)malloc(source_ctx_size);
 
-        if (srce_ctx == NULL) {
-            ret = -1;
-        }
-        else {
+        if (srce_ctx != NULL) {
             memset(srce_ctx, 0, sizeof(quicrq_media_source_ctx_t));
             srce_ctx->media_url = ((uint8_t*)srce_ctx) + sizeof(quicrq_media_source_ctx_t);
             srce_ctx->media_url_length = url_length;
@@ -423,7 +417,7 @@ int quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url, size_t url
         }
     }
 
-    return ret;
+    return srce_ctx;
 }
 
 void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn default_source_fn, void* default_source_ctx)
