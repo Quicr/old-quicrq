@@ -39,7 +39,10 @@ static const quicrq_test_def_t test_table[] =
     { "relay_datagram", quicrq_relay_datagram_test },
     { "relay_datagram_loss", quicrq_relay_datagram_loss_test },
     { "relay_basic_client", quicrq_relay_basic_client_test },
-    { "relay_datagram_client", quicrq_relay_datagram_client_test }
+    { "relay_datagram_client", quicrq_relay_datagram_client_test },
+    { "triangle_basic", quicrq_triangle_basic_test },
+    { "triangle_datagram", quicrq_triangle_datagram_test },
+    { "triangle_datagram_loss", quicrq_triangle_datagram_loss_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);
