@@ -72,6 +72,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     char result_log_name[512];
     char text_log_name[512];
     size_t nb_log_chars = 0;
+    int partial_closure = 0;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams,
         (unsigned long long)simulate_losses);
@@ -177,10 +178,10 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
         }
         else {
             /* TODO: add closing condition on server */
-            int client_stream_closed = config->nodes[2]->first_cnx->first_stream == NULL;
-            int server_stream_closed = config->nodes[0]->first_cnx != NULL && config->nodes[0]->first_cnx->first_stream == NULL;
+            int client1_stream_closed = config->nodes[1]->first_cnx == NULL || config->nodes[1]->first_cnx->first_stream == NULL;
+            int client2_stream_closed = config->nodes[1]->first_cnx == NULL || config->nodes[2]->first_cnx->first_stream == NULL;
 
-            if (!is_closed && client_stream_closed && server_stream_closed) {
+            if (!is_closed && client1_stream_closed && client2_stream_closed) {
                 /* Client is done. Close connections without waiting for timer -- if not closed yet */
                 for (int c_nb = 1;ret == 0 && c_nb < 3; c_nb++) {
                     if (config->nodes[c_nb]->first_cnx != NULL) {
@@ -190,6 +191,12 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
                             DBG_PRINTF("Cannot close client connection, ret = %d", ret);
                         }
                     }
+                }
+            }
+            else if (client1_stream_closed ^ client2_stream_closed) {
+                if (!partial_closure) {
+                    partial_closure = 1;
+                    DBG_PRINTF("Partial closure: client 1 (%d), client 2 (%d).", client1_stream_closed, client2_stream_closed);
                 }
             }
         }
