@@ -171,22 +171,22 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
                 DBG_PRINTF("Exit loop after too many inactive: %d", nb_inactive);
             }
         }
-        /* if the media is received, exit the loop */
-        if (config->nodes[2]->first_cnx == NULL) {
+        /* if the media is sent and received, exit the loop */
+        if (config->nodes[1]->first_cnx == NULL && config->nodes[2]->first_cnx == NULL) {
             DBG_PRINTF("%s", "Exit loop after client connection #2 closed.");
             break;
         }
         else {
             /* TODO: add closing condition on server */
             int client1_stream_closed = config->nodes[1]->first_cnx == NULL || config->nodes[1]->first_cnx->first_stream == NULL;
-            int client2_stream_closed = config->nodes[1]->first_cnx == NULL || config->nodes[2]->first_cnx->first_stream == NULL;
+            int client2_stream_closed = config->nodes[2]->first_cnx == NULL || config->nodes[2]->first_cnx->first_stream == NULL;
 
             if (!is_closed && client1_stream_closed && client2_stream_closed) {
                 /* Client is done. Close connections without waiting for timer -- if not closed yet */
-                for (int c_nb = 1;ret == 0 && c_nb < 3; c_nb++) {
+                is_closed = 1;
+                for (int c_nb = 1; ret == 0 && c_nb < 3; c_nb++) {
                     if (config->nodes[c_nb]->first_cnx != NULL) {
                         ret = quicrq_close_cnx(config->nodes[c_nb]->first_cnx);
-                        is_closed = 1;
                         if (ret != 0) {
                             DBG_PRINTF("Cannot close client connection, ret = %d", ret);
                         }
