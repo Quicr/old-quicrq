@@ -508,7 +508,6 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
 {
     int ret = 0;
     quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
-    quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)qr_ctx->default_source_ctx;
     quicrq_relay_cached_media_t* cache_ctx = NULL;
     quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx();
 
