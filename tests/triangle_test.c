@@ -73,6 +73,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     char text_log_name[512];
     size_t nb_log_chars = 0;
     int partial_closure = 0;
+    uint64_t client2_close_time = UINT64_MAX;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams,
         (unsigned long long)simulate_losses);
@@ -181,6 +182,10 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             int client1_stream_closed = config->nodes[1]->first_cnx == NULL || config->nodes[1]->first_cnx->first_stream == NULL;
             int client2_stream_closed = config->nodes[2]->first_cnx == NULL || config->nodes[2]->first_cnx->first_stream == NULL;
 
+            if (client2_stream_closed && client2_close_time > config->simulated_time) {
+                client2_close_time = config->simulated_time;
+            }
+
             if (!is_closed && client1_stream_closed && client2_stream_closed) {
                 /* Client is done. Close connections without waiting for timer -- if not closed yet */
                 is_closed = 1;
@@ -196,14 +201,15 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             else if (client1_stream_closed ^ client2_stream_closed) {
                 if (!partial_closure) {
                     partial_closure = 1;
-                    DBG_PRINTF("Partial closure: client 1 (%d), client 2 (%d).", client1_stream_closed, client2_stream_closed);
+                    DBG_PRINTF("Partial closure: client 1 (%d), client 2 (%d), time = %" PRIu64, 
+                        client1_stream_closed, client2_stream_closed, config->simulated_time);
                 }
             }
         }
     }
 
-    if (ret == 0 && (!is_closed || config->simulated_time > 12000000)) {
-        DBG_PRINTF("Session was not properly closed, time = %" PRIu64, config->simulated_time);
+    if (ret == 0 && (!is_closed || client2_close_time > 12000000)) {
+        DBG_PRINTF("Session was not properly closed, time = %" PRIu64, client2_close_time);
         ret = -1;
     }
 
