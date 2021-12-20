@@ -473,12 +473,9 @@ quicrq_media_source_ctx_t* quicrq_create_default_source(quicrq_ctx_t* qr_ctx, co
     return srce_ctx;
 }
 
-/* Parse incoming request, connect incoming stream to media source
- */
-int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length)
+/* Find whether the local context for a media source */
+quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length)
 {
-    int ret = 0;
-    quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
     quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
 
     /* Find whether there is a matching media published locally */
@@ -489,6 +486,17 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         }
         srce_ctx = srce_ctx->next_source;
     }
+    return srce_ctx;
+}
+
+/* Parse incoming request, connect incoming stream to media source
+ */
+int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length)
+{
+    int ret = 0;
+    quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
+    quicrq_media_source_ctx_t* srce_ctx = quicrq_find_local_media_source(qr_ctx, url, url_length);
+
     if (srce_ctx == NULL && qr_ctx->default_source_fn != NULL) {
         srce_ctx = quicrq_create_default_source(qr_ctx, url, url_length);
     }

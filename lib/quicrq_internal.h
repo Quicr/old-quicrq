@@ -123,6 +123,7 @@ struct st_quicrq_media_source_ctx_t {
     quicrq_media_publisher_fn getdata_fn;
 };
 
+quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length);
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
 

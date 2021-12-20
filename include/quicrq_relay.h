@@ -12,6 +12,9 @@ extern "C" {
     /* Enable the relay */
     int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char * sni, const struct sockaddr * addr, int use_datagrams);
 
+    /* Enable origin */
+    int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams);
+
 
 #ifdef __cplusplus
 }

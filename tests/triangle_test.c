@@ -96,6 +96,14 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     }
 
     if (ret == 0) {
+        /* Enable origin on node 0 */
+        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        if (ret != 0) {
+            DBG_PRINTF("Cannot enable origin, ret = %d", ret);
+        }
+    }
+
+    if (ret == 0) {
         /* Add a test source to the configuration on client #1 (publisher) */
         int publish_node = 1;
 
@@ -108,7 +116,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     }
 
     if (ret == 0) {
-        /* Create a quirq connection context on client #1 */
+        /* Create a quicrq connection context on client #1 */
         cnx_ctx_1 = quicrq_test_create_client_cnx(config, 1, 0);
         if (cnx_ctx_1 == NULL) {
             ret = -1;
@@ -117,7 +125,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     }
 
     if (ret == 0) {
-        /* Create a quirq connection context on client #2 */
+        /* Create a quicrq connection context on client #2 */
         cnx_ctx_2 = quicrq_test_create_client_cnx(config, 2, 0);
         if (cnx_ctx_2 == NULL) {
             ret = -1;
@@ -126,17 +134,21 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     }
 
     if (ret == 0) {
-        /* Set up a default receiver on the server */
-        quicrq_set_media_init_callback(config->nodes[0], test_media_consumer_init_callback);
         /* Start pushing from the client #1 */
         ret = quicrq_cnx_post_media(cnx_ctx_1, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
-       
+        if (ret != 0) {
+            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+        }
+    }
+
+    if (ret == 0) {
         /* Create a subscription to the test source on client # 2*/
         ret = test_media_subscribe(cnx_ctx_2, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
         if (ret != 0) {
             DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
     }
+
 
     while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
         /* Run the simulation. Monitor the connection. Monitor the media. */
@@ -169,12 +181,14 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             int server_stream_closed = config->nodes[0]->first_cnx != NULL && config->nodes[0]->first_cnx->first_stream == NULL;
 
             if (!is_closed && client_stream_closed && server_stream_closed) {
-                /* Client is done. Close connection #1 without waiting for timer -- if not closed yet */
-                if (config->nodes[1]->first_cnx != NULL) {
-                    ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
-                    is_closed = 1;
-                    if (ret != 0) {
-                        DBG_PRINTF("Cannot close client connection, ret = %d", ret);
+                /* Client is done. Close connections without waiting for timer -- if not closed yet */
+                for (int c_nb = 1;ret == 0 && c_nb < 3; c_nb++) {
+                    if (config->nodes[c_nb]->first_cnx != NULL) {
+                        ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
+                        is_closed = 1;
+                        if (ret != 0) {
+                            DBG_PRINTF("Cannot close client connection, ret = %d", ret);
+                        }
                     }
                 }
             }
