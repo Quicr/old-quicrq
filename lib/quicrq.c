@@ -1237,7 +1237,13 @@ int quicrq_cnx_has_stream(quicrq_cnx_ctx_t* cnx_ctx)
 
 int quicrq_close_cnx(quicrq_cnx_ctx_t* cnx_ctx)
 {
-    return  picoquic_close(cnx_ctx->cnx, 0);
+    int ret = 0;
+
+    if (cnx_ctx->cnx != NULL && picoquic_get_cnx_state(cnx_ctx->cnx) < picoquic_state_disconnecting) {
+        ret = picoquic_close(cnx_ctx->cnx, 0);
+    }
+
+    return ret;
 }
 
 int quicrq_is_cnx_disconnected(quicrq_cnx_ctx_t* cnx_ctx)

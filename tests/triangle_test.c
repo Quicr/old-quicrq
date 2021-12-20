@@ -184,7 +184,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
                 /* Client is done. Close connections without waiting for timer -- if not closed yet */
                 for (int c_nb = 1;ret == 0 && c_nb < 3; c_nb++) {
                     if (config->nodes[c_nb]->first_cnx != NULL) {
-                        ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
+                        ret = quicrq_close_cnx(config->nodes[c_nb]->first_cnx);
                         is_closed = 1;
                         if (ret != 0) {
                             DBG_PRINTF("Cannot close client connection, ret = %d", ret);
