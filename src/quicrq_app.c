@@ -152,7 +152,7 @@ char const* quic_app_scenario_parse_method(char const* scenario, int* method)
         next_char += 4;
         *method = 0;
     }
-    else if (strncmp(scenario, "post", 5) == 0) {
+    else if (strncmp(scenario, "post:", 5) == 0) {
         next_char += 5;
         *method = 1;
     }
@@ -420,8 +420,16 @@ int quic_app_loop(picoquic_quic_config_t* config,
 
     /* if client or server, initialize all the local sources */
     if (ret == 0 && (mode == quicrq_app_mode_client || mode == quicrq_app_mode_server)) {
-        ret = quic_app_scenario_parse(&cb_ctx, scenario, current_time,
-            use_datagram, cnx_ctx);
+        if (scenario == NULL) {
+            if (mode == quicrq_app_mode_client) {
+                fprintf(stderr, "No scenario provided!\n");
+                ret = -1;
+            }
+        }
+        else {
+            ret = quic_app_scenario_parse(&cb_ctx, scenario, current_time,
+                use_datagram, cnx_ctx);
+        }
     }
 
     /* Start the loop */
@@ -483,7 +491,7 @@ int main(int argc, char** argv)
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
     picoquic_config_init(&config);
-    ret = picoquic_config_option_letters(option_string, 0, NULL);
+    ret = picoquic_config_option_letters(option_string, sizeof(option_string), NULL);
 
     if (ret == 0) {
         /* Get the parameters */
