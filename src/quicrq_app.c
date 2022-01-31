@@ -389,7 +389,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
     }
     /* Set up a default receiver on the server */
     if (ret == 0 && mode == quicrq_app_mode_server) {
-        quicrq_set_media_init_callback(cb_ctx.qr_ctx, test_media_consumer_init_callback);
+        quicrq_enable_origin(cb_ctx.qr_ctx, use_datagram);
     }
 
     /* If client or relay, resolve the address */

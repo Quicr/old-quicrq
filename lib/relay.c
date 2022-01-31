@@ -81,6 +81,7 @@ typedef struct st_quicrq_relay_context_t {
     struct sockaddr_storage server_addr;
     quicrq_ctx_t* qr_ctx;
     quicrq_cnx_ctx_t* cnx_ctx;
+    int is_origin_only : 1;
     int use_datagrams : 1;
 } quicrq_relay_context_t;
 
@@ -361,48 +362,58 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
     const uint8_t* url, const size_t url_length)
 {
     int ret = 0;
+    /* Should there be a single context type for relays and origin? */
     quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)default_source_ctx;
     if (url == NULL) {
-        /* By convention, this is a request to release the resource of the relay */
+        /* By convention, this is a request to release the resource of the origin */
         quicrq_set_default_source(qr_ctx, NULL, NULL);
     }
     else {
-        /* If there is no valid connection to the server, create one. */
-        ret = quicrq_relay_check_server_cnx(relay_ctx, qr_ctx);
-        if (ret == 0) {
-            /* Create a cache context for the URL and a consumer context for the server connection */
-            quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx();
-            quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
-
-            if (cache_ctx == NULL || cons_ctx == NULL) {
-                ret = -1;
-            }
-            else {
-                cons_ctx->cached_ctx = cache_ctx;
-
-                /* Request a URL on a new stream on that connection */
-                ret = quicrq_cnx_subscribe_media(relay_ctx->cnx_ctx, url, url_length,
-                    relay_ctx->use_datagrams, quicrq_relay_consumer_cb, cons_ctx);
-            }
+        quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
+        quicrq_relay_consumer_context_t* cons_ctx = NULL;
+        if (cache_ctx == NULL) {
+            ret = -1;
+        }
+        else if (!relay_ctx->is_origin_only) {
+            /* If there is no valid connection to the server, create one. */
+            ret = quicrq_relay_check_server_cnx(relay_ctx, qr_ctx);
 
             if (ret == 0) {
-                /* if succeeded, publish the source */
-                ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
-            }
+                /* Create a consumer context for the relay to server connection */
+                cons_ctx = quicrq_relay_create_cons_ctx();
 
-            if (ret != 0){
-                if (cache_ctx != NULL){
-                    free(cache_ctx);
+                if (cons_ctx == NULL) {
+                    ret = -1;
                 }
-                if (cons_ctx != NULL) {
-                    free(cons_ctx);
+                else {
+                    cons_ctx->cached_ctx = cache_ctx;
+
+                    /* Request a URL on a new stream on that connection */
+                    ret = quicrq_cnx_subscribe_media(relay_ctx->cnx_ctx, url, url_length,
+                        relay_ctx->use_datagrams, quicrq_relay_consumer_cb, cons_ctx);
                 }
+            }
+        }
+        else {
+            /* TODO: whatever is needed for origin only behavior. */
+        }
+
+        if (ret == 0) {
+            /* if succeeded, publish the source */
+            ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
+        }
+
+        if (ret != 0) {
+            if (cache_ctx != NULL) {
+                free(cache_ctx);
+            }
+            if (cons_ctx != NULL) {
+                free(cons_ctx);
             }
         }
     }
     return ret;
 }
-
 
 /* The relay consumer callback is called when receiving a "post" request from
  * a client. It will initialize a cached media context for the posted url.
@@ -476,6 +487,82 @@ int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sock
         quicrq_set_default_source(qr_ctx, quicrq_relay_default_source_fn, relay_ctx);
         /* set a default post client on the relay */
         quicrq_set_media_init_callback(qr_ctx, quicrq_relay_consumer_init_callback);
+    }
+    return ret;
+}
+
+/*
+ * The origin server behavior is very similar to the behavior of a realy, but
+ * there are some key differences:
+ *  
+ *  1) When receiving a "subscribe" request, the relay creates the media context and
+ *     starts a connection. The server creates a media context but does not start the connection. 
+ *  2) When receiving a "post" request, the relay creates a cache version and also
+ *     forwards it to the server using an upload connection. There is no upload
+ *     connection at the origin server. 
+ *  3) When receiving a "post" request, the server must check whether the media context 
+ *     already exists, and if it does connects it.
+ */
+
+int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length)
+{
+    int ret = 0;
+    quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
+    quicrq_relay_cached_media_t* cache_ctx = NULL;
+    quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx();
+
+    if (cons_ctx == NULL) {
+        ret = -1;
+    } else {
+        /* Check whether there is already a context for this media */
+        quicrq_media_source_ctx_t* srce_ctx = quicrq_find_local_media_source(qr_ctx, url, url_length);
+
+        if (srce_ctx != NULL) {
+            cache_ctx = (quicrq_relay_cached_media_t*)srce_ctx->pub_ctx;
+        }
+        else {
+            /* Create a cache context for the URL */
+            cache_ctx = quicrq_relay_create_cache_ctx();
+            if (cache_ctx != NULL) {
+                ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
+                if (ret != 0) {
+                    /* Could not publish the media, free the resource. */
+                    free(cache_ctx);
+                    cache_ctx = NULL;
+                }
+            }
+        }
+
+        if (ret == 0) {
+            /* set the parameter in the stream context. */
+            cons_ctx->cached_ctx = cache_ctx;
+            ret = quicrq_set_media_stream_ctx(stream_ctx, quicrq_relay_consumer_cb, cons_ctx);
+        }
+
+        if (ret != 0) {
+            free(cons_ctx);
+        }
+    }
+    return ret;
+}
+
+int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
+{
+    int ret = 0;
+    quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)malloc(
+        sizeof(quicrq_relay_context_t));
+    if (relay_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        /* initialize the relay context. */
+        memset(relay_ctx, 0, sizeof(quicrq_relay_context_t));
+        relay_ctx->use_datagrams = use_datagrams;
+        relay_ctx->is_origin_only = 1;
+        /* set the relay as default provider */
+        quicrq_set_default_source(qr_ctx, quicrq_relay_default_source_fn, relay_ctx);
+        /* set a default post client on the relay */
+        quicrq_set_media_init_callback(qr_ctx, quicrq_origin_consumer_init_callback);
     }
     return ret;
 }

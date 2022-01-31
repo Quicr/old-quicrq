@@ -24,6 +24,7 @@ set(QUICRQ_TEST_LIBRARY_FILES
     tests/proto_test.c
     tests/relay_test.c
     tests/test_media.c
+    tests/triangle_test.c
 )
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
