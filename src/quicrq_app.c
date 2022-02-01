@@ -408,6 +408,11 @@ int quic_app_loop(picoquic_quic_config_t* config,
     }
     else {
         cb_ctx.mode = mode;
+
+        if (config->alpn == NULL) {
+            picoquic_config_set_option(config, picoquic_option_ALPN, QUICRQ_ALPN);
+        }
+
         /* TODO: Verify that the ALPN configured corresponds to our application. */
         /* Create a picoquic context, using the configuration */
         quic = picoquic_create_and_configure(config,
