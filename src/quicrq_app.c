@@ -86,6 +86,21 @@ void quicrq_app_check_source_time(quicrq_app_loop_cb_t* cb_ctx,
     }
 }
 
+int quicrq_app_loop_cb_check_fin(quicrq_app_loop_cb_t* cb_ctx)
+{
+    int ret = 0;
+
+    /* if a client, exit the loop if connection is gone. */
+    quicrq_cnx_ctx_t* cnx_ctx = quicrq_first_connection(cb_ctx->qr_ctx);
+    if (cnx_ctx == NULL || quicrq_is_cnx_disconnected(cnx_ctx)) {
+        ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
+    }
+    else if (!quicrq_cnx_has_stream(cnx_ctx)) {
+        ret = quicrq_close_cnx(cnx_ctx);
+    }
+    return ret;
+}
+
 int quicrq_app_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mode,
     void* callback_ctx, void* callback_arg)
 {
@@ -106,20 +121,19 @@ int quicrq_app_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mo
             break;
         case picoquic_packet_loop_after_receive:
             /* Post receive callback */
+            /* if a client, exit the loop if connection is gone. */
             if (cb_ctx->mode == quicrq_app_mode_client) {
-                /* if a client, exit the loop if connection is gone. */
-                quicrq_cnx_ctx_t*  cnx_ctx = quicrq_first_connection(cb_ctx->qr_ctx);
-                if (cnx_ctx == NULL || quicrq_is_cnx_disconnected(cnx_ctx)) {
-                    ret = PICOQUIC_NO_ERROR_TERMINATE_PACKET_LOOP;
-                }
-                else if (!quicrq_cnx_has_stream(cnx_ctx)) {
-                    ret = quicrq_close_cnx(cnx_ctx);
-                }
+                ret = quicrq_app_loop_cb_check_fin(cb_ctx);
             }
             break;
         case picoquic_packet_loop_after_send:
             /* Post send callback. Check whether sources need to be awakaned */
             quicrq_app_wake_up_sources(cb_ctx, picoquic_get_quic_time(quic));
+            /* if a client, exit the loop if connection is gone. */
+            if (cb_ctx->mode == quicrq_app_mode_client) {
+                /* if a client, exit the loop if connection is gone. */
+                ret = quicrq_app_loop_cb_check_fin(cb_ctx);
+            }
             break;
         case picoquic_packet_loop_port_update:
             break;
@@ -224,6 +238,7 @@ int quicrq_app_add_source(quicrq_app_loop_cb_t* cb_ctx, uint8_t* url, size_t url
     char const* media_source_path, uint64_t current_time)
 {
     int ret = 0;
+    quicrq_test_source_t* source = NULL;
     if (cb_ctx->nb_test_sources >= cb_ctx->allocated_test_sources) {
         size_t new_nb = (cb_ctx->allocated_test_sources == 0) ? 8 : 2 * cb_ctx->allocated_test_sources;
         quicrq_test_source_t** new_test_source_ctx =
@@ -244,19 +259,51 @@ int quicrq_app_add_source(quicrq_app_loop_cb_t* cb_ctx, uint8_t* url, size_t url
             cb_ctx->allocated_test_sources = new_nb;
         }
     }
-    cb_ctx->test_source_ctx[cb_ctx->nb_test_sources]->srce_ctx =
-        test_media_publish(cb_ctx->qr_ctx, (uint8_t*)url, url_length,
-            media_source_path, NULL, 1,
-            &cb_ctx->test_source_ctx[cb_ctx->nb_test_sources]->next_source_time,
-            current_time);
-    if (cb_ctx->test_source_ctx[cb_ctx->nb_test_sources]->srce_ctx == NULL) {
-        fprintf(stderr, "Cannot create source for path %s\n", media_source_path);
-        ret = -1;
+
+    if (ret == 0) {
+        quicrq_test_source_t* source =
+            (quicrq_test_source_t*)malloc(sizeof(quicrq_test_source_t));
+        if (source == NULL) {
+            fprintf(stderr, "Cannot allocate source number %zu\n", cb_ctx->nb_test_sources + 1);
+            ret = -1;
+        }
+        else {
+            memset(source, 0, sizeof(quicrq_test_source_t));
+            source->srce_ctx =
+                test_media_publish(cb_ctx->qr_ctx, (uint8_t*)url, url_length,
+                    media_source_path, NULL, 1,
+                    &source->next_source_time,
+                    current_time);
+            if (source->srce_ctx == NULL) {
+                free(source);
+                source = NULL;
+                fprintf(stderr, "Cannot create source for path %s\n", media_source_path);
+                ret = -1;
+            }
+            else {
+                cb_ctx->test_source_ctx[cb_ctx->nb_test_sources] = source;
+                cb_ctx->nb_test_sources++;
+            }
+        }
     }
-    else {
-        cb_ctx->nb_test_sources++;
-    }
+
     return ret;
+}
+
+void quicrq_app_free_sources(quicrq_app_loop_cb_t* cb_ctx)
+{
+    if (cb_ctx->test_source_ctx != NULL) {
+        for (size_t i = 0; i < cb_ctx->nb_test_sources; i++) {
+            quicrq_test_source_t* source = cb_ctx->test_source_ctx[i];
+            if (source != NULL) {
+                quicrq_delete_source(source->srce_ctx, cb_ctx->qr_ctx);
+                free(source);
+                cb_ctx->test_source_ctx[i] = NULL;
+            }
+        }
+        free(cb_ctx->test_source_ctx);
+        cb_ctx->test_source_ctx = NULL;
+    }
 }
 
 char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char const* scenario,
@@ -361,6 +408,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
         ret = -1;
     }
     else {
+        cb_ctx.mode = mode;
         /* TODO: Verify that the ALPN configured corresponds to our application. */
         /* Create a picoquic context, using the configuration */
         quic = picoquic_create_and_configure(config,
@@ -445,12 +493,10 @@ int quic_app_loop(picoquic_quic_config_t* config,
 
     /* And exit */
     printf("Quicrq_app loop exit, ret = %d (0x%x)\n", ret, ret);
+    /* Release the media sources*/
+    quicrq_app_free_sources(&cb_ctx);
     /* Free the quicrq context */
     quicrq_delete(cb_ctx.qr_ctx);
-    /* release the callback context storage */
-    if (cb_ctx.test_source_ctx != NULL) {
-        free(cb_ctx.test_source_ctx);
-    }
 
     return ret;
 }
@@ -549,19 +595,25 @@ int main(int argc, char** argv)
                     usage();
                 }
             }
+        }
 
+        if (optind < argc) {
             if (mode != quicrq_app_mode_relay) {
-                if (optind < argc) {
-                    usage();
-                }
-                else {
-                    scenario = argv[optind++];
-                }
+                scenario = argv[optind++];
             }
-
-            if (optind < argc) {
+            else {
+                fprintf(stderr, "No scenario expected in relay mode: %s\n", optarg);
                 usage();
             }
+        }
+        else if (mode == quicrq_app_mode_client) {
+            fprintf(stderr, "Scenario expected in client mode!\n");
+            usage();
+        }
+        
+        if (optind < argc) {
+            fprintf(stderr, "Extra argument not expected: %s\n", optarg);
+            usage();
         }
     }
 
