@@ -526,6 +526,35 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
     return ret;
 }
 
+
+/* When closing a stream, remove the stream from the source's wakeup list 
+ */
+void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
+{
+    quicrq_media_source_ctx_t* srce_ctx = stream_ctx->media_source;
+    if (srce_ctx != NULL) {
+        quicrq_stream_ctx_t* previous = stream_ctx->previous_stream_for_source;
+        quicrq_stream_ctx_t* next = stream_ctx->next_stream_for_source;
+
+        if (next != NULL) {
+            next->previous_stream_for_source = previous;
+        }
+        else {
+            srce_ctx->last_stream = previous;
+        }
+
+        if (previous != NULL) {
+            previous->next_stream_for_source = next;
+        }
+        else {
+            srce_ctx->first_stream = next;
+        }
+        stream_ctx->media_source = NULL;
+        stream_ctx->previous_stream_for_source = NULL;
+        stream_ctx->next_stream_for_source = NULL;
+    }
+}
+
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->is_datagram) {
@@ -536,6 +565,7 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     }
 }
+
 
 /* When data is available for a source, wake up the corresponding connection 
  * and possibly stream.
@@ -549,6 +579,7 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
         stream_ctx = stream_ctx->next_stream_for_source;
     }
 };
+
 
 /* Request media in connection.
  * Send a media request to the server.
@@ -648,6 +679,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
                 else {
                     /* Queue the post messageto that stream */
                     stream_ctx->is_client = 0;
+                    stream_ctx->is_sender = 1;
                     message->message_size = message_next - message->buffer;
                     stream_ctx->send_state = quicrq_sending_initial;
                     stream_ctx->receive_state = quicrq_receive_confirmation;

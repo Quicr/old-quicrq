@@ -1168,6 +1168,8 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
         stream_ctx->previous_stream->next_stream = stream_ctx->next_stream;
     }
 
+    quicrq_unsubscribe_local_media(stream_ctx);
+
     while (stream_ctx->datagram_repair_first != NULL) {
         quicrq_remove_repair_in_stream_ctx(stream_ctx, stream_ctx->datagram_repair_first);
     }
@@ -1187,6 +1189,12 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
             }
         }
     }
+
+    /* TODO: remove stream from wake lists */
+    if (stream_ctx->media_source != NULL) {
+
+    }
+
     free(stream_ctx);
 }
 
