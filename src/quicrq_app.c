@@ -238,7 +238,6 @@ int quicrq_app_add_source(quicrq_app_loop_cb_t* cb_ctx, uint8_t* url, size_t url
     char const* media_source_path, uint64_t current_time)
 {
     int ret = 0;
-    quicrq_test_source_t* source = NULL;
     if (cb_ctx->nb_test_sources >= cb_ctx->allocated_test_sources) {
         size_t new_nb = (cb_ctx->allocated_test_sources == 0) ? 8 : 2 * cb_ctx->allocated_test_sources;
         quicrq_test_source_t** new_test_source_ctx =
