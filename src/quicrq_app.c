@@ -346,8 +346,10 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
             /* This is a get */
             if (cb_ctx->mode == quicrq_app_mode_client) {
                 /* Subscribe to the media */
-                ret = test_media_subscribe(cnx_ctx, (uint8_t*)url, url_length, use_datagrams, path,
-                    (log_path[0] == 0) ? NULL : log_path);
+                if (log_path[0] == 0) {
+                    picoquic_sprintf(log_path, sizeof(log_path), NULL, "%s.csv", path);
+                }
+                ret = test_media_subscribe(cnx_ctx, (uint8_t*)url, url_length, use_datagrams, path, log_path);
                 if (ret != 0) {
                     fprintf(stderr, "Cannot subscribe to test media %s, ret = %d", path, ret);
                 }
