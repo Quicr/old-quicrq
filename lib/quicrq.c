@@ -930,7 +930,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
             /* Remove the connection from the context, and then delete it */
-            cnx_ctx->cnx = NULL;
+             cnx_ctx->cnx = NULL;
             quicrq_delete_cnx_context(cnx_ctx);
             picoquic_set_callback(cnx, NULL, NULL);
             break;
