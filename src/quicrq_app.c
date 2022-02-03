@@ -511,7 +511,7 @@ void usage()
 {
     fprintf(stderr, "Quicrq client, relay and server\n");
     fprintf(stderr, "Usage: quicrq_app <options> [mode] [server_name ['d'|'s'] port [scenario]] \n");
-    fprintf(stderr, "  mode can be one of client, relay or server.");
+    fprintf(stderr, "  mode can be one of client, relay or server.\n");
     fprintf(stderr, "  For the client and relay mode, specify server_name and port,\n");
     fprintf(stderr, "  and either 'd' or 's' for datagram or stream mode.\n");
     fprintf(stderr, "  For the server and relay mode, use -p to specify the port,\n");
