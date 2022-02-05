@@ -34,6 +34,8 @@ extern "C" {
     int quicrq_pyramid_datagram_test();
     int quicrq_pyramid_datagram_loss_test();
     int quicrq_pyramid_datagram_client_test();
+    int quicrq_pyramid_datagram_delay_test();
+    int quicrq_pyramid_publish_delay_test();
 
 #ifdef __cplusplus
 }

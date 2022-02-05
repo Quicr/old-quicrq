@@ -165,5 +165,16 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(pyramid_datagram_delay) {
+			int ret = quicrq_pyramid_datagram_delay_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(pyramid_publish_delay) {
+			int ret = quicrq_pyramid_publish_delay_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

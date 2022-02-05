@@ -60,25 +60,34 @@ quicrq_test_config_t* quicrq_test_pyramid_config_create(uint64_t simulate_loss)
 }
 
 /* Basic relay test */
-int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_relay_client)
+int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_relay_client, uint64_t client_start_delay, uint64_t publish_start_delay)
 {
     int ret = 0;
     int nb_steps = 0;
     int nb_inactive = 0;
     int is_closed = 0;
+    int is_publisher_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
     quicrq_test_config_t* config = quicrq_test_pyramid_config_create(simulate_losses);
     quicrq_cnx_ctx_t* cnx_ctx_relay = NULL;
     quicrq_cnx_ctx_t* cnx_ctx_server = NULL;
     int receive_node_id = (is_from_relay_client) ? 3 : 2;
+    int publish_node_id = (is_from_relay_client) ? 2 : 3;
     char media_source_path[512];
     char result_file_name[512];
     char result_log_name[512];
     char text_log_name[512];
     size_t nb_log_chars = 0;
+    uint64_t client_start_time = client_start_delay;
+    uint64_t publisher_start_time = publish_start_delay;
+    uint64_t app_wake_time = (client_start_delay> publish_start_delay)? publish_start_delay: client_start_delay;
+    uint64_t is_client_started = 0;
+    uint64_t is_publisher_started = 0;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "pyramid_textlog-%d-%d-%d-%llx.txt", is_real_time, use_datagrams, is_from_relay_client, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "pyramid_textlog-%d-%d-%d-%llu-%llu-%llu.txt",
+        is_real_time, use_datagrams, is_from_relay_client, (unsigned long long)simulate_losses,
+        (unsigned long long)client_start_delay, (unsigned long long)publish_start_delay);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, is_from_relay_client,
         result_file_name, result_log_name, sizeof(result_file_name));
@@ -100,9 +109,7 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
 
     if (ret == 0) {
         /* Add a test source to the configuration, and to the either the first client (behind relay) or the second (direct to origin) */
-        int publish_node = (is_from_relay_client) ? 2 : 3;
-
-        config->sources[0].srce_ctx = test_media_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
+        config->sources[0].srce_ctx = test_media_publish(config->nodes[publish_node_id], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
             media_source_path, NULL, is_real_time, &config->sources[0].next_source_time, 0);
         if (config->sources[0].srce_ctx == NULL) {
             ret = -1;
@@ -145,28 +152,40 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
             DBG_PRINTF("Cannot create client connection, ret = %d", ret);
         }
     }
-    if (ret == 0) {
-        /* Start pushing from the publisher client */
-        quicrq_cnx_ctx_t* cnx_ctx_post = (is_from_relay_client)?cnx_ctx_relay:cnx_ctx_server;
-        ret = quicrq_cnx_post_media(cnx_ctx_post, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
-        if (ret != 0) {
-            DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
-        }
-        else {
+
+
+    while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
+        /* Run the simulation. Monitor the connection. Monitor the media. */
+        int is_active = 0;
+
+        if (!is_client_started && config->simulated_time >= client_start_time) {
             /* Create a subscription to the test source on client */
             quicrq_cnx_ctx_t* cnx_ctx_get = (is_from_relay_client) ? cnx_ctx_server : cnx_ctx_relay;
             ret = test_media_subscribe(cnx_ctx_get, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
             if (ret != 0) {
                 DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
             }
+            else {
+                is_client_started = 1;
+
+                app_wake_time = (is_publisher_started) ? max_time : publisher_start_time;
+            }
         }
-    }
 
-    while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
-        /* Run the simulation. Monitor the connection. Monitor the media. */
-        int is_active = 0;
+        if ((ret == 0) && !is_publisher_started && (config->simulated_time >= publisher_start_time)) {
+            /* Start pushing from the publisher client */
+            quicrq_cnx_ctx_t* cnx_ctx_post = (is_from_relay_client) ? cnx_ctx_relay : cnx_ctx_server;
+            ret = quicrq_cnx_post_media(cnx_ctx_post, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
+            if (ret != 0) {
+                DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+            }
+            else {
+                is_publisher_started = 1;
+                app_wake_time = (is_client_started) ? max_time : client_start_time;
+            }
+        }
 
-        ret = quicrq_test_loop_step(config, &is_active);
+        ret = quicrq_test_loop_step_ex(config, &is_active, app_wake_time);
         if (ret != 0) {
             DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
         }
@@ -188,10 +207,10 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
             break;
         }
         else {
-            /* TODO: add closing condition on server */
             int client_stream_closed = config->nodes[receive_node_id]->first_cnx == NULL || config->nodes[receive_node_id]->first_cnx->first_stream == NULL;
+            int publish_stream_closed = config->nodes[publish_node_id]->first_cnx == NULL || config->nodes[publish_node_id]->first_cnx->first_stream == NULL;
 
-            if (!is_closed && client_stream_closed) {
+            if (!is_closed && client_stream_closed && is_client_started) {
                 if (config->nodes[receive_node_id]->first_cnx != NULL) {
                     /* Client is done. Close client connection without waiting for timer */
                     ret = picoquic_close(config->nodes[receive_node_id]->first_cnx->cnx, 0);
@@ -200,6 +219,19 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
                     }
                 }
                 is_closed = 1;
+            }
+
+            if (is_publisher_started && !is_publisher_closed && publish_stream_closed) {
+                /* Publisher is done. Close publisher connection immediately, to test that receivers will
+                 * still receive the last data even if the publisher is closed. */
+                if (config->nodes[publish_node_id]->first_cnx != NULL) {
+                    /* Client is done. Close client connection without waiting for timer */
+                    ret = picoquic_close(config->nodes[publish_node_id]->first_cnx->cnx, 0);
+                    if (ret != 0) {
+                        DBG_PRINTF("Cannot close publisher connection, ret = %d", ret);
+                    }
+                }
+                is_publisher_closed = 1;
             }
         }
     }
@@ -226,36 +258,52 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
 
 int quicrq_pyramid_basic_test()
 {
-    int ret = quicrq_pyramid_testone(1, 0, 0, 0);
+    int ret = quicrq_pyramid_testone(1, 0, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_datagram_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0, 0);
+    int ret = quicrq_pyramid_testone(1, 1, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_datagram_loss_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0x7080, 0);
+    int ret = quicrq_pyramid_testone(1, 1, 0x7080, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_basic_client_test()
 {
-    int ret = quicrq_pyramid_testone(1, 0, 0, 1);
+    int ret = quicrq_pyramid_testone(1, 0, 0, 1, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_datagram_client_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0, 1);
+    int ret = quicrq_pyramid_testone(1, 1, 0, 1, 0, 0);
 
     return ret;
 }
+
+int quicrq_pyramid_datagram_delay_test()
+{
+    int ret = quicrq_pyramid_testone(1, 1, 0, 1, 2000000, 0);
+
+    return ret;
+}
+
+int quicrq_pyramid_publish_delay_test()
+{
+    int ret = quicrq_pyramid_testone(1, 1, 0, 1, 0, 2000000);
+
+    return ret;
+}
+
+
 
