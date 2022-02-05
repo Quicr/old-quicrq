@@ -30,6 +30,9 @@
     <ClCompile Include="..\tests\triangle_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\tests\pyramid_test.c">
+      <Filter>Resource Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\tests\quicrq_test_internal.h">

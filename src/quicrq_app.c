@@ -457,10 +457,13 @@ int quic_app_loop(picoquic_quic_config_t* config,
         }
     }
     /* If relay, enable relaying */
-    if (ret == 0 && mode == quicrq_app_mode_client) {
+    if (ret == 0 && mode == quicrq_app_mode_relay) {
         ret = quicrq_enable_relay(cb_ctx.qr_ctx, sni, (struct sockaddr*)&addr, use_datagram);
         if (ret != 0) {
             fprintf(stderr, "Cannot initialize relay to %s\n", server_name);
+        }
+        else {
+            fprintf(stdout, "Relaying to %s:%d\n", server_name, server_port);
         }
     }
 
