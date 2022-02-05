@@ -1190,11 +1190,6 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
         }
     }
 
-    /* TODO: remove stream from wake lists */
-    if (stream_ctx->media_source != NULL) {
-
-    }
-
     free(stream_ctx);
 }
 

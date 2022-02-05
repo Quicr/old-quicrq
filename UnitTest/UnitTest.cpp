@@ -9,7 +9,7 @@ namespace UnitTest
 	TEST_CLASS(UnitTest)
 	{
 	public:
-		
+
 		TEST_METHOD(basic)
 		{
 			int ret = quicrq_basic_test();
@@ -137,6 +137,42 @@ namespace UnitTest
 
 		TEST_METHOD(triangle_datagram_loss) {
 			int ret = quicrq_triangle_datagram_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(pyramid_basic_test) {
+			int ret = quicrq_pyramid_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(pyramid_datagram_test) {
+			int ret = quicrq_pyramid_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(pyramid_datagram_loss_test) {
+			int ret = quicrq_pyramid_datagram_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(pyramid_datagram_client_test) {
+			int ret = quicrq_pyramid_datagram_client_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(pyramid_datagram_delay) {
+			int ret = quicrq_pyramid_datagram_delay_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(pyramid_publish_delay) {
+			int ret = quicrq_pyramid_publish_delay_test();
 
 			Assert::AreEqual(ret, 0);
 		}

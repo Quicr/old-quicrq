@@ -166,7 +166,7 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
 }
 
 /* Execute the loop */
-int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
+int quicrq_test_loop_step_ex(quicrq_test_config_t* config, int* is_active, uint64_t app_wake_time)
 {
     int ret = 0;
     int next_step_type = 0;
@@ -200,6 +200,14 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
             next_step_index = i;
         }
     }
+
+    if (next_time > app_wake_time) {
+        /* Special case. pretend that node 0 has to be waken up */
+        next_time = app_wake_time;
+        next_step_type = 2;
+        next_step_index = 0;
+    }
+
     if (next_time < UINT64_MAX) {
         /* Update the time */
         if (next_time > config->simulated_time) {
@@ -228,6 +236,11 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active)
     }
 
     return ret;
+}
+
+/* Execute the loop */
+int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active) {
+    return quicrq_test_loop_step_ex(config, is_active, UINT64_MAX);
 }
 
 /* Delete a configuration */

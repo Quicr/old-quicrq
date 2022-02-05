@@ -61,6 +61,7 @@ void quicrq_test_config_delete(quicrq_test_config_t* config);
 struct sockaddr* quicrq_test_find_send_addr(quicrq_test_config_t* config, int srce_node_id, int dest_node_id);
 /* Create a connection between two nodes */
 quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, int client_node, int server_node);
+int quicrq_test_loop_step_ex(quicrq_test_config_t* config, int* is_active, uint64_t app_wake_time);
 /* Execute one round of the network simulation loop */
 int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active);
 
