@@ -74,6 +74,18 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active);
 extern char const* quicrq_test_picoquic_solution_dir;
 extern char const* quicrq_test_solution_dir;
 
+/* Definition of a client target */
+typedef struct st_quicrq_test_config_target_t {
+    char const* url;
+    size_t url_length;
+    char const* ref;
+    char* target_bin;
+    char* target_csv;
+} quicrq_test_config_target_t;
+
+quicrq_test_config_target_t* quicrq_test_config_target_create(char const * test_id, char const * url, int client_id, char const* ref);
+void quicrq_test_config_target_free(quicrq_test_config_target_t* target);
+
 /* Test media definitions
  */
 

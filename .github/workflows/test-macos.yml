@@ -2,7 +2,11 @@
 name: "TestMacOs"
 
 on:
-  push
+  push:
+    branches: [ main ]
+  pull_request:
+    branches:
+      - main
 
 jobs:
   analyze:
@@ -25,7 +29,7 @@ jobs:
           ./ci/build_picotls.sh
           ./ci/build_picoquic.sh
      
-      # Build quicdoq and run tests
+      # Build quicrq and run tests
       - run: |
           mkdir build
           cd build
