@@ -243,6 +243,47 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active) {
     return quicrq_test_loop_step_ex(config, is_active, UINT64_MAX);
 }
 
+/* Manage different file names for different receivers and sources */
+void quicrq_test_config_target_free(quicrq_test_config_target_t* target)
+{
+    if (target->target_bin != NULL) {
+        free(target->target_bin);
+    }
+
+    if (target->target_csv != NULL) {
+        free(target->target_csv);
+    }
+
+    free(target);
+}
+
+quicrq_test_config_target_t* quicrq_test_config_target_create(char const* test_id, char const* url, int client_id, char const* ref)
+{
+    quicrq_test_config_target_t* target = (quicrq_test_config_target_t*)malloc(sizeof(quicrq_test_config_target_t));
+
+    if (target != NULL) {
+        size_t id_len = strlen(test_id);
+        size_t url_length = strlen(url);
+        size_t name_len = id_len + 1 + url_length + 1 + 9 + 1 + 3 + 1;
+
+        memset(target, 0, sizeof(quicrq_test_config_target_t));
+        target->url = url;
+        target->ref = ref;
+        target->url_length = url_length;
+        target->target_bin = (char*)malloc(name_len);
+        target->target_csv = (char*)malloc(name_len);
+        if (target->target_bin != NULL && target->target_csv != NULL) {
+            (void)picoquic_sprintf(target->target_bin, name_len, NULL, "%s_%s_%d.bin", test_id, url, client_id);
+            (void)picoquic_sprintf(target->target_csv, name_len, NULL, "%s_%s_%d.csv", test_id, url, client_id);
+        }
+        else {
+            quicrq_test_config_target_free(target);
+            target = NULL;
+        }
+    }
+    return target;
+}
+
 /* Delete a configuration */
 void quicrq_test_config_delete(quicrq_test_config_t* config)
 {

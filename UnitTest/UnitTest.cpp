@@ -176,5 +176,23 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(twoways_basic_test) {
+			int ret = quicrq_twoways_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(twoways_datagram_test) {
+			int ret = quicrq_twoways_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(twoways_datagram_loss_test) {
+			int ret = quicrq_twoways_datagram_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

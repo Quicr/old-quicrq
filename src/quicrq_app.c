@@ -81,7 +81,13 @@ void quicrq_app_check_source_time(quicrq_app_loop_cb_t* cb_ctx,
     for (int i = 0; i < cb_ctx->nb_test_sources; i++) {
         if (cb_ctx->test_source_ctx[i]->next_source_time < next_time) {
             next_time = cb_ctx->test_source_ctx[i]->next_source_time;
-            time_check_arg->delta_t = next_time - time_check_arg->current_time;
+            if (next_time > time_check_arg->current_time) {
+                time_check_arg->delta_t = next_time - time_check_arg->current_time;
+            }
+            else {
+                next_time = time_check_arg->current_time;
+                time_check_arg->delta_t = 0;
+            }
         }
     }
 }
