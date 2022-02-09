@@ -5,6 +5,9 @@
 #include "quicrq_relay.h"
 #include "quicrq_internal.h"
 #include "quicrq_test_internal.h"
+#if 1
+#include "picoquic_internal.h"
+#endif
 
 /* two ways test
  * Test a "two ways" configuration, in which two clients communicate through a server.
@@ -76,6 +79,10 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
     quicrq_cnx_ctx_t* cnx_ctx[2] = { NULL, NULL };
     quicrq_test_config_target_t* target[2] = { NULL, NULL };
     uint64_t client_close_time = UINT64_MAX;
+#if 1
+    int stream_is_blocked[2] = { 0, 0 };
+    test_media_publisher_context_t* pub_ctx_ref[2] = { NULL, NULL };
+#endif
 
     if (config == NULL) {
         ret = -1;
@@ -119,7 +126,7 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
         for (int publish_node = 1; publish_node < 3; publish_node++) {
             int source_id = publish_node - 1;
             config->sources[source_id].srce_ctx = test_media_publish(config->nodes[publish_node], (uint8_t*)url[source_id], strlen(url[source_id]),
-                media_source_path, NULL, is_real_time, &config->sources[0].next_source_time, 0);
+                media_source_path, NULL, is_real_time, &config->sources[source_id].next_source_time, 0);
             if (config->sources[source_id].srce_ctx == NULL) {
                 ret = -1;
                 DBG_PRINTF("Cannot publish test media %s, ret = %d", url[source_id], ret);
