@@ -141,25 +141,25 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(pyramid_basic_test) {
+		TEST_METHOD(pyramid_basic) {
 			int ret = quicrq_pyramid_basic_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(pyramid_datagram_test) {
+		TEST_METHOD(pyramid_datagram) {
 			int ret = quicrq_pyramid_datagram_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(pyramid_datagram_loss_test) {
+		TEST_METHOD(pyramid_datagram_loss) {
 			int ret = quicrq_pyramid_datagram_loss_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(pyramid_datagram_client_test) {
+		TEST_METHOD(pyramid_datagram_client) {
 			int ret = quicrq_pyramid_datagram_client_test();
 
 			Assert::AreEqual(ret, 0);
@@ -177,19 +177,19 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(twoways_basic_test) {
+		TEST_METHOD(twoways_basic) {
 			int ret = quicrq_twoways_basic_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(twoways_datagram_test) {
+		TEST_METHOD(twoways_datagram) {
 			int ret = quicrq_twoways_datagram_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(twoways_datagram_loss_test) {
+		TEST_METHOD(twoways_datagram_loss) {
 			int ret = quicrq_twoways_datagram_loss_test();
 
 			Assert::AreEqual(ret, 0);

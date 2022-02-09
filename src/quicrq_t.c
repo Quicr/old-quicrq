@@ -43,15 +43,15 @@ static const quicrq_test_def_t test_table[] =
     { "triangle_basic", quicrq_triangle_basic_test },
     { "triangle_datagram", quicrq_triangle_datagram_test },
     { "triangle_datagram_loss", quicrq_triangle_datagram_loss_test },
-    { "pyramid_basic_test", quicrq_pyramid_basic_test },
-    { "pyramid_datagram_test", quicrq_pyramid_datagram_test },
-    { "pyramid_datagram_loss_test", quicrq_pyramid_datagram_loss_test },
-    { "pyramid_datagram_client_test", quicrq_pyramid_datagram_client_test },
+    { "pyramid_basic", quicrq_pyramid_basic_test },
+    { "pyramid_datagram", quicrq_pyramid_datagram_test },
+    { "pyramid_datagram_loss", quicrq_pyramid_datagram_loss_test },
+    { "pyramid_datagram_client", quicrq_pyramid_datagram_client_test },
     { "pyramid_datagram_delay", quicrq_pyramid_datagram_delay_test },
     { "pyramid_publish_delay", quicrq_pyramid_publish_delay_test },
-    { "twoways_basic_test", quicrq_twoways_basic_test },
-    { "twoways_datagram_test", quicrq_twoways_datagram_test },
-    { "twoways_datagram_loss_test", quicrq_twoways_datagram_loss_test }
+    { "twoways_basic", quicrq_twoways_basic_test },
+    { "twoways_datagram", quicrq_twoways_datagram_test },
+    { "twoways_datagram_loss", quicrq_twoways_datagram_loss_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);
