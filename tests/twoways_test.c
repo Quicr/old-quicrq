@@ -79,10 +79,6 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
     quicrq_cnx_ctx_t* cnx_ctx[2] = { NULL, NULL };
     quicrq_test_config_target_t* target[2] = { NULL, NULL };
     uint64_t client_close_time = UINT64_MAX;
-#if 1
-    int stream_is_blocked[2] = { 0, 0 };
-    test_media_publisher_context_t* pub_ctx_ref[2] = { NULL, NULL };
-#endif
 
     if (config == NULL) {
         ret = -1;
