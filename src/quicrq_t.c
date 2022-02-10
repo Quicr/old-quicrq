@@ -51,7 +51,10 @@ static const quicrq_test_def_t test_table[] =
     { "pyramid_publish_delay", quicrq_pyramid_publish_delay_test },
     { "twoways_basic", quicrq_twoways_basic_test },
     { "twoways_datagram", quicrq_twoways_datagram_test },
-    { "twoways_datagram_loss", quicrq_twoways_datagram_loss_test }
+    { "twoways_datagram_loss", quicrq_twoways_datagram_loss_test },
+    { "threelegs_basic",  quicrq_threelegs_basic_test },
+    { "threelegs_datagram",  quicrq_threelegs_datagram_test },
+    { "threelegs_datagram_loss",  quicrq_threelegs_datagram_loss_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);

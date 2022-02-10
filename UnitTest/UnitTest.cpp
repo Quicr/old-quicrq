@@ -194,5 +194,23 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(threelegs_basic) {
+			int ret = quicrq_threelegs_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(threelegs_datagram) {
+			int ret = quicrq_threelegs_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(threelegs_datagram_loss) {
+			int ret = quicrq_threelegs_datagram_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

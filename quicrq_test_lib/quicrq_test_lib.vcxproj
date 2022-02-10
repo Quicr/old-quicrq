@@ -148,6 +148,7 @@
     <ClCompile Include="..\tests\relay_test.c" />
     <ClCompile Include="..\tests\proto_test.c" />
     <ClCompile Include="..\tests\test_media.c" />
+    <ClCompile Include="..\tests\threelegs_test.c" />
     <ClCompile Include="..\tests\triangle_test.c" />
     <ClCompile Include="..\tests\twoways_test.c" />
   </ItemGroup>

@@ -46,7 +46,6 @@
   * The frames are added when received on a client connection, organized as a binary tree.
   * The relayed media is kept until the end of the relay connection. This is of course not
   * sustainable, some version of cache management will have to be added later.
-  *
   */
 
 typedef struct st_quicrq_relay_cached_frame_t {

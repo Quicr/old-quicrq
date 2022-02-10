@@ -39,6 +39,9 @@ extern "C" {
     int quicrq_twoways_basic_test();
     int quicrq_twoways_datagram_test();
     int quicrq_twoways_datagram_loss_test();
+    int quicrq_threelegs_basic_test();
+    int quicrq_threelegs_datagram_test();
+    int quicrq_threelegs_datagram_loss_test();
 
 #ifdef __cplusplus
 }
