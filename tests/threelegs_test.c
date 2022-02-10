@@ -108,7 +108,6 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
     uint64_t start_delay[3] = { 1000000, 0, 2000000 };
     int client_is_started[3] = { 0, 0, 0 };
     quicrq_cnx_ctx_t* cnx_ctx[3] = { NULL, NULL, NULL };
-    uint64_t client_close_time = UINT64_MAX;
     int partial_closure = 0;
 
 
@@ -168,7 +167,6 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
     while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
         /* Run the simulation. Monitor the connection. Monitor the media. */
         int is_active = 0;
-        int is_client_closed[3] = { 0, 0, 0 };
         uint64_t app_wake_time = UINT64_MAX;
         for (int i = 0; ret == 0 && i < 3; i++) {
             if (!client_is_started[i]) {
@@ -252,7 +250,6 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
                 if (all_done) {
                     /* Clients are done. Close connections without waiting for timer -- if not closed yet */
                     is_closed = 1;
-                    client_close_time = config->simulated_time;
                     for (int c_nb = 2; ret == 0 && c_nb < 5; c_nb++) {
                         if (config->nodes[c_nb]->first_cnx != NULL) {
                             ret = quicrq_close_cnx(config->nodes[c_nb]->first_cnx);
