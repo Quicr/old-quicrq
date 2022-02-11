@@ -46,7 +46,6 @@
   * The frames are added when received on a client connection, organized as a binary tree.
   * The relayed media is kept until the end of the relay connection. This is of course not
   * sustainable, some version of cache management will have to be added later.
-  *
   */
 
 typedef struct st_quicrq_relay_cached_frame_t {
@@ -73,7 +72,6 @@ typedef struct st_quicrq_relay_publisher_context_t {
 typedef struct st_quicrq_relay_consumer_context_t {
     quicrq_relay_cached_media_t* cached_ctx;
     quicrq_reassembly_context_t reassembly_ctx;
-    int is_finished : 1;
 } quicrq_relay_consumer_context_t;
 
 typedef struct st_quicrq_relay_context_t {
@@ -185,7 +183,7 @@ int quicrq_relay_consumer_cb(
     case quicrq_media_datagram_ready:
         ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, frame_id, offset,
             is_last_segment, data_length, quicrq_relay_consumer_frame_ready, media_ctx);
-        if (ret == 0 && cons_ctx->is_finished) {
+        if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
         break;

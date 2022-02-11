@@ -36,6 +36,9 @@
     <ClCompile Include="..\tests\twoways_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\tests\threelegs_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\tests\quicrq_test_internal.h">

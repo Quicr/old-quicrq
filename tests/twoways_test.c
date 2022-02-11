@@ -5,9 +5,7 @@
 #include "quicrq_relay.h"
 #include "quicrq_internal.h"
 #include "quicrq_test_internal.h"
-#if 1
 #include "picoquic_internal.h"
-#endif
 
 /* two ways test
  * Test a "two ways" configuration, in which two clients communicate through a server.
