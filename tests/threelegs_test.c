@@ -92,8 +92,6 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
     int nb_steps = 0;
     int nb_inactive = 0;
     int is_closed = 0;
-    int all_receivers_done = 0;
-    uint64_t all_received_time = UINT64_MAX;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
     quicrq_test_config_t* config = quicrq_test_threelegs_config_create(simulate_losses);
@@ -230,7 +228,6 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
         /* if the media is sent and received, exit the loop */
         if (ret == 0) {
             int all_closed = 1;
-            int all_received = 1;
             int all_done = 1;
             int nb_done = 0;
             int is_client_closed[3] = { 0, 0, 0 };
@@ -242,13 +239,7 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
                 is_client_done[i] = client_is_started[i] && (config->nodes[node_id]->first_cnx == NULL || config->nodes[node_id]->first_cnx->first_stream == NULL);
                 all_closed &= is_client_closed[i];
                 all_done &= is_client_done[i];
-                all_received &= (i == 0 || is_client_done[i]);
                 nb_done += is_client_done[i];
-            }
-
-            if (!all_receivers_done && all_received) {
-                all_received_time = config->simulated_time;
-                all_receivers_done = 1;
             }
 
             if (all_closed) {
@@ -281,12 +272,7 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
 
     if (ret == 0 && (!is_closed || config->simulated_time > 12000000)) {
         DBG_PRINTF("Session was not properly closed, time = %" PRIu64, config->simulated_time);
-        if (all_receivers_done && all_received_time <= 12000000) {
-            DBG_PRINTF("All received at time = %" PRIu64, all_received_time);
-        }
-        else {
-            ret = -1;
-        }
+        ret = -1;
     }
 
     /* Verify that media file was received correctly */
@@ -323,7 +309,7 @@ int quicrq_threelegs_datagram_test()
 
 int quicrq_threelegs_datagram_loss_test()
 {
-    int ret = quicrq_threelegs_test_one(1, 0x7080);
+    int ret = quicrq_threelegs_test_one(1, 0x37880);
 
     return ret;
 }
