@@ -144,6 +144,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\tests\basic_test.c" />
+    <ClCompile Include="..\tests\fourlegs_test.c" />
     <ClCompile Include="..\tests\pyramid_test.c" />
     <ClCompile Include="..\tests\relay_test.c" />
     <ClCompile Include="..\tests\proto_test.c" />
@@ -155,10 +156,6 @@
   <ItemGroup>
     <ClInclude Include="..\tests\quicrq_tests.h" />
     <ClInclude Include="..\tests\quicrq_test_internal.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\tests\video1_logref.csv" />
-    <None Include="..\tests\video1_source.bin" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
