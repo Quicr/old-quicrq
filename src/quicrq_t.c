@@ -54,7 +54,12 @@ static const quicrq_test_def_t test_table[] =
     { "twoways_datagram_loss", quicrq_twoways_datagram_loss_test },
     { "threelegs_basic",  quicrq_threelegs_basic_test },
     { "threelegs_datagram",  quicrq_threelegs_datagram_test },
-    { "threelegs_datagram_loss",  quicrq_threelegs_datagram_loss_test }
+    { "threelegs_datagram_loss",  quicrq_threelegs_datagram_loss_test },
+    { "fourlegs_basic", quicrq_fourlegs_basic_test },
+    { "fourlegs_basic_last", quicrq_fourlegs_basic_last_test },
+    { "fourlegs_datagram", quicrq_fourlegs_datagram_test },
+    { "fourlegs_datagram_last", quicrq_fourlegs_datagram_last_test },
+    { "fourlegs_datagram_loss", quicrq_fourlegs_datagram_loss_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);

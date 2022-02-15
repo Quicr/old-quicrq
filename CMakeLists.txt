@@ -21,6 +21,7 @@ set(QUICRQ_LIBRARY_FILES
 
 set(QUICRQ_TEST_LIBRARY_FILES
     tests/basic_test.c
+    tests/fourlegs_test.c
     tests/proto_test.c
     tests/pyramid_test.c
     tests/relay_test.c

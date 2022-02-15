@@ -39,6 +39,9 @@
     <ClCompile Include="..\tests\threelegs_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\tests\fourlegs_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\tests\quicrq_test_internal.h">
@@ -47,13 +50,5 @@
     <ClInclude Include="..\tests\quicrq_tests.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\tests\video1_logref.csv">
-      <Filter>Source Files</Filter>
-    </None>
-    <None Include="..\tests\video1_source.bin">
-      <Filter>Source Files</Filter>
-    </None>
   </ItemGroup>
 </Project>

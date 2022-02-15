@@ -212,5 +212,36 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(fourlegs_basic) {
+			int ret = quicrq_fourlegs_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(fourlegs_basic_last) {
+			int ret = quicrq_fourlegs_basic_last_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(fourlegs_datagram) {
+			int ret = quicrq_fourlegs_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(fourlegs_datagram_last) {
+			int ret = quicrq_fourlegs_datagram_last_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(fourlegs_datagram_loss) {
+			int ret = quicrq_fourlegs_datagram_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 	};
 }

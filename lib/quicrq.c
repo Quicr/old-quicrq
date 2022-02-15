@@ -316,7 +316,9 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
         /* Find the stream context by datagram ID */
         stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 0);
         if (stream_ctx == NULL) {
-            ret = -1;
+            if (datagram_stream_id >= cnx_ctx->next_abandon_datagram_id) {
+                ret = -1;
+            }
         }
         else {
             /* Pass data to the media context. */
@@ -883,8 +885,8 @@ int quicrq_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
             if (stream_ctx == NULL) {
-                /* Create and initialize stream context */
-                stream_ctx = quicrq_create_stream_context(cnx_ctx, stream_id);
+                /* Retrieve, or create and initialize stream context */
+                stream_ctx = quicrq_find_or_create_stream(stream_id, cnx_ctx, 1);
             }
 
             if (stream_ctx == NULL) {

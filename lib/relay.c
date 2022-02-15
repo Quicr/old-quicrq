@@ -58,6 +58,7 @@ typedef struct st_quicrq_relay_cached_frame_t {
 typedef struct st_quicrq_relay_cached_media_t {
     quicrq_media_source_ctx_t* srce_ctx;
     uint64_t final_frame_id;
+    uint64_t subscribe_stream_id;
     picosplay_tree_t frame_tree;
 } quicrq_relay_cached_media_t;
 
@@ -331,6 +332,7 @@ quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx()
         sizeof(quicrq_relay_cached_media_t));
     if (cache_ctx != NULL) {
         memset(cache_ctx, 0, sizeof(quicrq_relay_cached_media_t));
+        cache_ctx->subscribe_stream_id = UINT64_MAX;
         quicrq_relay_cache_media_init(cache_ctx);
     }
     return cache_ctx;
@@ -389,6 +391,10 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
                     /* Request a URL on a new stream on that connection */
                     ret = quicrq_cnx_subscribe_media(relay_ctx->cnx_ctx, url, url_length,
                         relay_ctx->use_datagrams, quicrq_relay_consumer_cb, cons_ctx);
+                    if (ret == 0){
+                        /* Document the stream ID for that cache */
+                        cache_ctx->subscribe_stream_id = relay_ctx->cnx_ctx->last_stream->stream_id;
+                    }
                 }
             }
         }
@@ -426,19 +432,44 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
     quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
     quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)qr_ctx->default_source_ctx;
 
+    quicrq_relay_cached_media_t* cache_ctx = NULL;
+    quicrq_relay_consumer_context_t* cons_ctx = NULL;
+
     /* If there is no valid connection to the server, create one. */
     ret = quicrq_relay_check_server_cnx(relay_ctx, qr_ctx);
     if (ret == 0) {
-        /* Create a cache context for the URL */
-        quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
-        quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx();
-        if (cache_ctx == NULL || cons_ctx == NULL) {
-            ret = -1;
+        quicrq_media_source_ctx_t* srce_ctx = quicrq_find_local_media_source(qr_ctx, url, url_length);
+
+        if (srce_ctx != NULL) {
+            cache_ctx = (quicrq_relay_cached_media_t*)srce_ctx->pub_ctx;
+            if (cache_ctx == NULL) {
+                ret = -1;
+            }
+            else {
+                /* Abandon the stream that was open to receive the media */
+                quicrq_cnx_abandon_stream_id(relay_ctx->cnx_ctx, cache_ctx->subscribe_stream_id);
+            }
         }
         else {
-            /* if succeeded, publish the source */
-            ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
-            if (ret == 0) {
+            /* Create a cache context for the URL */
+            cache_ctx = quicrq_relay_create_cache_ctx();
+            if (cache_ctx != NULL) {
+                ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
+                if (ret != 0) {
+                    /* Could not publish the media, free the resource. */
+                    free(cache_ctx);
+                    cache_ctx = NULL;
+                    ret = -1;
+                }
+            }
+        }
+
+        if (ret == 0) {
+            cons_ctx = quicrq_relay_create_cons_ctx();
+            if (cons_ctx == NULL) {
+                ret = -1;
+            }
+            else {
                 ret = quicrq_cnx_post_media(relay_ctx->cnx_ctx, url, url_length, relay_ctx->use_datagrams);
                 if (ret != 0) {
                     /* TODO: unpublish the media context */
@@ -450,14 +481,9 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
                     ret = quicrq_set_media_stream_ctx(stream_ctx, quicrq_relay_consumer_cb, cons_ctx);
                 }
             }
-
-            if (ret != 0) {
-                /* Could not publish the media, free the resource. */
-                free(cache_ctx);
-                cache_ctx = NULL;
-            }
         }
     }
+
     return ret;
 }
 

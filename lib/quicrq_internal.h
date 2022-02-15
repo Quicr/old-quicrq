@@ -226,6 +226,7 @@ struct st_quicrq_cnx_ctx_t {
     int is_server;
 
     uint64_t next_datagram_stream_id; /* only used for receiving */
+    uint64_t next_abandon_datagram_id; /* used to test whether unexpected datagrams are OK */
     struct st_quicrq_stream_ctx_t* first_stream;
     struct st_quicrq_stream_ctx_t* last_stream;
 };
@@ -276,6 +277,10 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
 
 /* Handle closure of stream after receiving the last bit of data */
 int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int is_datagram, int ret);
+
+void quicrq_cnx_abandon_stream_id(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id);
+
+void quicrq_cnx_abandon_stream(quicrq_stream_ctx_t* stream_ctx);
 
 #ifdef __cplusplus
 }

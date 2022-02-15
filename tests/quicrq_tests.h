@@ -42,6 +42,11 @@ extern "C" {
     int quicrq_threelegs_basic_test();
     int quicrq_threelegs_datagram_test();
     int quicrq_threelegs_datagram_loss_test();
+    int quicrq_fourlegs_basic_test();
+    int quicrq_fourlegs_basic_last_test();
+    int quicrq_fourlegs_datagram_test();
+    int quicrq_fourlegs_datagram_last_test();
+    int quicrq_fourlegs_datagram_loss_test();
 
 #ifdef __cplusplus
 }
