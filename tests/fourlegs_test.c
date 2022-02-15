@@ -145,12 +145,13 @@ int quicrq_fourlegs_test_one(int use_datagrams, uint64_t simulate_losses, int pu
         start_delay[3] = 2000000;
     }
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "fourlegs_textlog-%d-%llx.txt", use_datagrams, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "fourlegs_textlog-%d-%llx-%d.txt",
+        use_datagrams, (unsigned long long)simulate_losses, publish_last);
     for (int i = 0; i < 3; i++) {
-        (void)picoquic_sprintf(result_file_name[i], sizeof(result_file_name_1), &nb_log_chars, "fourlegs-video1-recv-%d-%d-%llx.bin",
-            i+1, use_datagrams, (unsigned long long)simulate_losses);
-        (void)picoquic_sprintf(result_log_name[i], sizeof(result_log_name_1), &nb_log_chars, "fourlegs-video1-log-%d-%d-%llx.csv",
-            i+1, use_datagrams, (unsigned long long)simulate_losses);
+        (void)picoquic_sprintf(result_file_name[i], sizeof(result_file_name_1), &nb_log_chars, "fourlegs-video1-recv-%d-%d-%llx-%d.bin",
+            i+1, use_datagrams, (unsigned long long)simulate_losses, publish_last);
+        (void)picoquic_sprintf(result_log_name[i], sizeof(result_log_name_1), &nb_log_chars, "fourlegs-video1-log-%d-%d-%llx-%d.csv",
+            i+1, use_datagrams, (unsigned long long)simulate_losses, publish_last);
     }
 
     if (config == NULL) {

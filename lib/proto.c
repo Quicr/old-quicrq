@@ -557,12 +557,14 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
 
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
 {
-    if (stream_ctx->is_datagram) {
-        stream_ctx->is_active_datagram = 1;
-        picoquic_mark_datagram_ready(stream_ctx->cnx_ctx->cnx, 1);
-    }
-    else {
-        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+    if (stream_ctx->cnx_ctx->cnx != NULL) {
+        if (stream_ctx->is_datagram) {
+            stream_ctx->is_active_datagram = 1;
+            picoquic_mark_datagram_ready(stream_ctx->cnx_ctx->cnx, 1);
+        }
+        else if (stream_ctx->cnx_ctx->cnx != NULL) {
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        }
     }
 }
 
@@ -774,4 +776,24 @@ int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_
         ret = 0;
     }
     return ret;
+}
+
+/* Abandon a stream before receive is complete */
+void quicrq_cnx_abandon_stream(quicrq_stream_ctx_t* stream_ctx)
+{
+    stream_ctx->send_state = quicrq_sending_fin;
+    (void)picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+    if (stream_ctx->is_datagram && !stream_ctx->is_sender) {
+        if (stream_ctx->cnx_ctx->next_abandon_datagram_id <= stream_ctx->datagram_stream_id) {
+            stream_ctx->cnx_ctx->next_abandon_datagram_id = stream_ctx->datagram_stream_id + 1;
+        }
+    }
+}
+
+void quicrq_cnx_abandon_stream_id(quicrq_cnx_ctx_t * cnx_ctx, uint64_t stream_id)
+{
+    quicrq_stream_ctx_t* stream_ctx = quicrq_find_or_create_stream(stream_id, cnx_ctx, 0);
+    if (stream_ctx != NULL) {
+        quicrq_cnx_abandon_stream(stream_ctx);
+    }
 }
