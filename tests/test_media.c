@@ -927,6 +927,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     int is_media_finished = 0;
     uint64_t simulated_time = 0;
     uint64_t media_next_time = 0;
+    quicrq_media_source_ctx_t* published_source = NULL;
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     quicrq_stream_ctx_t* stream_ctx = NULL;
     quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
@@ -964,9 +965,13 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
 
 
     /* Publish a test file */
-    if (ret == 0 && test_media_publish(qr_ctx, (uint8_t*)media_source_name, strlen(media_source_name),
-            media_source_path, generation_model, is_real_time, &media_next_time, 0) == NULL){
-        ret = -1;
+    if (ret == 0){
+        published_source = test_media_publish(qr_ctx, (uint8_t*)media_source_name, strlen(media_source_name),
+            media_source_path, generation_model, is_real_time, &media_next_time, 0);
+
+        if (published_source == NULL) {
+            ret = -1;
+        }
     }
 
     /* Connect the stream context to the publisher */
@@ -1054,6 +1059,10 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
         quicrq_delete(qr_ctx);
     }
 
+    /* Close media source */
+    if (published_source != NULL) {
+        free(published_source);
+    }
     return ret;
 }
 
