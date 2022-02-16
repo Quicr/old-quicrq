@@ -2,7 +2,6 @@
 #define QUICRQ_REASSEMBLY_H
 
 #include "quicrq.h"
-#include "quicrq_internal.h"
 #include "picoquic_utils.h"
 #include "picosplay.h"
 
