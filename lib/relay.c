@@ -403,9 +403,6 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
         }
         else {
             /* TODO: whatever is needed for origin only behavior. */
-            char buffer[256];
-            picoquic_log_app_message(relay_ctx->cnx_ctx->cnx, "URL: %s is not yet available.",
-                quicrq_uint8_t_to_text(url, url_length, buffer, 256));
         }
 
         if (ret == 0) {
