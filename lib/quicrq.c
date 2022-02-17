@@ -1290,3 +1290,46 @@ uint8_t* quicr_encode_frame_header(uint8_t* fh, const uint8_t* fh_max, const qui
 
     return fh;
 }
+
+/* Utility function, write an URL as a string. */
+const char* quicrq_uint8_t_to_text(const uint8_t* u, size_t length, char* buffer, size_t buffer_length)
+{
+    if (buffer_length < 16) {
+        return "???";
+    }
+    else {
+        size_t available = buffer_length - 8;
+        size_t i = 0;
+        size_t l = 0;
+        for (; l < available && i < length; i++) {
+            int c = u[i];
+            if (c == '\\') {
+                buffer[l++] = '\\';
+                buffer[l++] = '\\';
+            }
+            else if (c >= 32 && c <= 126 && c != '\\') {
+                buffer[l++] = (char)c;
+            }
+            else {
+                int d;
+
+                buffer[l++] = '\\';
+                d = c / 100;
+                buffer[l++] = '0' + d;
+                c -= 100 * d;
+                d = c / 10;
+                buffer[l++] = '0' + d;
+                c -= 10 * d;
+                buffer[l++] = '0' + c;
+            }
+        }
+        if (i < length) {
+            available = buffer_length - 1;
+            for (int j = 0; j < 3 && l < available; j++) {
+                buffer[l++] = '.';
+            }
+        }
+        buffer[l++] = 0;
+        return buffer;
+    }
+}

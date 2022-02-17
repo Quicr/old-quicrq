@@ -393,13 +393,19 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
                         relay_ctx->use_datagrams, quicrq_relay_consumer_cb, cons_ctx);
                     if (ret == 0){
                         /* Document the stream ID for that cache */
-                        cache_ctx->subscribe_stream_id = relay_ctx->cnx_ctx->last_stream->stream_id;
+                        char buffer[256];
+                        cache_ctx->subscribe_stream_id = relay_ctx->cnx_ctx->last_stream->stream_id; 
+                        picoquic_log_app_message(relay_ctx->cnx_ctx->cnx, "Asking server for URL: %s on stream %" PRIu64,
+                            quicrq_uint8_t_to_text(url, url_length, buffer, 256));
                     }
                 }
             }
         }
         else {
             /* TODO: whatever is needed for origin only behavior. */
+            char buffer[256];
+            picoquic_log_app_message(relay_ctx->cnx_ctx->cnx, "URL: %s is not yet available.",
+                quicrq_uint8_t_to_text(url, url_length, buffer, 256));
         }
 
         if (ret == 0) {
@@ -447,14 +453,20 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
             }
             else {
                 /* Abandon the stream that was open to receive the media */
+                char buffer[256];
                 quicrq_cnx_abandon_stream_id(relay_ctx->cnx_ctx, cache_ctx->subscribe_stream_id);
+                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Abandon subscription to URL: %s",
+                    quicrq_uint8_t_to_text(url, url_length, buffer, 256));
             }
         }
         else {
             /* Create a cache context for the URL */
             cache_ctx = quicrq_relay_create_cache_ctx();
             if (cache_ctx != NULL) {
+                char buffer[256];
                 ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
+                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Create cache for URL: %s",
+                    quicrq_uint8_t_to_text(url, url_length, buffer, 256));
                 if (ret != 0) {
                     /* Could not publish the media, free the resource. */
                     free(cache_ctx);
@@ -477,8 +489,12 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
                 }
                 else {
                     /* set the parameter in the stream context. */
+                    char buffer[256];
+
                     cons_ctx->cached_ctx = cache_ctx;
                     ret = quicrq_set_media_stream_ctx(stream_ctx, quicrq_relay_consumer_cb, cons_ctx);
+                    picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Posting URL: %s to server on stream %" PRIu64,
+                        quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
                 }
             }
         }
@@ -534,6 +550,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
     quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
     quicrq_relay_cached_media_t* cache_ctx = NULL;
     quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx();
+    char buffer[256];
 
     if (cons_ctx == NULL) {
         ret = -1;
@@ -543,6 +560,8 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
 
         if (srce_ctx != NULL) {
             cache_ctx = (quicrq_relay_cached_media_t*)srce_ctx->pub_ctx;
+            picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Found cache context for URL: %s",
+                quicrq_uint8_t_to_text(url, url_length, buffer, 256));
         }
         else {
             /* Create a cache context for the URL */
@@ -553,6 +572,12 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
                     /* Could not publish the media, free the resource. */
                     free(cache_ctx);
                     cache_ctx = NULL;
+                    picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Cannot create cache for URL: %s",
+                        quicrq_uint8_t_to_text(url, url_length, buffer, 256));
+                }
+                else {
+                    picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Created cache context for URL: %s",
+                        quicrq_uint8_t_to_text(url, url_length, buffer, 256));
                 }
             }
         }
