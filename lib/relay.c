@@ -396,7 +396,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
                         char buffer[256];
                         cache_ctx->subscribe_stream_id = relay_ctx->cnx_ctx->last_stream->stream_id; 
                         picoquic_log_app_message(relay_ctx->cnx_ctx->cnx, "Asking server for URL: %s on stream %" PRIu64,
-                            quicrq_uint8_t_to_text(url, url_length, buffer, 256));
+                            quicrq_uint8_t_to_text(url, url_length, buffer, 256), cache_ctx->subscribe_stream_id);
                     }
                 }
             }
