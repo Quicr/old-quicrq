@@ -57,7 +57,7 @@ void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx);
 /* Media stream definition.
  * Media is composed of series of frames, frames have
  * headers and content. Header provides information
- * about sufficient for synchronization and replay
+ * about sufficient for synchronization and replay.
  */
 typedef struct st_quicrq_media_frame_header_t {
     uint64_t timestamp; /* time from start of media segment */
@@ -70,12 +70,46 @@ typedef struct st_quicrq_media_frame_header_t {
  * Publisher connect a source to a local context by calling `quicrq_publish_source`.
  * This registers an URL for the source, and creates a source entry in the local context.
  * 
- * Local connections can subscribe to the 
- * Simplified API for now:
  * - qr_ctx: QUICR context in which the media is published
- * - media_url: URL of the media segment
- * - media_publisher_cb: callback function for processing media arrival
- * - media_ctx: media context managed by the publisher
+ * - url, url_length: URL of the media segment
+ * - media_publisher_subscribe_fn: callback function for subscribing a new consumer to the media source.
+ * - media_publisher_fn: callback function for processing media arrival
+ * - media_ctx: media context managed by the publisher, specific to that URL.
+ * 
+ * When a subscribe request arrives, the stack looks for a media source, which could be
+ * an actual source, or the cached version of the media published by another node
+ * for that URL. (In relays and origin servers, a new cache entry is automatically
+ * created upon the request to an URL.) Once the stack has identified the source
+ * context, it will make a first call to the "subscribe" function, which will
+ * return a "media context" specific to that source and that subscription.
+ * 
+ * After that, the stack will try to send the media as a series of frames, each
+ * composed of a series of segments. The data is obtained by a series of calls
+ * to the "publisher" function, with the following parameters:
+ * 
+ * - action: set to get data for retrieving data, or close to indicate end of
+ *   the transmission. After a call to close, the media context can be freed.
+ * - media_ctx: as produced by the call to the subscribe function.
+ * - data: either NULL, or a pointer to the memory location where data shall
+ *   be copied. (See below for the logic of calling the function twice)
+ * - data_max_size: the space available at the memory location.
+ * - &data_length: the data available to fill that space.
+ * - &is_last_segment: whether this is the last segment in a frame
+ * - &is_media_finished: whether there is no more data to send.
+ * - current_time: time, in microseconds. (May be virtual time during simulations
+ *   and tests.)
+ * 
+ * The stack will make two calls to fill a packet: a first call with "data" set
+ * to NULL to learn the number of bytes available, and the value of "is_last_segment"
+ * and "is_media_finished", and a second call to actually request the data. It is
+ * essential that data_length, is_last_segment and is_media_finished are set to
+ * the same value in both calls.
+ * 
+ * The media is sent as a series of frames. The stack inserts a small header in
+ * front of each segment to specify the frame number, the offset in the frame,
+ * and whether this is the last segment. This is used by the reassembly
+ * processes (see quicrq_reassembly.h). Intermediate relay may wait until the
+ * last segment is received to forward data belonging to a frame.
  */
 
 typedef enum {
@@ -83,7 +117,7 @@ typedef enum {
     quicrq_media_source_close
 } quicrq_media_source_action_enum;
 
-typedef void* (*quicrq_media_publisher_subscribe_fn)(/*const uint8_t* media_url, const size_t media_url_length,*/ void* pub_ctx);
+typedef void* (*quicrq_media_publisher_subscribe_fn)(void* pub_ctx);
 typedef int (*quicrq_media_publisher_fn)(
     quicrq_media_source_action_enum action,
     void* media_ctx,
@@ -111,14 +145,6 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
 typedef int (*quicrq_default_source_fn)(void * default_source_ctx, quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn default_source_fn, void * default_source_ctx);
 
-/* Subscribe to a media segment using QUIC streams.
- * Simplified API for now:
- * - cnx_ctx: context of the QUICR connection
- * - media_url: URL of the media segment
- * - media_consumer_cb: callback function for processing media arrival
- * - media_ctx: media context managed by the application
- */
-/* TBD */
 
  /* Quic media consumer.
   * The application sets a "media consumer function" and a "media consumer context" for

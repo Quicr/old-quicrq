@@ -216,6 +216,9 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         ret = -1;
                     }
                     else {
+                        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Fin frame of stream %" PRIu64 " : %" PRIu64,
+                            stream_ctx->stream_id, stream_ctx->final_frame_id);
+
                         stream_header[0] = (uint8_t)(h_size >> 8);
                         stream_header[1] = (uint8_t)(h_size & 0xff);
                         memcpy(buffer, stream_header, h_size);
@@ -232,6 +235,10 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
             /* Encode the actual header, instead of a prediction */
             h_byte = quicrq_repair_request_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_REPAIR,
                 stream_ctx->next_frame_id, stream_ctx->next_frame_offset, is_last_segment, available);
+            if (is_last_segment) {
+                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final segment of frame %" PRIu64 " on stream %" PRIu64,
+                    stream_ctx->next_frame_id, stream_ctx->stream_id);
+            }
             if (h_byte == NULL) {
                 /* That should not happen, unless the stream_header size was way too small */
                 ret = -1;
@@ -318,10 +325,16 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
         if (stream_ctx == NULL) {
             if (datagram_stream_id >= cnx_ctx->next_abandon_datagram_id) {
                 ret = -1;
+                picoquic_log_app_message(cnx_ctx->cnx, "Unexpected datagram on stream %" PRIu64,
+                    datagram_stream_id);
             }
         }
         else {
             /* Pass data to the media context. */
+            if (is_last_segment) {
+                picoquic_log_app_message(cnx_ctx->cnx, "Received final segment of frame %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
+                    frame_id, datagram_stream_id, stream_ctx->stream_id);
+            }
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, frame_id, frame_offset, is_last_segment, bytes_max - next_bytes);
             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
         }
@@ -1289,4 +1302,47 @@ uint8_t* quicr_encode_frame_header(uint8_t* fh, const uint8_t* fh_max, const qui
     }
 
     return fh;
+}
+
+/* Utility function, write an URL as a string. */
+const char* quicrq_uint8_t_to_text(const uint8_t* u, size_t length, char* buffer, size_t buffer_length)
+{
+    if (buffer_length < 16) {
+        return "???";
+    }
+    else {
+        size_t available = buffer_length - 8;
+        size_t i = 0;
+        size_t l = 0;
+        for (; l < available && i < length; i++) {
+            int c = u[i];
+            if (c == '\\') {
+                buffer[l++] = '\\';
+                buffer[l++] = '\\';
+            }
+            else if (c >= 32 && c <= 126 && c != '\\') {
+                buffer[l++] = (char)c;
+            }
+            else {
+                int d;
+
+                buffer[l++] = '\\';
+                d = c / 100;
+                buffer[l++] = '0' + d;
+                c -= 100 * d;
+                d = c / 10;
+                buffer[l++] = '0' + d;
+                c -= 10 * d;
+                buffer[l++] = '0' + c;
+            }
+        }
+        if (i < length) {
+            available = buffer_length - 1;
+            for (int j = 0; j < 3 && l < available; j++) {
+                buffer[l++] = '.';
+            }
+        }
+        buffer[l++] = 0;
+        return buffer;
+    }
 }

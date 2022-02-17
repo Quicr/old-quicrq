@@ -282,6 +282,9 @@ void quicrq_cnx_abandon_stream_id(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id)
 
 void quicrq_cnx_abandon_stream(quicrq_stream_ctx_t* stream_ctx);
 
+/* For logging.. */
+const char* quicrq_uint8_t_to_text(const uint8_t* u, size_t length, char* buffer, size_t buffer_length);
+
 #ifdef __cplusplus
 }
 #endif

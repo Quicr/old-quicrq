@@ -496,12 +496,15 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
     int ret = 0;
     quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
     quicrq_media_source_ctx_t* srce_ctx = quicrq_find_local_media_source(qr_ctx, url, url_length);
+    char buffer[256];
 
     if (srce_ctx == NULL && qr_ctx->default_source_fn != NULL) {
         srce_ctx = quicrq_create_default_source(qr_ctx, url, url_length);
     }
     if (srce_ctx == NULL) {
         ret = -1;
+        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "No source available for URL: %s",
+            quicrq_uint8_t_to_text(url, url_length, buffer, 256));
     }
     else {
         /* Add stream to list of published streams */
@@ -521,6 +524,12 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         stream_ctx->media_ctx = srce_ctx->subscribe_fn(/*url, url_length, */ srce_ctx->pub_ctx);
         if (stream_ctx->media_ctx == NULL) {
             ret = -1;
+            picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "No media available for URL: %s",
+                quicrq_uint8_t_to_text(url, url_length, buffer, 256));
+        }
+        else {
+            picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Set a subscription to URL: %s",
+                quicrq_uint8_t_to_text(url, url_length, buffer, 256));
         }
     }
     return ret;
@@ -611,6 +620,7 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
             if (message_next == NULL) {
                 ret = -1;
             } else {
+                char buffer[256];
                 /* Queue the media request message to that stream */
                 stream_ctx->is_client = 1;
                 stream_ctx->is_datagram = (use_datagrams != 0);
@@ -621,6 +631,8 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
                 stream_ctx->send_state = quicrq_sending_initial;
                 stream_ctx->receive_state = quicrq_receive_repair;
                 picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
+                picoquic_log_app_message(cnx_ctx->cnx, "Accepted post of URL: %s on stream %" PRIu64,
+                    quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
             }
         }
     }
@@ -640,6 +652,9 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
     }
     stream_ctx->is_sender = 1;
     if (use_datagram) {
+        /* There is no data to send or receive on the control stream at this point.
+         * The sender might send repair messages and will send a final frame eventually.
+         * The receiver will close the stream when not needed anymore. */
         stream_ctx->send_state = quicrq_sending_ready;
         stream_ctx->receive_state = quicrq_receive_done;
     }
@@ -728,6 +743,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
         }
         else {
             /* Queue the accept message to that stream */
+            char buffer[256];
             stream_ctx->is_client = 1;
             stream_ctx->is_datagram = use_datagrams;
             message->message_size = message_next - message->buffer;
@@ -737,6 +753,9 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             ret = stream_ctx->cnx_ctx->qr_ctx->consumer_media_init_fn(stream_ctx, url, url_length);
             /* Activate the receiver */
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Accepted post of URL: %s on stream %" PRIu64,
+                quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
+
         }
     }
     return ret;
