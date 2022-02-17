@@ -620,6 +620,7 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
             if (message_next == NULL) {
                 ret = -1;
             } else {
+                char buffer[256];
                 /* Queue the media request message to that stream */
                 stream_ctx->is_client = 1;
                 stream_ctx->is_datagram = (use_datagrams != 0);
@@ -630,6 +631,8 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
                 stream_ctx->send_state = quicrq_sending_initial;
                 stream_ctx->receive_state = quicrq_receive_repair;
                 picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
+                picoquic_log_app_message(cnx_ctx->cnx, "Accepted post of URL: %s on stream %" PRIu64,
+                    quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
             }
         }
     }
@@ -645,6 +648,8 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
     /* Open the media -- TODO, variants with different actions. */
     ret = quicrq_subscribe_local_media(stream_ctx, url, url_length);
     if (ret == 0) {
+        /* As we just subscribed, make sure that we wake up both the control stream and the media stream */
+        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
         quicrq_wakeup_media_stream(stream_ctx);
     }
     stream_ctx->is_sender = 1;
