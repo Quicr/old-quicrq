@@ -648,12 +648,13 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
     /* Open the media -- TODO, variants with different actions. */
     ret = quicrq_subscribe_local_media(stream_ctx, url, url_length);
     if (ret == 0) {
-        /* As we just subscribed, make sure that we wake up both the control stream and the media stream */
-        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
         quicrq_wakeup_media_stream(stream_ctx);
     }
     stream_ctx->is_sender = 1;
     if (use_datagram) {
+        /* There is no data to send or receive on the control stream at this point.
+         * The sender might send repair messages and will send a final frame eventually.
+         * The receiver will close the stream when not needed anymore. */
         stream_ctx->send_state = quicrq_sending_ready;
         stream_ctx->receive_state = quicrq_receive_done;
     }
