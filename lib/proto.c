@@ -748,7 +748,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             /* Activate the receiver */
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
             picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Accepted post of URL: %s on stream %" PRIu64,
-                quicrq_uint8_t_to_text(url, url_length, buffer, 256));
+                quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
 
         }
     }
