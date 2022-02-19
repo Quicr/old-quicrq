@@ -3,10 +3,6 @@
 #ifndef QUICRQ_INTERNAL_RELAY_H
 #define QUICRQ_INTERNAL_RELAY_H
 
-#include <stdlib.h>
-#include <string.h>
-#include <stddef.h>
-#include "picoquic_utils.h"
 #include "picosplay.h"
 #include "quicrq.h"
 #include "quicrq_reassembly.h"

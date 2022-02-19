@@ -1,4 +1,12 @@
 /* Handling of a relay */
+#include <stdlib.h>
+#include <string.h>
+#include <stddef.h>
+#include "picoquic_utils.h"
+#include "picosplay.h"
+#include "quicrq.h"
+#include "quicrq_reassembly.h"
+#include "quicrq_internal.h"
 #include "quicrq_relay_internal.h"
 
 /* A relay is a specialized node, acting both as client when acquiring a media
