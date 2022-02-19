@@ -652,7 +652,6 @@ int quicrq_relay_next_available_frame(quicrq_sent_frame_ranges_t* frame_ranges, 
     quicrq_relay_cached_frame_t key = { 0 };
     picosplay_node_t * found = NULL;
     quicrq_relay_cached_frame_t* result;
-    int current_range = 0;
     int ret = -1;
 
     if (next_range == NULL || next_range->range_start != 0) {
