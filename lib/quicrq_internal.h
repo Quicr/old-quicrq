@@ -23,6 +23,7 @@
 #define quicrq_client_internal_H
 
 #include "picoquic.h"
+#include "picosplay.h"
 #include "quicrq.h"
 
 #ifdef __cplusplus
@@ -167,6 +168,17 @@ typedef struct st_quicrq_datagram_queued_repair_t {
     int is_last_segment;
     size_t length;
 } quicrq_datagram_queued_repair_t;
+
+#define QUIRCQ_FRAME_RANGE_MAX 32
+typedef struct st_quicrq_sent_frame_one_range_t {
+    struct st_quicrq_sent_frame_one_range_t* next;
+    uint64_t range_start;
+    uint64_t range_end;
+} quicrq_sent_frame_one_range_t;
+
+typedef struct st_quicrq_sent_frame_ranges_t {
+    quicrq_sent_frame_one_range_t * sent;
+} quicrq_sent_frame_ranges_t;
 
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;

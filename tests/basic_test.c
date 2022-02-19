@@ -372,7 +372,6 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
             }
         }
 
-
         if (nb_attachments <= 0 || nb_attachments > 0xffff) {
             success = 0;
         } else if (success) {
@@ -636,4 +635,105 @@ int quicrq_basic_client_test()
 int quicrq_datagram_client_test()
 {
     return quicrq_basic_test_one(1, 1, 0, 1);
+}
+
+/* Unit tests of reordering functions.
+ * Check that the frames are being sent as expected.
+ * Set up: provide a list of frame ids in the receive buffer.
+ * Verify that the successive transmitted ID correspond to the buffer content.
+ * Add a series of additional frames.
+ * Verify that they are all sent.
+ * repeat.
+ */
+
+int quicrq_relay_add_frame_to_cache(struct st_quicrq_relay_cached_media_t* cached_ctx,
+    uint64_t frame_id,
+    const uint8_t* data,
+    size_t data_length);
+int quicrq_relay_next_available_frame(quicrq_sent_frame_ranges_t* frame_ranges, struct st_quicrq_relay_cached_media_t* cached_media, uint64_t* next_frame_id);
+int quicrq_relay_add_frame_id_to_ranges(quicrq_sent_frame_ranges_t* frame_ranges, uint64_t frame_id);
+struct st_quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx();
+void quicrq_relay_delete_cache_ctx(struct st_quicrq_relay_cached_media_t* cache_ctx);
+void quick_relay_clear_ranges(quicrq_sent_frame_ranges_t* frame_ranges);
+
+int quick_relay_range_test_wave(quicrq_sent_frame_ranges_t* frame_ranges, struct st_quicrq_relay_cached_media_t* cached_media, uint64_t* wave, size_t nb_in_wave)
+{
+    int ret = 0;
+    uint8_t data[] = { 'w', 'h', 'a', 'e', 'v', 'e', 'r' };
+    size_t data_length = sizeof(data);
+    /* Add the wave to the data set */
+    for (size_t i = 0; ret == 0 && i < nb_in_wave; i++) {
+        ret = quicrq_relay_add_frame_to_cache(cached_media, wave[i], data, data_length);
+        if (ret != 0) {
+            DBG_PRINTF("Failure when adding frame %" PRIu64 " to cache", wave[i]);
+        }
+    }
+    /* Check that the expected frame ids are returned */
+    for (size_t i = 0; ret == 0 && i < nb_in_wave; i++) {
+        uint64_t next_frame_id = UINT64_MAX;
+        int f_ret = quicrq_relay_next_available_frame(frame_ranges, cached_media, &next_frame_id);
+        if (f_ret != 0 || next_frame_id != wave[i]) {
+            DBG_PRINTF("Expected frame_id %" PRIu64 ", got ret=%d, frame_id=%" PRIu64, wave[i], f_ret, next_frame_id);
+            ret = -1;
+        }
+        else {
+            ret = quicrq_relay_add_frame_id_to_ranges(frame_ranges, next_frame_id);
+            if (ret != 0) {
+                DBG_PRINTF("Failure when adding frame %" PRIu64 " to ranges", next_frame_id);
+            }
+        }
+    }
+
+    if (ret == 0) {
+        uint64_t next_frame_id = UINT64_MAX;
+        int f_ret = quicrq_relay_next_available_frame(frame_ranges, cached_media, &next_frame_id);
+        if (f_ret == 0) {
+            DBG_PRINTF("Expected no frame, got ret=0, frame_id=%" PRIu64, next_frame_id);
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+int quick_relay_range_test()
+{
+    int ret = 0;
+    uint64_t wave1[] = { 3, 4, 6, 7, 10, 15 };
+    uint64_t wave2[] = { 2, 8, 17 };
+    uint64_t wave3[] = { 0, 1, 5, 9, 11, 12, 13, 14, 16, 18 };
+    quicrq_sent_frame_ranges_t frame_ranges = { 0 };
+    struct st_quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
+
+    if (cache_ctx == NULL) {
+        ret = -1;
+    }
+
+    if (ret == 0) {
+        ret = quick_relay_range_test_wave(&frame_ranges, cache_ctx, wave1, sizeof(wave1) / sizeof(uint64_t));
+        if (ret != 0) {
+            DBG_PRINTF("Relay range test fails after wave %d", 1);
+        }
+    }
+    if (ret == 0) {
+        ret = quick_relay_range_test_wave(&frame_ranges, cache_ctx, wave2, sizeof(wave2) / sizeof(uint64_t));
+        if (ret != 0) {
+            DBG_PRINTF("Relay range test fails after wave %d", 2);
+        }
+    }
+
+    if (ret == 0) {
+        ret = quick_relay_range_test_wave(&frame_ranges, cache_ctx, wave3, sizeof(wave3) / sizeof(uint64_t));
+        if (ret != 0) {
+            DBG_PRINTF("Relay range test fails after wave %d", 3);
+        }
+    }
+
+    if (cache_ctx != NULL) {
+        quicrq_relay_delete_cache_ctx(cache_ctx);
+    }
+
+    quick_relay_clear_ranges(&frame_ranges);
+
+    return ret;
 }
