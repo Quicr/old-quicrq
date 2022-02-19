@@ -9,6 +9,8 @@
 #include "quicrq_internal.h"
 #include "quicrq_tests.h"
 #include "quicrq_test_internal.h"
+#include "quicrq_relay_internal.h"
+
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
 #define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\..\\picoquic\\"
@@ -646,17 +648,7 @@ int quicrq_datagram_client_test()
  * repeat.
  */
 
-int quicrq_relay_add_frame_to_cache(struct st_quicrq_relay_cached_media_t* cached_ctx,
-    uint64_t frame_id,
-    const uint8_t* data,
-    size_t data_length);
-int quicrq_relay_next_available_frame(quicrq_sent_frame_ranges_t* frame_ranges, struct st_quicrq_relay_cached_media_t* cached_media, uint64_t* next_frame_id);
-int quicrq_relay_add_frame_id_to_ranges(quicrq_sent_frame_ranges_t* frame_ranges, uint64_t frame_id);
-struct st_quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx();
-void quicrq_relay_delete_cache_ctx(struct st_quicrq_relay_cached_media_t* cache_ctx);
-void quick_relay_clear_ranges(quicrq_sent_frame_ranges_t* frame_ranges);
-
-int quick_relay_range_test_wave(quicrq_sent_frame_ranges_t* frame_ranges, struct st_quicrq_relay_cached_media_t* cached_media, uint64_t* wave, size_t nb_in_wave)
+int quick_relay_range_test_wave(quicrq_sent_frame_ranges_t* frame_ranges, quicrq_relay_cached_media_t* cached_media, uint64_t* wave, size_t nb_in_wave)
 {
     int ret = 0;
     uint8_t data[] = { 'w', 'h', 'a', 'e', 'v', 'e', 'r' };
@@ -703,7 +695,7 @@ int quick_relay_range_test()
     uint64_t wave2[] = { 2, 8, 17 };
     uint64_t wave3[] = { 0, 1, 5, 9, 11, 12, 13, 14, 16, 18 };
     quicrq_sent_frame_ranges_t frame_ranges = { 0 };
-    struct st_quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
+    quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
 
     if (cache_ctx == NULL) {
         ret = -1;
