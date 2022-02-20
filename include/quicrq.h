@@ -127,11 +127,14 @@ typedef int (*quicrq_media_publisher_fn)(
     int* is_last_segment,
     int* is_media_finished,
     uint64_t current_time);
+typedef void* (*quicrq_media_publisher_delete_fn)(void* pub_ctx);
 
 typedef struct st_quicrq_media_source_ctx_t quicrq_media_source_ctx_t;
 quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
-    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn);
-int quicrq_close_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length, void* pub_ctx);
+    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, 
+    quicrq_media_publisher_fn getdata_fn, quicrq_media_publisher_delete_fn delete_fn);
+int quicrq_close_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length, 
+    void* pub_ctx);
 void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_ctx);
 
 /* Management of default sources, used for example by proxies or relays.

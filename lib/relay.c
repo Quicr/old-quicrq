@@ -305,6 +305,12 @@ void* quicrq_relay_publisher_subscribe(void* v_srce_ctx)
     return media_ctx;
 }
 
+void* quicrq_relay_publisher_delete(void* v_srce_ctx)
+{
+    quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)v_srce_ctx;
+
+}
+
 
 /* Default source is called when a client of a relay is loading a not-yet-cached
  * URL. This requires creating the desired URL, and then opening the stream to
@@ -338,6 +344,11 @@ quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx()
     return cache_ctx;
 }
 
+void quicrq_relay_delete_cache(quicrq_relay_cached_media_t* cache_ctx)
+{
+    return;
+}
+
 quicrq_relay_consumer_context_t* quicrq_relay_create_cons_ctx()
 {
     quicrq_relay_consumer_context_t* cons_ctx = (quicrq_relay_consumer_context_t*)
@@ -354,7 +365,7 @@ int quicrq_relay_publish_cached_media(quicrq_ctx_t* qr_ctx,
 {
     /* if succeeded, publish the source */
     cache_ctx->srce_ctx = quicrq_publish_source(qr_ctx, url, url_length, cache_ctx,
-        quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn);
+        quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn, NULL);
     return (cache_ctx->srce_ctx == NULL)?-1:0;
 }
 

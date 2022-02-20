@@ -360,7 +360,7 @@ quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* ur
 
     if (pub_source_ctx != NULL) {
         srce_ctx = quicrq_publish_source(qr_ctx, url, url_length, pub_source_ctx,
-            test_media_publisher_subscribe, test_media_frame_publisher_fn);
+            test_media_publisher_subscribe, test_media_frame_publisher_fn, NULL);
         if (srce_ctx == NULL) {
             free(pub_source_ctx);
         }
