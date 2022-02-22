@@ -389,7 +389,9 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 /* Publish local source API.
  */
 
-quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url, size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, quicrq_media_publisher_fn getdata_fn)
+quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url,
+    size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, 
+    quicrq_media_publisher_fn getdata_fn, quicrq_media_publisher_delete_fn delete_fn)
 {
     quicrq_media_source_ctx_t* srce_ctx = NULL;
     size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
@@ -414,6 +416,7 @@ quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const ui
             srce_ctx->pub_ctx = pub_ctx;
             srce_ctx->subscribe_fn = subscribe_fn;
             srce_ctx->getdata_fn = getdata_fn;
+            srce_ctx->delete_fn = delete_fn;
         }
     }
 
@@ -444,15 +447,18 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
         qr_ctx->first_source = srce_ctx->next_source;
     }
     else {
-        srce_ctx->next_source->previous_source = srce_ctx->next_source;
+        srce_ctx->previous_source->next_source = srce_ctx->next_source;
     }
     if (srce_ctx == qr_ctx->last_source) {
         qr_ctx->last_source = srce_ctx->previous_source;
     }
     else {
-        srce_ctx->previous_source->next_source = srce_ctx->previous_source;
+        srce_ctx->next_source->previous_source = srce_ctx->previous_source;
     }
-    /* TODO: should there be a call to the publisher function to explicitly close the source? */
+    /* call to the publisher function to explicitly close the source */
+    if (srce_ctx->delete_fn != NULL) {
+        srce_ctx->delete_fn(srce_ctx->pub_ctx);
+    }
     free(srce_ctx);
 }
 

@@ -32,6 +32,7 @@
 #include "picoquic_utils.h"
 #include "quicrq.h"
 #include "quicrq_internal.h"
+#include "quicrq_relay.h"
 
 /* Allocate space in the message buffer */
 int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, size_t bytes_stored)
@@ -102,6 +103,15 @@ void quicrq_msg_buffer_reset(quicrq_message_buffer_t* msg_buffer)
 
     msg_buffer->nb_bytes_read = 0;
     msg_buffer->message_size = 0;
+}
+
+
+void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer)
+{
+    if (msg_buffer->buffer != NULL) {
+        free(msg_buffer->buffer);
+    }
+    memset(msg_buffer, 0, sizeof(quicrq_message_buffer_t));
 }
 
 /* Send a protocol message through series of read data call backs.
@@ -1021,6 +1031,8 @@ void quicrq_delete(quicrq_ctx_t* qr_ctx)
 {
     struct st_quicrq_cnx_ctx_t* cnx_ctx = qr_ctx->first_cnx;
     struct st_quicrq_cnx_ctx_t* next = NULL;
+    struct st_quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
+    struct st_quicrq_media_source_ctx_t* srce_next = NULL;
 
     while (cnx_ctx != NULL) {
         next = cnx_ctx->next_cnx;
@@ -1028,9 +1040,17 @@ void quicrq_delete(quicrq_ctx_t* qr_ctx)
         cnx_ctx = next;
     }
 
+    while (srce_ctx != NULL) {
+        srce_next = srce_ctx->next_source;
+        quicrq_delete_source(srce_ctx, qr_ctx);
+        srce_ctx = srce_next;
+    }
+
     if (qr_ctx->quic != NULL) {
         picoquic_free(qr_ctx->quic);
     }
+
+    quicrq_disable_relay(qr_ctx);
 
     free(qr_ctx);
 }
@@ -1204,6 +1224,9 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
             }
         }
     }
+
+    quicrq_msg_buffer_release(&stream_ctx->message_receive);
+    quicrq_msg_buffer_release(&stream_ctx->message_sent);
 
     free(stream_ctx);
 }
