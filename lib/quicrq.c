@@ -32,6 +32,7 @@
 #include "picoquic_utils.h"
 #include "quicrq.h"
 #include "quicrq_internal.h"
+#include "quicrq_relay.h"
 
 /* Allocate space in the message buffer */
 int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, size_t bytes_stored)
