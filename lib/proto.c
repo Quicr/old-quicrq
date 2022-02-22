@@ -455,7 +455,10 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
     else {
         srce_ctx->previous_source->next_source = srce_ctx->previous_source;
     }
-    /* TODO: should there be a call to the publisher function to explicitly close the source? */
+    /* call to the publisher function to explicitly close the source */
+    if (srce_ctx->delete_fn != NULL) {
+        srce_ctx->delete_fn(srce_ctx->pub_ctx);
+    }
     free(srce_ctx);
 }
 

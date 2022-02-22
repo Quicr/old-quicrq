@@ -1021,11 +1021,19 @@ void quicrq_delete(quicrq_ctx_t* qr_ctx)
 {
     struct st_quicrq_cnx_ctx_t* cnx_ctx = qr_ctx->first_cnx;
     struct st_quicrq_cnx_ctx_t* next = NULL;
+    struct st_quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
+    struct st_quicrq_media_source_ctx_t* srce_next = NULL;
 
     while (cnx_ctx != NULL) {
         next = cnx_ctx->next_cnx;
         quicrq_delete_cnx_context(cnx_ctx);
         cnx_ctx = next;
+    }
+
+    while (srce_ctx != NULL) {
+        srce_next = srce_ctx->next_source;
+        quicrq_delete_source(srce_ctx, qr_ctx);
+        srce_ctx = srce_next;
     }
 
     if (qr_ctx->quic != NULL) {
