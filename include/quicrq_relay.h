@@ -15,6 +15,8 @@ extern "C" {
     /* Enable origin */
     int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams);
 
+    /* Disable the relay */
+    void quicrq_disable_relay(quicrq_ctx_t* qr_ctx);
 
 #ifdef __cplusplus
 }

@@ -127,7 +127,7 @@ typedef int (*quicrq_media_publisher_fn)(
     int* is_last_segment,
     int* is_media_finished,
     uint64_t current_time);
-typedef void* (*quicrq_media_publisher_delete_fn)(void* pub_ctx);
+typedef void (*quicrq_media_publisher_delete_fn)(void* pub_ctx);
 
 typedef struct st_quicrq_media_source_ctx_t quicrq_media_source_ctx_t;
 quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,

@@ -447,13 +447,13 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
         qr_ctx->first_source = srce_ctx->next_source;
     }
     else {
-        srce_ctx->next_source->previous_source = srce_ctx->next_source;
+        srce_ctx->previous_source->next_source = srce_ctx->next_source;
     }
     if (srce_ctx == qr_ctx->last_source) {
         qr_ctx->last_source = srce_ctx->previous_source;
     }
     else {
-        srce_ctx->previous_source->next_source = srce_ctx->previous_source;
+        srce_ctx->next_source->previous_source = srce_ctx->previous_source;
     }
     /* call to the publisher function to explicitly close the source */
     if (srce_ctx->delete_fn != NULL) {
