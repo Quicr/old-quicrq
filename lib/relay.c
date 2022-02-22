@@ -56,12 +56,10 @@ static void quicrq_relay_cache_frame_node_delete(void* tree, picosplay_node_t* n
     free(quicrq_relay_cache_frame_node_value(node));
 }
 
-
 void quicrq_relay_cache_media_clear(quicrq_relay_cached_media_t* cached_media)
 {
     picosplay_empty_tree(&cached_media->frame_tree);
 }
-
 
 void quicrq_relay_cache_media_init(quicrq_relay_cached_media_t* cached_media)
 {
@@ -276,11 +274,6 @@ void* quicrq_relay_publisher_subscribe(void* v_srce_ctx)
         media_ctx->cache_ctx = cache_ctx;
     }
     return media_ctx;
-}
-
-void quicrq_relay_cache_media_clear(quicrq_relay_cached_media_t* cached_media)
-{
-    picosplay_empty_tree(&cached_media->frame_tree);
 }
 
 void quicrq_relay_publisher_delete(void* v_pub_ctx)
