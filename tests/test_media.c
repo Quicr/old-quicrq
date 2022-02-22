@@ -351,6 +351,11 @@ static test_media_source_context_t* test_media_create_source(char const* media_s
 }
 
 
+void test_media_delete(void * v_pub_source_ctx)
+{
+    free(v_pub_source_ctx);
+}
+
 quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* url, size_t url_length,
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
     uint64_t * p_next_time, uint64_t start_time)
@@ -360,7 +365,7 @@ quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* ur
 
     if (pub_source_ctx != NULL) {
         srce_ctx = quicrq_publish_source(qr_ctx, url, url_length, pub_source_ctx,
-            test_media_publisher_subscribe, test_media_frame_publisher_fn);
+            test_media_publisher_subscribe, test_media_frame_publisher_fn, test_media_delete);
         if (srce_ctx == NULL) {
             free(pub_source_ctx);
         }
@@ -927,7 +932,6 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     int is_media_finished = 0;
     uint64_t simulated_time = 0;
     uint64_t media_next_time = 0;
-    quicrq_media_source_ctx_t* published_source = NULL;
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     quicrq_stream_ctx_t* stream_ctx = NULL;
     quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
@@ -966,10 +970,8 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
 
     /* Publish a test file */
     if (ret == 0){
-        published_source = test_media_publish(qr_ctx, (uint8_t*)media_source_name, strlen(media_source_name),
-            media_source_path, generation_model, is_real_time, &media_next_time, 0);
-
-        if (published_source == NULL) {
+        if (test_media_publish(qr_ctx, (uint8_t*)media_source_name, strlen(media_source_name),
+            media_source_path, generation_model, is_real_time, &media_next_time, 0) == NULL){ 
             ret = -1;
         }
     }
@@ -1059,10 +1061,6 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
         quicrq_delete(qr_ctx);
     }
 
-    /* Close media source */
-    if (published_source != NULL) {
-        free(published_source);
-    }
     return ret;
 }
 

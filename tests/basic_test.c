@@ -128,6 +128,9 @@ int quicrq_test_packet_departure(quicrq_test_config_t* config, int node_id, int*
                 free(packet);
             }
         }
+        else {
+            free(packet);
+        }
     }
 
     return ret;

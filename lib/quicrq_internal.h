@@ -53,6 +53,7 @@ typedef struct st_quicrq_message_buffer_t {
 int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, size_t bytes_stored);
 uint8_t* quicrq_msg_buffer_store(uint8_t* bytes, size_t length, quicrq_message_buffer_t* msg_buffer, int* is_finished);
 void quicrq_msg_buffer_reset(quicrq_message_buffer_t* msg_buffer);
+void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 
 /* The protocol used for our tests defines a set of actions:
  * - Open Stream: request to open a stream, defined by URL of media segment. Content will be sent as a stream of bytes.
@@ -122,6 +123,7 @@ struct st_quicrq_media_source_ctx_t {
     void* pub_ctx;
     quicrq_media_publisher_subscribe_fn subscribe_fn;
     quicrq_media_publisher_fn getdata_fn;
+    quicrq_media_publisher_delete_fn delete_fn;
 };
 
 quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length);
@@ -249,12 +251,14 @@ struct st_quicrq_ctx_t {
     /* Local media sources */
     quicrq_media_source_ctx_t* first_source;
     quicrq_media_source_ctx_t* last_source;
+    /* Relay context, if not is acting as relay or origin */
+    struct st_quicrq_relay_context_t* relay_ctx;
     /* Default publisher function, used for example by relays */
     quicrq_default_source_fn default_source_fn;
     void* default_source_ctx;
     /* Local media receiver function */
     quicrq_media_consumer_init_fn consumer_media_init_fn;
-    /* Todo: sockets, etc */
+    /* List of connections */
     struct st_quicrq_cnx_ctx_t* first_cnx; /* First in double linked list of open connections in this context */
     struct st_quicrq_cnx_ctx_t* last_cnx; /* last in list of open connections in this context */
 };

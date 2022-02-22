@@ -278,6 +278,18 @@ void* quicrq_relay_publisher_subscribe(void* v_srce_ctx)
     return media_ctx;
 }
 
+void quicrq_relay_cache_media_clear(quicrq_relay_cached_media_t* cached_media)
+{
+    picosplay_empty_tree(&cached_media->frame_tree);
+}
+
+void quicrq_relay_publisher_delete(void* v_pub_ctx)
+{
+    quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)v_pub_ctx;
+    quicrq_relay_cache_media_clear(cache_ctx);
+    free(cache_ctx);
+}
+
 
 /* Default source is called when a client of a relay is loading a not-yet-cached
  * URL. This requires creating the desired URL, and then opening the stream to
@@ -311,6 +323,11 @@ quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx()
     return cache_ctx;
 }
 
+void quicrq_relay_delete_cache(quicrq_relay_cached_media_t* cache_ctx)
+{
+    return;
+}
+
 quicrq_relay_consumer_context_t* quicrq_relay_create_cons_ctx()
 {
     quicrq_relay_consumer_context_t* cons_ctx = (quicrq_relay_consumer_context_t*)
@@ -327,7 +344,7 @@ int quicrq_relay_publish_cached_media(quicrq_ctx_t* qr_ctx,
 {
     /* if succeeded, publish the source */
     cache_ctx->srce_ctx = quicrq_publish_source(qr_ctx, url, url_length, cache_ctx,
-        quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn);
+        quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn, quicrq_relay_publisher_delete);
     return (cache_ctx->srce_ctx == NULL)?-1:0;
 }
 
@@ -476,29 +493,45 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
 int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sockaddr* addr, int use_datagrams)
 {
     int ret = 0;
-    size_t sni_len = (sni == NULL) ? 0 : strlen(sni);
-    quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)malloc(
-        sizeof(quicrq_relay_context_t) + sni_len + 1);
-    if (relay_ctx == NULL) {
+
+    if (qr_ctx->relay_ctx != NULL) {
+        /* Error -- cannot enable relaying twice without first disabling it */
         ret = -1;
     }
     else {
-        /* initialize the relay context. */
-        uint8_t* v_sni = ((uint8_t*)relay_ctx) + sizeof(quicrq_relay_context_t);
-        memset(relay_ctx, 0, sizeof(quicrq_relay_context_t));
-        picoquic_store_addr(&relay_ctx->server_addr, addr);
-        if (sni_len > 0) {
-            memcpy(v_sni, sni, sni_len);
+        size_t sni_len = (sni == NULL) ? 0 : strlen(sni);
+        quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)malloc(
+            sizeof(quicrq_relay_context_t) + sni_len + 1);
+        if (relay_ctx == NULL) {
+            ret = -1;
         }
-        v_sni[sni_len] = 0;
-        relay_ctx->sni = (char const*)v_sni;
-        relay_ctx->use_datagrams = use_datagrams;
-        /* set the relay as default provider */
-        quicrq_set_default_source(qr_ctx, quicrq_relay_default_source_fn, relay_ctx);
-        /* set a default post client on the relay */
-        quicrq_set_media_init_callback(qr_ctx, quicrq_relay_consumer_init_callback);
+        else {
+            /* initialize the relay context. */
+            uint8_t* v_sni = ((uint8_t*)relay_ctx) + sizeof(quicrq_relay_context_t);
+            memset(relay_ctx, 0, sizeof(quicrq_relay_context_t));
+            picoquic_store_addr(&relay_ctx->server_addr, addr);
+            if (sni_len > 0) {
+                memcpy(v_sni, sni, sni_len);
+            }
+            v_sni[sni_len] = 0;
+            relay_ctx->sni = (char const*)v_sni;
+            relay_ctx->use_datagrams = use_datagrams;
+            /* set the relay as default provider */
+            quicrq_set_default_source(qr_ctx, quicrq_relay_default_source_fn, relay_ctx);
+            /* set a default post client on the relay */
+            quicrq_set_media_init_callback(qr_ctx, quicrq_relay_consumer_init_callback);
+            qr_ctx->relay_ctx = relay_ctx;
+        }
     }
     return ret;
+}
+
+void quicrq_disable_relay(quicrq_ctx_t* qr_ctx)
+{
+    if (qr_ctx->relay_ctx != NULL) {
+        free(qr_ctx->relay_ctx);
+        qr_ctx->relay_ctx = NULL;
+    }
 }
 
 /*
@@ -582,6 +615,8 @@ int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
         quicrq_set_default_source(qr_ctx, quicrq_relay_default_source_fn, relay_ctx);
         /* set a default post client on the relay */
         quicrq_set_media_init_callback(qr_ctx, quicrq_origin_consumer_init_callback);
+        /* Remember pointer */
+        qr_ctx->relay_ctx = relay_ctx;
     }
     return ret;
 }
