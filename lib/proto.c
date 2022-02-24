@@ -389,9 +389,9 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 /* Publish local source API.
  */
 
-quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url,
-    size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, 
-    quicrq_media_publisher_fn getdata_fn, quicrq_media_publisher_delete_fn delete_fn)
+quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
+    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn,
+    quicrq_media_publisher_fn getdata_fn, quicrq_datagram_publisher_fn get_datagram_fn, quicrq_media_publisher_delete_fn delete_fn)
 {
     quicrq_media_source_ctx_t* srce_ctx = NULL;
     size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
@@ -416,11 +416,20 @@ quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const ui
             srce_ctx->pub_ctx = pub_ctx;
             srce_ctx->subscribe_fn = subscribe_fn;
             srce_ctx->getdata_fn = getdata_fn;
+            srce_ctx->get_datagram_fn = get_datagram_fn;
             srce_ctx->delete_fn = delete_fn;
         }
     }
 
     return srce_ctx;
+}
+
+
+quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url,
+    size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, 
+    quicrq_media_publisher_fn getdata_fn, quicrq_media_publisher_delete_fn delete_fn)
+{
+    return quicrq_publish_datagram_source(qr_ctx, url, url_length, pub_ctx, subscribe_fn, getdata_fn, NULL, delete_fn);
 }
 
 void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn default_source_fn, void* default_source_ctx)
@@ -526,6 +535,7 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         }
         /* Document media function. */
         stream_ctx->publisher_fn = srce_ctx->getdata_fn;
+        stream_ctx->get_datagram_fn = srce_ctx->get_datagram_fn;
         /* Create a subscribe media context */
         stream_ctx->media_ctx = srce_ctx->subscribe_fn(/*url, url_length, */ srce_ctx->pub_ctx);
         if (stream_ctx->media_ctx == NULL) {

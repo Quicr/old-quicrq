@@ -59,7 +59,8 @@ static const quicrq_test_def_t test_table[] =
     { "fourlegs_basic_last", quicrq_fourlegs_basic_last_test },
     { "fourlegs_datagram", quicrq_fourlegs_datagram_test },
     { "fourlegs_datagram_last", quicrq_fourlegs_datagram_last_test },
-    { "fourlegs_datagram_loss", quicrq_fourlegs_datagram_loss_test }
+    { "fourlegs_datagram_loss", quicrq_fourlegs_datagram_loss_test },
+    { "relay_range", quick_relay_range_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);
