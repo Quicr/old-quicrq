@@ -111,6 +111,19 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 /* Stream header is indentical to repair message */
 #define QUICRQ_STREAM_HEADER_MAX 2+1+8+4+2
 
+
+/* Transmission of out of order datagrams is possible for relays.
+ * We use a function pointer to isolate the relay code for the main code,
+ * and ensure the quicrq library can be used in clients without
+ * loading the relay code.
+ */
+typedef int (*quicrq_datagram_publisher_fn)(
+    quicrq_stream_ctx_t* stream_ctx,
+    void* context,
+    size_t space,
+    int* media_was_sent,
+    int* at_least_one_active);
+
  /* Quicrq per media source context.
   */
 struct st_quicrq_media_source_ctx_t {
@@ -123,6 +136,7 @@ struct st_quicrq_media_source_ctx_t {
     void* pub_ctx;
     quicrq_media_publisher_subscribe_fn subscribe_fn;
     quicrq_media_publisher_fn getdata_fn;
+    quicrq_datagram_publisher_fn get_datagram_fn;
     quicrq_media_publisher_delete_fn delete_fn;
 };
 
@@ -225,8 +239,13 @@ struct st_quicrq_stream_ctx_t {
 
     quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
     quicrq_media_publisher_fn publisher_fn; /* Data providing function for source */
+    quicrq_datagram_publisher_fn get_datagram_fn; /* Out of order publishing of datagrams */
     void* media_ctx; /* Callback argument for receiving or sending data */
 };
+
+quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
+    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn,
+    quicrq_media_publisher_fn getdata_fn, quicrq_datagram_publisher_fn get_datagram_fn, quicrq_media_publisher_delete_fn delete_fn);
 
 /* Quicrq per connection context */
 struct st_quicrq_cnx_ctx_t {
@@ -251,7 +270,7 @@ struct st_quicrq_ctx_t {
     /* Local media sources */
     quicrq_media_source_ctx_t* first_source;
     quicrq_media_source_ctx_t* last_source;
-    /* Relay context, if not is acting as relay or origin */
+    /* Relay context, if is acting as relay or origin */
     struct st_quicrq_relay_context_t* relay_ctx;
     /* Default publisher function, used for example by relays */
     quicrq_default_source_fn default_source_fn;

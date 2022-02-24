@@ -656,6 +656,8 @@ int quick_relay_range_test_wave(quicrq_sent_frame_ranges_t* frame_ranges, quicrq
     int ret = 0;
     uint8_t data[] = { 'w', 'h', 'a', 'e', 'v', 'e', 'r' };
     size_t data_length = sizeof(data);
+    int is_finished = 0;
+
     /* Add the wave to the data set */
     for (size_t i = 0; ret == 0 && i < nb_in_wave; i++) {
         ret = quicrq_relay_add_frame_to_cache(cached_media, wave[i], data, data_length);
@@ -666,7 +668,7 @@ int quick_relay_range_test_wave(quicrq_sent_frame_ranges_t* frame_ranges, quicrq
     /* Check that the expected frame ids are returned */
     for (size_t i = 0; ret == 0 && i < nb_in_wave; i++) {
         uint64_t next_frame_id = UINT64_MAX;
-        int f_ret = quicrq_relay_next_available_frame(frame_ranges, cached_media, &next_frame_id);
+        int f_ret = quicrq_relay_next_available_frame_id(frame_ranges, cached_media, &next_frame_id, &is_finished);
         if (f_ret != 0 || next_frame_id != wave[i]) {
             DBG_PRINTF("Expected frame_id %" PRIu64 ", got ret=%d, frame_id=%" PRIu64, wave[i], f_ret, next_frame_id);
             ret = -1;
@@ -681,7 +683,7 @@ int quick_relay_range_test_wave(quicrq_sent_frame_ranges_t* frame_ranges, quicrq
 
     if (ret == 0) {
         uint64_t next_frame_id = UINT64_MAX;
-        int f_ret = quicrq_relay_next_available_frame(frame_ranges, cached_media, &next_frame_id);
+        int f_ret = quicrq_relay_next_available_frame_id(frame_ranges, cached_media, &next_frame_id, &is_finished);
         if (f_ret == 0) {
             DBG_PRINTF("Expected no frame, got ret=0, frame_id=%" PRIu64, next_frame_id);
             ret = -1;

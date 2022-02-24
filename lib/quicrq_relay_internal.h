@@ -67,6 +67,8 @@ typedef struct st_quicrq_relay_publisher_context_t {
     size_t current_offset;
     int is_frame_complete;
     int is_media_complete;
+    int is_sending_frame;
+    quicrq_sent_frame_ranges_t ranges;
 } quicrq_relay_publisher_context_t;
 
 typedef struct st_quicrq_relay_consumer_context_t {
@@ -88,7 +90,7 @@ int quicrq_relay_add_frame_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     uint64_t frame_id,
     const uint8_t* data,
     size_t data_length);
-int quicrq_relay_next_available_frame(quicrq_sent_frame_ranges_t* frame_ranges, quicrq_relay_cached_media_t* cached_media, uint64_t* next_frame_id);
+int quicrq_relay_next_available_frame_id(quicrq_sent_frame_ranges_t* frame_ranges, quicrq_relay_cached_media_t* cached_ctx, uint64_t* next_frame_id, int* is_finished);
 int quicrq_relay_add_frame_id_to_ranges(quicrq_sent_frame_ranges_t* frame_ranges, uint64_t frame_id);
 quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx();
 void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx);

@@ -86,7 +86,7 @@ quicrq_relay_cached_frame_t* quicrq_relay_cache_frame_get(quicrq_relay_cached_me
  * The connection is started when a context is specialized to become a relay
  */
 
-int quicrq_relay_add_frame_to_cache(struct st_quicrq_relay_cached_media_t* cached_ctx,
+int quicrq_relay_add_frame_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     uint64_t frame_id,
     const uint8_t* data,
     size_t data_length)
@@ -198,14 +198,16 @@ int quicrq_relay_consumer_cb(
  * When the correction is available, the client is notified, and polls for the
  * missing frame-id.
  */
-void quicrq_relay_delete_cache_ctx(struct st_quicrq_relay_cached_media_t* cache_ctx)
+void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx)
 {
     quicrq_relay_cache_media_clear(cache_ctx);
+
     free(cache_ctx);
 }
 
 void quicrq_relay_publisher_close(quicrq_relay_publisher_context_t* media_ctx)
 {
+    quick_relay_clear_ranges(&media_ctx->ranges);
     free(media_ctx);
 }
 
@@ -261,6 +263,107 @@ int quicrq_relay_publisher_fn(
         /* close the context */
         quicrq_relay_publisher_close(media_ctx);
     }
+    return ret;
+}
+
+static int quicrq_relay_datagram_publisher_fn(
+    quicrq_stream_ctx_t* stream_ctx,
+    void* context,
+    size_t space,
+    int* media_was_sent,
+    int* at_least_one_active)
+{
+    int ret = 0;
+    int is_finished = 0;
+    quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)stream_ctx->media_ctx;
+
+    if (!media_ctx->is_sending_frame) {
+        /* If not currently sending, check what other frame might be available */
+        media_ctx->current_offset = 0;
+        /* TODO: should retrieve the frame, instead of just the number. */
+        if (quicrq_relay_next_available_frame_id(&media_ctx->ranges, media_ctx->cache_ctx, &media_ctx->current_frame_id, &is_finished) == 0) {
+            media_ctx->is_sending_frame = 1;
+        }
+    }
+
+    if (media_ctx->is_sending_frame) {
+        /* retrieve the frame and compute the available size based on frame data */
+        quicrq_relay_cached_frame_t* frame = quicrq_relay_cache_frame_get(media_ctx->cache_ctx, media_ctx->current_frame_id);
+        /* TODO: how to assess that the media is finished? */
+        uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
+        size_t h_size;
+        uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
+            media_ctx->current_frame_id, media_ctx->current_offset, 0);
+
+        *media_was_sent = 1;
+        *at_least_one_active = 1;
+
+        if (h_byte == NULL) {
+            ret = -1;
+        }
+        else {
+            int is_last_segment = 0;
+            h_size = h_byte - datagram_header;
+            if (h_size > space) {
+                /* TODO: should get a min encoding length per stream */
+                /* Can't do anything there */
+            }
+            else {
+                size_t available = frame->data_length - media_ctx->current_offset;
+                if (available > space - h_size) {
+                    available = space - h_size;
+                } else {
+                    is_last_segment = 1;
+                }
+
+                if (available > 0) {
+                    /* Get a buffer inside the datagram packet */
+                    void* buffer = picoquic_provide_datagram_buffer(context, available + h_size);
+                    if (buffer == NULL) {
+                        ret = -1;
+                    }
+                    else {
+                        /* Push the header */
+                        if (is_last_segment) {
+                            h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
+                                media_ctx->current_frame_id, media_ctx->current_offset, 1);
+                            if (h_byte != datagram_header + h_size) {
+                                /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
+                                ret = -1;
+                            }
+                        }
+                        if (ret == 0) {
+                            memcpy(buffer, datagram_header, h_size);
+                            /* Get the media */
+                            memcpy(((uint8_t*)buffer) + h_size, frame->data + media_ctx->current_offset, available);
+                            /* Update offset based on what is sent. */
+                            if (is_last_segment) {
+                                media_ctx->is_sending_frame = 0;
+                                /* Mark this frame as sent */
+                                ret = quicrq_relay_add_frame_id_to_ranges(&media_ctx->ranges, media_ctx->current_frame_id);
+                            }
+                            else {
+                                media_ctx->current_offset += available;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else {
+        /* Nothing to send at this point. If the media sending is finished, mark the stream accordingly. */
+        *media_was_sent = 0;
+
+        if (is_finished) {
+            /* Mark the stream as finished, prepare sending a final message */
+            stream_ctx->final_frame_id = media_ctx->current_frame_id;
+            /* Wake up the control stream so the final message can be sent. */
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            stream_ctx->is_active_datagram = 0;
+        }
+    }
+
     return ret;
 }
 
@@ -336,8 +439,9 @@ int quicrq_relay_publish_cached_media(quicrq_ctx_t* qr_ctx,
     quicrq_relay_cached_media_t* cache_ctx, const uint8_t* url, const size_t url_length)
 {
     /* if succeeded, publish the source */
-    cache_ctx->srce_ctx = quicrq_publish_source(qr_ctx, url, url_length, cache_ctx,
-        quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn, quicrq_relay_publisher_delete);
+    cache_ctx->srce_ctx = quicrq_publish_datagram_source(qr_ctx, url, url_length, cache_ctx,
+        quicrq_relay_publisher_subscribe, quicrq_relay_publisher_fn, quicrq_relay_datagram_publisher_fn,
+        quicrq_relay_publisher_delete);
     return (cache_ctx->srce_ctx == NULL)?-1:0;
 }
 
@@ -621,12 +725,12 @@ int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
  * The "next available frame" function returns an available frame ID.
  * The "mark frame transmitted" function adds a frame ID to the transmitted ranges.
  */
-int quicrq_relay_next_available_frame(quicrq_sent_frame_ranges_t* frame_ranges, struct st_quicrq_relay_cached_media_t* cached_media, uint64_t * next_frame_id)
+int quicrq_relay_next_available_frame_id(quicrq_sent_frame_ranges_t* frame_ranges, quicrq_relay_cached_media_t* cached_media, uint64_t* next_frame_id, int * is_finished)
 {
     /* First, look for the closest frame id after the last frame */
     quicrq_sent_frame_one_range_t* next_range = frame_ranges->sent;
     quicrq_relay_cached_frame_t key = { 0 };
-    picosplay_node_t * found = NULL;
+    picosplay_node_t* found = NULL;
     quicrq_relay_cached_frame_t* result;
     int ret = -1;
 
@@ -645,7 +749,7 @@ int quicrq_relay_next_available_frame(quicrq_sent_frame_ranges_t* frame_ranges, 
     /* Then, find whether this frame belongs to an already-sent range.
      * If it does, try find a frame ID after that range, and repeat.
      */
-    while (found != NULL && next_range != NULL){
+    while (found != NULL && next_range != NULL) {
         result = (quicrq_relay_cached_frame_t*)quicrq_relay_cache_frame_node_value(found);
         if (result->frame_id < next_range->range_start) {
             /* Hole to be filled before start of range */
@@ -672,10 +776,20 @@ int quicrq_relay_next_available_frame(quicrq_sent_frame_ranges_t* frame_ranges, 
     }
     else {
         *next_frame_id = 0;
+        if (cached_media->final_frame_id != 0) {
+            if (frame_ranges->sent != NULL &&
+                frame_ranges->sent->range_start == 0 &&
+                frame_ranges->sent->range_end + 1 == cached_media->final_frame_id)
+            {
+                *next_frame_id = cached_media->final_frame_id;
+                *is_finished = 1;
+            }
+        }
     }
 
     return ret;
 }
+
 
 int quicrq_relay_add_frame_id_to_ranges(quicrq_sent_frame_ranges_t* frame_ranges, uint64_t frame_id)
 {

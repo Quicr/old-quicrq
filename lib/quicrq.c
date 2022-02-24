@@ -491,84 +491,98 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
 
     while (stream_ctx != NULL) {
         if (stream_ctx->is_datagram && stream_ctx->is_sender && stream_ctx->is_active_datagram) {
-            /* Check how much data is ready */
-            size_t available = 0;
-            size_t data_length = 0;
-            /* Predict length of datagram_stream_id + length of offset.
-             * TODO: the number of bytes available depends on the header size, which depends on
-             * frame_id, and offset. The frame size and frame offset are managed by the
-             * sender code and are known in advance, but the "last_segment" value is not.
-             * We do a first encoding supposing last_segment = 0. If this turns out
-             * to be the actual last segment, the coding will have to be fixed.
-             */
-            uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
-            size_t h_size;
-            uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-                stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 0);
-            if (h_byte == NULL) {
-                ret = -1;
-                break;
+            if (stream_ctx->get_datagram_fn != NULL) {
+                /* If the source can directly format datagrams, just poll it */
+                int media_was_sent = 0;
+                ret = stream_ctx->get_datagram_fn(stream_ctx, context, space, &media_was_sent, &at_least_one_active);
+                if (media_was_sent || ret != 0) {
+                    break;
+                }
+                else {
+                    stream_ctx->is_active_datagram = 0;
+                }
             }
-            h_size = h_byte - datagram_header;
-            if (h_size > space) {
-                /* TODO: should get a min encoding length per stream */
-                /* Can't do anything there */
-                at_least_one_active = 1;
-            } else {
-                int is_last_segment = 0;
-                int is_media_finished = 0;
-                ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, current_time);
+            else {
+                /* Check how much data is ready */
+                size_t available = 0;
+                size_t data_length = 0;
+                /* Predict length of datagram_stream_id + length of offset.
+                 * TODO: the number of bytes available depends on the header size, which depends on
+                 * frame_id, and offset. The frame size and frame offset are managed by the
+                 * sender code and are known in advance, but the "last_segment" value is not.
+                 * We do a first encoding supposing last_segment = 0. If this turns out
+                 * to be the actual last segment, the coding will have to be fixed.
+                 */
+                uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
+                size_t h_size;
+                uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
+                    stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 0);
+                if (h_byte == NULL) {
+                    ret = -1;
+                    break;
+                }
+                h_size = h_byte - datagram_header;
+                if (h_size > space) {
+                    /* TODO: should get a min encoding length per stream */
+                    /* Can't do anything there */
+                    at_least_one_active = 1;
+                }
+                else {
+                    int is_last_segment = 0;
+                    int is_media_finished = 0;
+                    ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, current_time);
 
-                /* Get a buffer inside the datagram packet */
-                if (ret == 0){
-                    if (is_media_finished) {
-                        /* Mark the stream as finished, prepare sending a final message */
-                        stream_ctx->final_frame_id = stream_ctx->next_frame_id;
-                        /* Wake up the control stream so the final message can be sent. */
-                        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-                        stream_ctx->is_active_datagram = 0;
-                    }
-                    if (available > 0) {
-                        void* buffer = picoquic_provide_datagram_buffer(context, available + h_size);
-                        at_least_one_active = 1;
-                        if (buffer == NULL) {
-                            ret = -1;
+                    /* Get a buffer inside the datagram packet */
+                    if (ret == 0) {
+                        if (is_media_finished) {
+                            /* Mark the stream as finished, prepare sending a final message */
+                            stream_ctx->final_frame_id = stream_ctx->next_frame_id;
+                            /* Wake up the control stream so the final message can be sent. */
+                            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+                            stream_ctx->is_active_datagram = 0;
+                        }
+                        if (available > 0) {
+                            void* buffer = picoquic_provide_datagram_buffer(context, available + h_size);
+                            at_least_one_active = 1;
+                            if (buffer == NULL) {
+                                ret = -1;
+                            }
+                            else {
+                                /* Push the header */
+                                if (is_last_segment) {
+                                    h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
+                                        stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 1);
+                                    if (h_byte != datagram_header + h_size) {
+                                        /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
+                                        ret = -1;
+                                    }
+                                }
+                                if (ret == 0) {
+                                    memcpy(buffer, datagram_header, h_size);
+                                    /* Get the media */
+                                    ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, ((uint8_t*)buffer) + h_size, available, &data_length,
+                                        &is_last_segment, &is_media_finished, current_time);
+                                    if (ret == 0 && available != data_length) {
+                                        ret = -1;
+                                    }
+                                }
+                                /* Update offset based on what is sent. */
+                                if (ret == 0) {
+                                    if (is_last_segment) {
+                                        stream_ctx->next_frame_id++;
+                                        stream_ctx->next_frame_offset = 0;
+                                    }
+                                    else {
+                                        stream_ctx->next_frame_offset += available;
+                                    }
+                                }
+                            }
+                            /* Exit the loop, since data was copied */
+                            break;
                         }
                         else {
-                            /* Push the header */
-                            if (is_last_segment) {
-                                h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-                                    stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 1);
-                                if (h_byte != datagram_header + h_size) {
-                                    /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
-                                    ret = -1;
-                                }
-                            }
-                            if (ret == 0) {
-                                memcpy(buffer, datagram_header, h_size);
-                                /* Get the media */
-                                ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, ((uint8_t*)buffer) + h_size, available, &data_length,
-                                    &is_last_segment, &is_media_finished, current_time);
-                                if (ret == 0 && available != data_length) {
-                                    ret = -1;
-                                }
-                            }
-                            /* Update offset based on what is sent. */
-                            if (ret == 0) {
-                                if (is_last_segment) {
-                                    stream_ctx->next_frame_id++;
-                                    stream_ctx->next_frame_offset = 0;
-                                }
-                                else {
-                                    stream_ctx->next_frame_offset += available;
-                                }
-                            }
+                            stream_ctx->is_active_datagram = 0;
                         }
-                        /* Exit the loop, since data was copied */
-                        break;
-                    }
-                    else {
-                        stream_ctx->is_active_datagram = 0;
                     }
                 }
             }
