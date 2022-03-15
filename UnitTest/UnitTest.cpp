@@ -248,5 +248,11 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(get_addr) {
+			int ret = quicrq_get_addr_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

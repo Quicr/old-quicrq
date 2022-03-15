@@ -1197,6 +1197,16 @@ quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
     return cnx_ctx;
 }
 
+/* Access the server address behind a quicrq connection context
+ */
+void quicrq_get_peer_address(quicrq_cnx_ctx_t* cnx_ctx, struct sockaddr_storage* stored_addr)
+{
+    struct sockaddr* peer_addr;
+
+    picoquic_get_peer_addr(cnx_ctx->cnx, &peer_addr);
+    picoquic_store_addr(stored_addr, peer_addr);
+}
+
 quicrq_cnx_ctx_t* quicrq_first_connection(quicrq_ctx_t* qr_ctx)
 {
     return qr_ctx->first_cnx;
