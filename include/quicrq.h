@@ -54,6 +54,8 @@ quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
     const char* sni, struct sockaddr* addr);
 void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx);
 
+void quicrq_get_peer_address(quicrq_cnx_ctx_t* cnx_ctx, struct sockaddr_storage* stored_addr);
+
 /* Media stream definition.
  * Media is composed of series of frames, frames have
  * headers and content. Header provides information

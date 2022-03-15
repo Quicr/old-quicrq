@@ -734,3 +734,52 @@ int quick_relay_range_test()
 
     return ret;
 }
+
+int quicrq_get_addr_test()
+{
+    int ret = 0;
+    quicrq_test_config_t* config = quicrq_test_basic_config_create(0);
+    quicrq_cnx_ctx_t* cnx_ctx = NULL;
+    struct sockaddr* addr_to = NULL;
+
+    if (config == NULL) {
+        ret = -1;
+        DBG_PRINTF("Cannot create client configuration, ret = %d", ret);
+    }
+    else {
+        /* Create a quirq connection context on client */
+        cnx_ctx = quicrq_test_create_client_cnx(config, 1, 0);
+        if (cnx_ctx == NULL) {
+            ret = -1;
+            DBG_PRINTF("Cannot create client connection, ret = %d", ret);
+        }
+    }
+
+    if (ret == 0) {
+        /* Find the address of the server node */
+        addr_to = quicrq_test_find_send_addr(config, 1, 0);
+        if (addr_to == NULL) {
+            ret = -1;
+            DBG_PRINTF("Cannot get server address from configuration, ret = %d", ret);
+        }
+    }
+
+
+    if (ret == 0) {
+        struct sockaddr_storage stored_addr;
+
+        quicrq_get_peer_address(cnx_ctx, &stored_addr);
+
+        if (picoquic_compare_addr((struct sockaddr*)&stored_addr, addr_to) != 0) {
+            ret = -1;
+            DBG_PRINTF("Cannot retrieve expected address, ret = %d", ret);
+        }
+    }
+
+    /* Clear everything. */
+    if (config != NULL) {
+        quicrq_test_config_delete(config);
+    }
+
+    return ret;
+}
