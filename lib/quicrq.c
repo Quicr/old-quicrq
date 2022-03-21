@@ -518,11 +518,13 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
                     stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 0);
                 if (h_byte == NULL) {
+                    /* Not enough space in header buffer to encode the header. That should never happen */
+                    DBG_PRINTF("Error: datagram header longer than %zu", QUICRQ_DATAGRAM_HEADER_MAX);
                     ret = -1;
                     break;
                 }
                 h_size = h_byte - datagram_header;
-                if (h_size > space) {
+                if (h_size >= space) {
                     /* TODO: should get a min encoding length per stream */
                     /* Can't do anything there */
                     at_least_one_active = 1;
@@ -533,7 +535,9 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, current_time);
 
                     /* Get a buffer inside the datagram packet */
-                    if (ret == 0) {
+                    if (ret < 0) {
+                        DBG_PRINTF("Error, first publisher function call returns %d, space = %zu, available = %zu", ret, space - h_size, available);
+                    } else {
                         if (is_media_finished) {
                             /* Mark the stream as finished, prepare sending a final message */
                             stream_ctx->final_frame_id = stream_ctx->next_frame_id;
@@ -545,6 +549,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                             void* buffer = picoquic_provide_datagram_buffer(context, available + h_size);
                             at_least_one_active = 1;
                             if (buffer == NULL) {
+                                DBG_PRINTF("Error, cannot obtain datagram buffer, space = %zu, available = %zu", space, available + h_size);
                                 ret = -1;
                             }
                             else {
@@ -554,6 +559,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                         stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 1);
                                     if (h_byte != datagram_header + h_size) {
                                         /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
+                                        DBG_PRINTF("Error, cannot encode datagram header, expected = %zu", h_size);
                                         ret = -1;
                                     }
                                 }
@@ -563,6 +569,8 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, ((uint8_t*)buffer) + h_size, available, &data_length,
                                         &is_last_segment, &is_media_finished, current_time);
                                     if (ret == 0 && available != data_length) {
+                                        /* Application returned different size on second call */
+                                        DBG_PRINTF("Error,  application datagram provided %zu, expected %zu", data_length, available);
                                         ret = -1;
                                     }
                                 }
