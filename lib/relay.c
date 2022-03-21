@@ -356,10 +356,12 @@ static int quicrq_relay_datagram_publisher_fn(
         *media_was_sent = 0;
 
         if (is_finished) {
-            /* Mark the stream as finished, prepare sending a final message */
-            stream_ctx->final_frame_id = media_ctx->current_frame_id;
-            /* Wake up the control stream so the final message can be sent. */
-            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            if (!stream_ctx->is_final_frame_id_sent) {
+                /* Mark the stream as finished, prepare sending a final message */
+                stream_ctx->final_frame_id = media_ctx->current_frame_id;
+                /* Wake up the control stream so the final message can be sent. */
+                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            }
             stream_ctx->is_active_datagram = 0;
         }
     }
