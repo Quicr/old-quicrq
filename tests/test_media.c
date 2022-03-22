@@ -923,7 +923,6 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     char media_log_ref_path[512];
     uint8_t media_buffer[1024];
     uint64_t current_time = 0;
-    uint64_t published_offset = 0;
     size_t data_length;
     void* cons_ctx = NULL;
     uint64_t frame_id = 0;
@@ -1001,7 +1000,6 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
                 ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
                     frame_id, frame_offset, is_last_segment, data_length);
                 if (ret == 0) {
-                    published_offset += data_length;
                     inactive = 0;
                 }
                 else {
