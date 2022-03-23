@@ -518,7 +518,7 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
     }
     if (srce_ctx == NULL) {
         ret = -1;
-        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "No source available for URL: %s",
+        quicrq_log_message(stream_ctx->cnx_ctx, "No source available for URL: %s",
             quicrq_uint8_t_to_text(url, url_length, buffer, 256));
     }
     else {
@@ -540,11 +540,11 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         stream_ctx->media_ctx = srce_ctx->subscribe_fn(/*url, url_length, */ srce_ctx->pub_ctx);
         if (stream_ctx->media_ctx == NULL) {
             ret = -1;
-            picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "No media available for URL: %s",
+            quicrq_log_message(stream_ctx->cnx_ctx, "No media available for URL: %s",
                 quicrq_uint8_t_to_text(url, url_length, buffer, 256));
         }
         else {
-            picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Set a subscription to URL: %s",
+            quicrq_log_message(stream_ctx->cnx_ctx, "Set a subscription to URL: %s",
                 quicrq_uint8_t_to_text(url, url_length, buffer, 256));
         }
     }
@@ -647,7 +647,7 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
                 stream_ctx->send_state = quicrq_sending_initial;
                 stream_ctx->receive_state = quicrq_receive_repair;
                 picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
-                picoquic_log_app_message(cnx_ctx->cnx, "Accepted post of URL: %s on stream %" PRIu64,
+                quicrq_log_message(cnx_ctx, "Posting subscribe to URL: %s on stream %" PRIu64,
                     quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
             }
         }
@@ -769,7 +769,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             ret = stream_ctx->cnx_ctx->qr_ctx->consumer_media_init_fn(stream_ctx, url, url_length);
             /* Activate the receiver */
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-            picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Accepted post of URL: %s on stream %" PRIu64,
+            quicrq_log_message(stream_ctx->cnx_ctx, "Accepted post of URL: %s on stream %" PRIu64,
                 quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
 
         }
@@ -804,6 +804,8 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
 int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int is_datagram, int ret)
 {
     if (ret == quicrq_consumer_finished) {
+        quicrq_log_message(stream_ctx->cnx_ctx, "Stream %"PRIu64" finished after %s, ret=%d",
+            stream_ctx->stream_id, (is_final) ? "final offset" : ((is_datagram) ? "datagram" : "repair"), ret);
         DBG_PRINTF("Finished after %s, ret=%d", (is_final)?"final offset":((is_datagram)?"datagram":"repair"), ret);
         stream_ctx->is_receive_complete = 1;
         stream_ctx->send_state = quicrq_sending_fin;
