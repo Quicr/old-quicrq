@@ -473,7 +473,7 @@ quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, in
 }
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client)
+int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client, int min_packet_size)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -489,7 +489,8 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     char text_log_name[512];
     size_t nb_log_chars = 0;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%llx.txt", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%llx-%zx.txt", is_real_time, use_datagrams, is_from_client, 
+        (unsigned long long)simulate_losses, min_packet_size);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, is_from_client,
         result_file_name, result_log_name, sizeof(result_file_name));
@@ -519,6 +520,11 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         if (config->sources[0].srce_ctx == NULL) {
             ret = -1;
             DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+        }
+        else if (min_packet_size > 0){
+            quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)config->sources[0].srce_ctx;
+            test_media_source_context_t* pub_source_ctx = (test_media_source_context_t *)srce_ctx->pub_ctx;
+            pub_source_ctx->min_packet_size = min_packet_size;
         }
     }
 
@@ -609,38 +615,45 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 /* Basic connection test, using streams, not real time. */
 int quicrq_basic_test()
 {
-    return quicrq_basic_test_one(0, 0, 0, 0);
+    return quicrq_basic_test_one(0, 0, 0, 0, 0);
 }
 
 /* Basic connection test, using streams, real time. */
 int quicrq_basic_rt_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 0);
+    return quicrq_basic_test_one(1, 0, 0, 0, 0);
 }
 
 /* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
 int quicrq_datagram_basic_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0);
+    return quicrq_basic_test_one(1, 1, 0, 0, 0);
 }
 
 /* Datagram test, with forced packet losses. */
 int quicrq_datagram_loss_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x7080, 0);
+    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0);
 }
 
 /* Publish from client, using streams */
 int quicrq_basic_client_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 1);
+    return quicrq_basic_test_one(1, 0, 0, 1, 0);
 }
 
 /* Publish from client, using datagrams */
 int quicrq_datagram_client_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 1);
+    return quicrq_basic_test_one(1, 1, 0, 1, 0);
 }
+
+/* Datagram test, with datagram limit. */
+int quicrq_datagram_limit_test()
+{
+    return quicrq_basic_test_one(1, 1, 0, 0, 1200);
+}
+
 
 /* Unit tests of reordering functions.
  * Check that the frames are being sent as expected.

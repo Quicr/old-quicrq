@@ -179,6 +179,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     /* Find how much data is available on the media stream */
     int is_media_finished = 0;
     int is_last_segment = 0;
+    int is_still_active = 0;
     size_t available = 0;
     size_t data_length = 0;
     uint8_t stream_header[QUICRQ_STREAM_HEADER_MAX];
@@ -201,7 +202,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         }
         else {
             /* Find how much data is actually available */
-            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, current_time);
+            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, &is_still_active, current_time);
         }
     }
 
@@ -264,7 +265,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                     /* copy the stream header to the packet */
                     memcpy(buffer, stream_header, h_size);
                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, buffer + h_size, available, &data_length,
-                        &is_last_segment, &is_media_finished, current_time);
+                        &is_last_segment, &is_media_finished, &is_still_active, current_time);
                     if (ret == 0 && available != data_length) {
                         ret = -1;
                     }
@@ -533,7 +534,8 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 else {
                     int is_last_segment = 0;
                     int is_media_finished = 0;
-                    ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, current_time);
+                    int is_still_active = 0;
+                    ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, &is_still_active, current_time);
 
                     /* Get a buffer inside the datagram packet */
                     if (ret < 0) {
@@ -571,7 +573,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                     memcpy(buffer, datagram_header, h_size);
                                     /* Get the media */
                                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, ((uint8_t*)buffer) + h_size, available, &data_length,
-                                        &is_last_segment, &is_media_finished, current_time);
+                                        &is_last_segment, &is_media_finished, &is_still_active, current_time);
                                     if (ret == 0 && available != data_length) {
                                         /* Application returned different size on second call */
                                         quicrq_log_message(stream_ctx->cnx_ctx, "Error,  application datagram provided %zu, expected %zu", data_length, available);
@@ -594,7 +596,8 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                             break;
                         }
                         else {
-                            stream_ctx->is_active_datagram = 0;
+                            stream_ctx->is_active_datagram = is_still_active;
+                            at_least_one_active |= is_still_active;
                         }
                     }
                 }
@@ -1277,7 +1280,7 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
     if (stream_ctx->media_ctx != NULL) {
         if (stream_ctx->is_sender) {
             if (stream_ctx->publisher_fn != NULL) {
-                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, 0);
+                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, NULL, 0);
             }
         }
         else {

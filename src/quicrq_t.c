@@ -33,6 +33,7 @@ static const quicrq_test_def_t test_table[] =
     { "datagram_loss", quicrq_datagram_loss_test },
     { "basic_client", quicrq_basic_client_test },
     { "datagram_client", quicrq_datagram_client_test },
+    { "datagram_limit", quicrq_datagram_limit_test },
     { "media_frame_no_loss", quicrq_media_frame_noloss },
     { "media_frame_loss", quicrq_media_frame_loss },
     { "relay_basic", quicrq_relay_basic_test },

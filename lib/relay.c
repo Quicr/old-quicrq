@@ -219,6 +219,7 @@ int quicrq_relay_publisher_fn(
     size_t* data_length,
     int* is_last_segment,
     int* is_media_finished,
+    int* is_still_active,
     uint64_t current_time)
 {
     int ret = 0;
@@ -228,6 +229,7 @@ int quicrq_relay_publisher_fn(
     if (action == quicrq_media_source_get_data) {
         *is_media_finished = 0;
         *is_last_segment = 0;
+        *is_still_active = 0;
         *data_length = 0;
         if (media_ctx->cache_ctx->final_frame_id != 0 && media_ctx->current_frame_id >= media_ctx->cache_ctx->final_frame_id) {
             *is_media_finished = 1;
@@ -244,6 +246,7 @@ int quicrq_relay_publisher_fn(
                     copied = available;
                 }
                 *data_length = copied;
+                *is_still_active = 1;
                 if (data != NULL) {
                     /* If data is set to NULL, return the available size but do not copy anything */
                     memcpy(data, frame->data + media_ctx->current_offset, copied);
