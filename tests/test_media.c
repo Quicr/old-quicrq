@@ -268,6 +268,7 @@ int test_media_frame_publisher_fn(
     size_t* data_length,
     int* is_last_segment,
     int* is_media_finished,
+    int * is_still_active,
     uint64_t current_time)
 {
     int ret = 0;
@@ -279,6 +280,7 @@ int test_media_frame_publisher_fn(
             /* Simulate behavior of a data source that only transmit packets if
              * enough space is available in datagram */
             *data_length = 0;
+            *is_still_active = 1;
         }
         else {
             *is_media_finished = 0;
@@ -287,8 +289,10 @@ int test_media_frame_publisher_fn(
             ret = test_media_publisher_check_frame(pub_ctx);
 
             if (ret == 0) {
+                *is_still_active = 1;
                 if (pub_ctx->is_finished) {
                     *is_media_finished = 1;
+                    *is_still_active = 0;
                 }
                 else if (pub_ctx->media_frame_size > pub_ctx->media_frame_read) {
                     if (!pub_ctx->is_real_time ||
@@ -311,11 +315,13 @@ int test_media_frame_publisher_fn(
                     else {
                         *pub_ctx->p_next_time = pub_ctx->current_header.timestamp + pub_ctx->start_time;
                         *data_length = 0;
+                        *is_still_active = 0;
                     }
                 }
                 else
                 {
                     *data_length = 0;
+                    *is_still_active = 0;
                 }
             }
         }
@@ -790,6 +796,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     uint64_t frame_offset = 0;
     int is_last_segment = 0;
     int is_media_finished = 0;
+    int is_still_active = 0;
     int inactive = 0;
 
     /* Locate the source and reference file */
@@ -816,7 +823,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     while (ret == 0 && !is_media_finished && inactive < 32) {
         ret = test_media_frame_publisher_fn(quicrq_media_source_get_data,
             pub_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_last_segment, &is_media_finished, current_time);
+            &data_length, &is_last_segment, &is_media_finished, &is_still_active, current_time);
         if (ret != 0) {
             DBG_PRINTF("Publisher, ret=%d", ret);
         }
@@ -937,6 +944,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     uint64_t frame_offset = 0;
     int is_last_segment = 0;
     int is_media_finished = 0;
+    int is_still_active = 0;
     uint64_t simulated_time = 0;
     uint64_t media_next_time = 0;
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
@@ -1002,7 +1010,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     while (ret == 0 && !is_media_finished && inactive < 32) {
         ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_last_segment, &is_media_finished, current_time);
+            &data_length, &is_last_segment, &is_media_finished, &is_still_active, current_time);
         if (ret == 0) {
             if (is_media_finished || data_length > 0) {
                 ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
@@ -1116,6 +1124,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     uint64_t frame_offset = 0;
     int is_media_finished = 0;
     int is_last_segment = 0;
+    int is_still_active = 0;
     media_disorder_hole_t* first_loss = NULL;
     media_disorder_hole_t* last_loss = NULL;
 
@@ -1151,7 +1160,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         /* Get the next frame from the publisher */
         ret = test_media_frame_publisher_fn(
             quicrq_media_source_get_data, pub_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_last_segment, &is_media_finished, current_time);
+            &data_length, &is_last_segment, &is_media_finished, &is_still_active, current_time);
         if (ret != 0) {
             DBG_PRINTF("Media published function: ret = %d", ret);
             break;

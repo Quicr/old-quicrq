@@ -128,6 +128,7 @@ typedef int (*quicrq_media_publisher_fn)(
     size_t* data_length,
     int* is_last_segment,
     int* is_media_finished,
+    int * is_still_active,
     uint64_t current_time);
 typedef void (*quicrq_media_publisher_delete_fn)(void* pub_ctx);
 
