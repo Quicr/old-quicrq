@@ -77,6 +77,7 @@ void* test_media_publisher_subscribe(void* v_srce_ctx)
 
     if (media_ctx != NULL) {
         media_ctx->p_next_time = srce_ctx->p_next_time;
+        media_ctx->min_packet_size = srce_ctx->min_packet_size;
     }
 
     return media_ctx;
@@ -272,43 +273,50 @@ int test_media_frame_publisher_fn(
     int ret = 0;
     test_media_publisher_context_t* pub_ctx = (test_media_publisher_context_t*)media_ctx;
 
+
     if (action == quicrq_media_source_get_data) {
+        if (data == NULL && pub_ctx->min_packet_size > 0 && data_max_size < pub_ctx->min_packet_size) {
+            /* Simulate behavior of a data source that only transmit packets if
+             * enough space is available in datagram */
+            *data_length = 0;
+        }
+        else {
+            *is_media_finished = 0;
+            *is_last_segment = 0;
+            *data_length = 0;
+            ret = test_media_publisher_check_frame(pub_ctx);
 
-        *is_media_finished = 0;
-        *is_last_segment = 0;
-        *data_length = 0;
-        ret = test_media_publisher_check_frame(pub_ctx);
-
-        if (ret == 0) {
-            if (pub_ctx->is_finished) {
-                *is_media_finished = 1;
-            }
-            else if (pub_ctx->media_frame_size > pub_ctx->media_frame_read) {
-                if (!pub_ctx->is_real_time ||
-                    current_time >= pub_ctx->current_header.timestamp + pub_ctx->start_time) {
-                    /* Copy data from frame in memory */
-                    size_t available = pub_ctx->media_frame_size - pub_ctx->media_frame_read;
-                    size_t copied = data_max_size;
-                    if (data_max_size >= available) {
-                        *is_last_segment = 1;
-                        copied = available;
-                    }
-                    *data_length = copied;
-                    if (data != NULL) {
-                        /* If data is set to NULL, return the available size but do not copy anything */
-                        memcpy(data, pub_ctx->media_frame + pub_ctx->media_frame_read, copied);
-                        pub_ctx->media_frame_read += copied;
-                    }
-                    *pub_ctx->p_next_time = UINT64_MAX;
+            if (ret == 0) {
+                if (pub_ctx->is_finished) {
+                    *is_media_finished = 1;
                 }
-                else {
-                    *pub_ctx->p_next_time = pub_ctx->current_header.timestamp  + pub_ctx->start_time;
+                else if (pub_ctx->media_frame_size > pub_ctx->media_frame_read) {
+                    if (!pub_ctx->is_real_time ||
+                        current_time >= pub_ctx->current_header.timestamp + pub_ctx->start_time) {
+                        /* Copy data from frame in memory */
+                        size_t available = pub_ctx->media_frame_size - pub_ctx->media_frame_read;
+                        size_t copied = data_max_size;
+                        if (data_max_size >= available) {
+                            *is_last_segment = 1;
+                            copied = available;
+                        }
+                        *data_length = copied;
+                        if (data != NULL) {
+                            /* If data is set to NULL, return the available size but do not copy anything */
+                            memcpy(data, pub_ctx->media_frame + pub_ctx->media_frame_read, copied);
+                            pub_ctx->media_frame_read += copied;
+                        }
+                        *pub_ctx->p_next_time = UINT64_MAX;
+                    }
+                    else {
+                        *pub_ctx->p_next_time = pub_ctx->current_header.timestamp + pub_ctx->start_time;
+                        *data_length = 0;
+                    }
+                }
+                else
+                {
                     *data_length = 0;
                 }
-            }
-            else
-            {
-                *data_length = 0;
             }
         }
     }

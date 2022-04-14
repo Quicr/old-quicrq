@@ -113,6 +113,7 @@ typedef struct st_test_media_publisher_context_t {
     size_t media_frame_alloc;
     size_t media_frame_size;
     size_t media_frame_read;
+    size_t min_packet_size;
     unsigned int is_real_time : 1;
     unsigned int is_finished : 1;
 } test_media_publisher_context_t;
@@ -123,6 +124,7 @@ typedef struct st_test_media_source_context_t {
     char const* file_path;
     const generation_parameters_t* generation_context;
     unsigned int is_real_time : 1;
+    size_t min_packet_size; /* For simulation of limited publishers */
     uint64_t start_time;
     uint64_t* p_next_time; /* Pointer for signalling next available time */
 } test_media_source_context_t;

@@ -20,6 +20,7 @@ extern "C" {
     int quicrq_datagram_loss_test();
     int quicrq_basic_client_test();
     int quicrq_datagram_client_test();
+    int quicrq_datagram_limit_test();
     int quicrq_media_frame_noloss();
     int quicrq_media_frame_loss();
     int quicrq_relay_basic_test();
