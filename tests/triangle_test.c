@@ -235,6 +235,13 @@ int quicrq_triangle_basic_test()
     return ret;
 }
 
+int quicrq_triangle_basic_loss_test()
+{
+    int ret = quicrq_triangle_test_one(1, 0, 0x7080);
+
+    return ret;
+}
+
 int quicrq_triangle_datagram_test()
 {
     int ret = quicrq_triangle_test_one(1, 1, 0);

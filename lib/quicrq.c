@@ -1032,6 +1032,9 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             /* Packet carrying datagram-frame was not really lost */
             ret = quicrq_handle_datagram_ack_nack(cnx_ctx, fin_or_event, bytes, length);
             break;
+        case picoquic_callback_pacing_changed:
+            /* Notification of rate change from congestion controller */
+            break;
         default:
             /* unexpected */
             break;

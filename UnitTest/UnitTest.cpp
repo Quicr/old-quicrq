@@ -135,6 +135,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(triangle_basic_loss) {
+			int ret = quicrq_triangle_basic_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(triangle_datagram) {
 			int ret = quicrq_triangle_datagram_test();
 
