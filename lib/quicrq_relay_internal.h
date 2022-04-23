@@ -47,18 +47,38 @@
   * sustainable, some version of cache management will have to be added later.
   */
 
+#if 1
+typedef struct st_quicrq_relay_cached_segment_t {
+    picosplay_node_t segment_node;
+    uint64_t frame_id;
+    uint64_t offset;
+    int is_last_segment;
+    struct st_quicrq_relay_cached_segment_t* next_in_order;
+    size_t data_length;
+    uint8_t* data;
+} quicrq_relay_cached_segment_t;
+
+#else
 typedef struct st_quicrq_relay_cached_frame_t {
     picosplay_node_t frame_node;
     uint64_t frame_id;
     uint8_t* data;
     size_t data_length;
 } quicrq_relay_cached_frame_t;
+#endif
 
 typedef struct st_quicrq_relay_cached_media_t {
     quicrq_media_source_ctx_t* srce_ctx;
     uint64_t final_frame_id;
+    uint64_t nb_frame_received;
     uint64_t subscribe_stream_id;
+#if 1
+    quicrq_relay_cached_segment_t* first_segment;
+    quicrq_relay_cached_segment_t* last_segment;
+    picosplay_tree_t segment_tree;
+#else 
     picosplay_tree_t frame_tree;
+#endif
 } quicrq_relay_cached_media_t;
 
 typedef struct st_quicrq_relay_publisher_context_t {
@@ -68,12 +88,21 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int is_frame_complete;
     int is_media_complete;
     int is_sending_frame;
+#if 1
+    quicrq_relay_cached_segment_t* current_segment;
+    uint64_t length_sent;
+#else
     quicrq_sent_frame_ranges_t ranges;
+#endif
 } quicrq_relay_publisher_context_t;
 
 typedef struct st_quicrq_relay_consumer_context_t {
+    uint64_t last_frame_id;
     quicrq_relay_cached_media_t* cached_ctx;
+#if 1
+#else
     quicrq_reassembly_context_t reassembly_ctx;
+#endif
 } quicrq_relay_consumer_context_t;
 
 typedef struct st_quicrq_relay_context_t {

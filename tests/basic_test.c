@@ -654,7 +654,7 @@ int quicrq_datagram_limit_test()
     return quicrq_basic_test_one(1, 1, 0, 0, 1200);
 }
 
-
+#if 0
 /* Unit tests of reordering functions.
  * Check that the frames are being sent as expected.
  * Set up: provide a list of frame ids in the receive buffer.
@@ -747,6 +747,7 @@ int quick_relay_range_test()
 
     return ret;
 }
+#endif
 
 int quicrq_get_addr_test()
 {

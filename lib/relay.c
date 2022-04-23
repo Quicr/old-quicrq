@@ -31,7 +31,41 @@
  * availability between "in-order" and "out-of-sequence" availablity, which
  * may need to be reflected in the contract between connection and sources.
  */
+#if 1
+/* Manage the splay of cached segments */
+static void* quicrq_relay_cache_segment_node_value(picosplay_node_t* segment_node)
+{
+    return (segment_node == NULL) ? NULL : (void*)((char*)segment_node - offsetof(struct st_quicrq_relay_cached_segment_t, segment_node));
+}
 
+static int64_t quicrq_relay_cache_segment_node_compare(void* l, void* r) {
+    quicrq_relay_cached_segment_t* ls = (quicrq_relay_cached_segment_t*)l;
+    quicrq_relay_cached_segment_t* rs = (quicrq_relay_cached_segment_t*)r;
+    int64_t ret = ls->frame_id - rs->frame_id;
+    if (ret == 0) {
+        if (ls->offset < rs->offset) {
+            ret = -1;
+        }
+        else if (ls->offset > rs->offset) {
+            ret = 1;
+        }
+    }
+    return ret;
+}
+
+static picosplay_node_t* quicrq_relay_cache_segment_node_create(void* v_media_frame)
+{
+    return &((quicrq_relay_cached_segment_t*)v_media_frame)->segment_node;
+}
+
+static void quicrq_relay_cache_segment_node_delete(void* tree, picosplay_node_t* node)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(tree);
+#endif
+    free(quicrq_relay_cache_segment_node_value(node));
+}
+#else
 /* manage the splay of cached frames */
 
 static void* quicrq_relay_cache_frame_node_value(picosplay_node_t* frame_node)
@@ -55,19 +89,34 @@ static void quicrq_relay_cache_frame_node_delete(void* tree, picosplay_node_t* n
 #endif
     free(quicrq_relay_cache_frame_node_value(node));
 }
+#endif
 
 void quicrq_relay_cache_media_clear(quicrq_relay_cached_media_t* cached_media)
 {
+#if 1
+    cached_media->first_segment = NULL;
+    cached_media->last_segment = NULL;
+    picosplay_empty_tree(&cached_media->segment_tree);
+#else
     picosplay_empty_tree(&cached_media->frame_tree);
+#endif
 }
 
 void quicrq_relay_cache_media_init(quicrq_relay_cached_media_t* cached_media)
 {
+#if 1
+    picosplay_init_tree(&cached_media->segment_tree, quicrq_relay_cache_segment_node_compare,
+        quicrq_relay_cache_segment_node_create, quicrq_relay_cache_segment_node_delete,
+        quicrq_relay_cache_segment_node_value);
+#else
     picosplay_init_tree(&cached_media->frame_tree, quicrq_relay_cache_frame_node_compare,
         quicrq_relay_cache_frame_node_create, quicrq_relay_cache_frame_node_delete,
         quicrq_relay_cache_frame_node_value);
+#endif
 }
 
+#if 1
+#else
 quicrq_relay_cached_frame_t* quicrq_relay_cache_frame_get(quicrq_relay_cached_media_t* cached_media, uint64_t frame_id)
 {
     quicrq_relay_cached_frame_t key = { 0 };
@@ -81,11 +130,134 @@ quicrq_relay_cached_frame_t* quicrq_relay_cache_frame_get(quicrq_relay_cached_me
     }
     return result;
 }
+#endif
 
 /* Client part of the relay.
  * The connection is started when a context is specialized to become a relay
  */
+#if 1
+int quicrq_relay_add_segment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
+    const uint8_t* data,
+    uint64_t frame_id,
+    uint64_t offset,
+    int is_last_segment,
+    size_t data_length)
+{
+    int ret = 0;
+    quicrq_relay_cached_segment_t* segment = (quicrq_relay_cached_segment_t*)malloc(
+        sizeof(quicrq_relay_cached_segment_t) + data_length);
 
+    if (segment == NULL) {
+        ret = -1;
+    }
+    else {
+        if (cached_ctx->last_segment == NULL) {
+            cached_ctx->first_segment = segment;
+        }
+        else {
+            cached_ctx->last_segment->next_in_order = segment;
+        }
+        cached_ctx->last_segment = segment;
+        memset(segment, 0, sizeof(quicrq_relay_cached_segment_t));
+        segment->frame_id = frame_id;
+        segment->offset = offset;
+        segment->is_last_segment = is_last_segment;
+        segment->data = ((uint8_t*)segment) + sizeof(quicrq_relay_cached_segment_t);
+        segment->data_length = data_length;
+        memcpy(segment->data, data, data_length);
+        picosplay_insert(&cached_ctx->segment_tree, segment);
+    }
+
+    return ret;
+}
+
+int quicrq_relay_filter_segment_against_cache(quicrq_relay_cached_media_t* cached_ctx,
+    const uint8_t* data,
+    uint64_t frame_id,
+    uint64_t offset,
+    int is_last_segment,
+    size_t data_length)
+{
+    int ret = 0;
+    int data_was_added = 0;
+    /* First check whether the frame is in the cache. */
+    /* If the frame is in the cache, check whether this segment is already received */
+    quicrq_relay_cached_segment_t * first_segment_state = NULL;
+    quicrq_relay_cached_segment_t key = { 0 };
+
+    key.frame_id = frame_id;
+    key.offset = UINT64_MAX;
+    picosplay_node_t* last_segment_node = picosplay_find_previous(&cached_ctx->segment_tree, &key);
+    do {
+        first_segment_state = (quicrq_relay_cached_segment_t*)quicrq_relay_cache_segment_node_value(last_segment_node);
+        if (first_segment_state == NULL || first_segment_state->frame_id != frame_id ||
+            first_segment_state->offset + first_segment_state->data_length < offset) {
+            /* Insert the whole segment */
+            ret = quicrq_relay_add_segment_to_cache(cached_ctx, data, frame_id, offset, is_last_segment, data_length);
+            data_was_added = 1;
+            /* Mark done */
+            data_length = 0;
+        }
+        else
+        {
+            uint64_t previous_last_byte = first_segment_state->offset + first_segment_state->data_length;
+            if (offset + data_length > previous_last_byte) {
+                /* Some of the segment data comes after this one. Submit */
+                size_t added_length = offset + data_length - previous_last_byte;
+                ret = quicrq_relay_add_segment_to_cache(cached_ctx, data, frame_id, offset, is_last_segment, added_length);
+                data_was_added = 1;
+                data_length -= added_length;
+            }
+            if (offset >= first_segment_state->offset) {
+                /* What remained of the segment overlaps with existing data */
+                data_length = 0;
+            }
+            else {
+                if (first_segment_state->offset < offset + data_length) {
+                    /* Some of the segment data overlaps, remove it */
+                    data_length = first_segment_state->offset - offset;
+                }
+                last_segment_node = picosplay_previous(last_segment_node);
+            }
+        }
+    } while (ret == 0 && data_length > 0);
+
+    if (ret == 0 && data_was_added) {
+        /* Wake up the consumers of this source */
+        quicrq_source_wakeup(cached_ctx->srce_ctx);
+        /* Check whether this frame is now complete */
+        last_segment_node = picosplay_find_previous(&cached_ctx->segment_tree, &key);
+        first_segment_state = (quicrq_relay_cached_segment_t*)quicrq_relay_cache_segment_node_value(last_segment_node);
+        if (first_segment_state != NULL) {
+            int last_is_final = first_segment_state->is_last_segment;
+            uint64_t previous_offset = first_segment_state->offset;
+
+            while (last_is_final && previous_offset > 0) {
+                last_segment_node = picosplay_previous(last_segment_node);
+                if (last_segment_node == NULL) {
+                    last_is_final = 0;
+                }
+                else {
+                    first_segment_state = (quicrq_relay_cached_segment_t*)quicrq_relay_cache_segment_node_value(last_segment_node);
+                    if (first_segment_state->frame_id != frame_id ||
+                        first_segment_state->offset + first_segment_state->data_length < previous_offset) {
+                        last_is_final = 0;
+                    }
+                    else {
+                        previous_offset = first_segment_state->offset;
+                    }
+                }
+            }
+            if (last_is_final) {
+                /* The frame was just completely received. Keep counts. */
+                cached_ctx->nb_frame_received += 1;
+            }
+        }
+    }
+
+    return ret;
+}
+#else
 int quicrq_relay_add_frame_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     uint64_t frame_id,
     const uint8_t* data,
@@ -132,6 +304,7 @@ int quicrq_relay_consumer_frame_ready(
 
     return ret;
 }
+#endif
 
 int quicrq_relay_consumer_cb(
     quicrq_media_consumer_enum action,
@@ -147,6 +320,34 @@ int quicrq_relay_consumer_cb(
     quicrq_relay_consumer_context_t * cons_ctx = (quicrq_relay_consumer_context_t*)media_ctx;
 
     switch (action) {
+#if 1
+    case quicrq_media_datagram_ready:
+        /* Check that this datagram was not yet received.
+         * This requires accessing the cache by frame_id, offset and length. */
+         /* Add segment (or segments) to cache */
+        ret = quicrq_relay_filter_segment_against_cache(cons_ctx->cached_ctx, data, frame_id, offset, is_last_segment, data_length);
+        /* Manage fin of transmission */
+        if (ret == 0) {
+            /* If the final frame id is known, and the number of fully received frames
+             * matches that frame id, then the transmission is finished. */
+            if (cons_ctx->cached_ctx->final_frame_id > 0 &&
+                cons_ctx->cached_ctx->nb_frame_received >= cons_ctx->cached_ctx->final_frame_id) {
+                ret = quicrq_consumer_finished;
+            }
+        }
+        break;
+    case quicrq_media_final_frame_id:
+        /* Document the final frame-ID in context */
+        /* Manage fin of transmission */
+        break;
+    case quicrq_media_close:
+        /* Document the final frame */
+        /* Notify consumers of the stream */
+        quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
+        /* Free the media context resource */
+        free(media_ctx);
+        break;
+#else
     case quicrq_media_datagram_ready:
         ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, frame_id, offset,
             is_last_segment, data_length, quicrq_relay_consumer_frame_ready, media_ctx);
@@ -176,6 +377,7 @@ int quicrq_relay_consumer_cb(
         quicrq_reassembly_release(&cons_ctx->reassembly_ctx);
         free(media_ctx);
         break;
+#endif
     default:
         ret = -1;
         break;
@@ -207,7 +409,10 @@ void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx)
 
 void quicrq_relay_publisher_close(quicrq_relay_publisher_context_t* media_ctx)
 {
+#if 1
+#else
     quick_relay_clear_ranges(&media_ctx->ranges);
+#endif
     free(media_ctx);
 }
 
@@ -223,7 +428,6 @@ int quicrq_relay_publisher_fn(
     uint64_t current_time)
 {
     int ret = 0;
-    /* TO DO: more complex behavior when data is not received in order. */
 
     quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)v_media_ctx;
     if (action == quicrq_media_source_get_data) {
@@ -231,6 +435,54 @@ int quicrq_relay_publisher_fn(
         *is_last_segment = 0;
         *is_still_active = 0;
         *data_length = 0;
+#if 1
+        /* In sequence access to frames !
+         * variable current_frame_id = in sequence.
+         * variable current_offset = current_offset sent.
+         */
+        if (media_ctx->cache_ctx->final_frame_id != 0 && media_ctx->current_frame_id >= media_ctx->cache_ctx->final_frame_id) {
+            *is_media_finished = 1;
+        }
+        else {
+            if (media_ctx->current_segment == NULL) {
+                /* Find the segment with the expected offset */
+            }
+            if (media_ctx->current_segment == NULL) {
+                /* Check for end of media maybe */
+            }
+            else {
+                size_t available = media_ctx->length_sent >= media_ctx->current_segment->data_length;
+                size_t copied = data_max_size;
+                size_t offset = media_ctx->current_segment->offset + media_ctx->length_sent;
+                int end_of_segment = 0;
+
+                if (data_max_size >= available) {
+                    end_of_segment = 1;
+                    *is_last_segment = media_ctx->current_segment->is_last_segment;
+                    copied = available;
+                }
+                *data_length = copied;
+                *is_still_active = 1;
+                if (data != NULL) {
+                    /* If data is set to NULL, return the available size but do not copy anything */
+                    memcpy(data, media_ctx->current_segment->data + media_ctx->length_sent, copied);
+                    media_ctx->length_sent += copied;
+                    if (end_of_segment) {
+                        if (media_ctx->current_segment->is_last_segment) {
+                            media_ctx->current_frame_id++;
+                            media_ctx->current_offset = 0;
+                        }
+                        else {
+                            media_ctx->current_offset += media_ctx->current_segment->data_length;
+                        }
+
+                        media_ctx->length_sent = 0;
+                        media_ctx->current_segment = NULL;
+                    }
+                }
+            }
+        }
+#else
         if (media_ctx->cache_ctx->final_frame_id != 0 && media_ctx->current_frame_id >= media_ctx->cache_ctx->final_frame_id) {
             *is_media_finished = 1;
         }
@@ -253,7 +505,7 @@ int quicrq_relay_publisher_fn(
                     media_ctx->current_offset += copied;
                     if (media_ctx->current_offset >= frame->data_length) {
                         media_ctx->current_frame_id++;
-                        media_ctx->current_offset = 0; 
+                        media_ctx->current_offset = 0;
                     }
                 }
             }
@@ -261,6 +513,7 @@ int quicrq_relay_publisher_fn(
                 /* Error, data is not yet available */
             }
         }
+#endif
     }
     else if (action == quicrq_media_source_close) {
         /* close the context */
@@ -280,6 +533,90 @@ static int quicrq_relay_datagram_publisher_fn(
     int is_finished = 0;
     quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)stream_ctx->media_ctx;
 
+#if 1
+    /* Check whether the current segment is fully sent, progress if needed */
+    if (media_ctx->current_segment == NULL) {
+        media_ctx->current_segment = media_ctx->cache_ctx->first_segment;
+    }
+    /* Move to the next segment if it is available */
+    while (media_ctx->current_segment != NULL && media_ctx->length_sent >= media_ctx->current_segment->data_length &&
+        media_ctx->current_segment->next_in_order != NULL) {
+        media_ctx->length_sent = 0;
+        media_ctx->current_segment = media_ctx->current_segment->next_in_order;
+    }
+    /* Return the flags per segment */
+    if (media_ctx->current_segment != NULL && media_ctx->length_sent < media_ctx->current_segment->data_length) {
+        /* TODO: how to assess that the media is finished? */
+        size_t offset = media_ctx->current_segment->offset + media_ctx->length_sent;
+        uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
+        uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, 
+            stream_ctx->datagram_stream_id, media_ctx->current_segment->frame_id, offset, 0);
+        if (h_byte == NULL) {
+            ret = -1;
+        }
+        else {
+            int is_last_segment = 0;
+            size_t h_size = h_byte - datagram_header;
+
+            if (h_size > space) {
+                /* TODO: should get a min encoding length per stream */
+                /* Can't do anything there */
+            }
+            else {
+                size_t available = media_ctx->current_segment->data_length - media_ctx->length_sent;
+                size_t copied = space - h_size;
+                if (copied >= available) {
+                    is_last_segment = media_ctx->current_segment->is_last_segment;
+                    copied = available;
+                }
+                if (copied > 0) {
+                    /* Get a buffer inside the datagram packet */
+                    void* buffer = picoquic_provide_datagram_buffer(context, copied + h_size);
+                    if (buffer == NULL) {
+                        ret = -1;
+                    }
+                    else {
+                        /* Push the header */
+                        if (is_last_segment) {
+                            h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
+                                stream_ctx->datagram_stream_id, media_ctx->current_segment->frame_id, offset, 1); 
+
+                            if (h_byte != datagram_header + h_size) {
+                                /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
+                                ret = -1;
+                            }
+                        }
+                        if (ret == 0) {
+                            memcpy(buffer, datagram_header, h_size);
+                            /* Get the media */
+                            memcpy(((uint8_t*)buffer) + h_size, media_ctx->current_segment->data + media_ctx->length_sent, copied);
+                            media_ctx->length_sent += copied;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else {
+        /* Nothing to send at this point. If the media sending is finished, mark the stream accordingly.
+         * The cache filling function checks that the final ID is only marked when all segments have been
+         * received. At this point, we only check that the final ID is marked, and all segments have 
+         * been sent.
+         */
+        *media_was_sent = 0;
+
+        if (media_ctx->cache_ctx->final_frame_id != 0 &&
+            media_ctx->current_segment != NULL &&
+            media_ctx->length_sent >= media_ctx->current_segment->data_length &&
+            media_ctx->current_segment->next_in_order == NULL) {
+            /* Mark the stream as finished, prepare sending a final message */
+            stream_ctx->final_frame_id = media_ctx->cache_ctx->final_frame_id;
+            /* Wake up the control stream so the final message can be sent. */
+            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            stream_ctx->is_active_datagram = 0;
+        }
+    }
+#else
     if (!media_ctx->is_sending_frame) {
         /* If not currently sending, check what other frame might be available */
         media_ctx->current_offset = 0;
@@ -368,6 +705,7 @@ static int quicrq_relay_datagram_publisher_fn(
             stream_ctx->is_active_datagram = 0;
         }
     }
+#endif
 
     return ret;
 }
@@ -435,7 +773,10 @@ quicrq_relay_consumer_context_t* quicrq_relay_create_cons_ctx()
         malloc(sizeof(quicrq_relay_consumer_context_t));
     if (cons_ctx != NULL) {
         memset(cons_ctx, 0, sizeof(quicrq_relay_consumer_context_t));
+#if 1
+#else
         quicrq_reassembly_init(&cons_ctx->reassembly_ctx);
+#endif
     }
     return cons_ctx;
 }
@@ -723,6 +1064,7 @@ int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
     return ret;
 }
 
+#if 0
 /* Management of out of order submission at relay.
  * When a relay forwards data over a datagram connection, if there is no in-order data
  * available, consider sending out of order data.
@@ -869,3 +1211,4 @@ void quick_relay_clear_ranges(quicrq_sent_frame_ranges_t* frame_ranges)
         free(last_range);
     }
 }
+#endif
