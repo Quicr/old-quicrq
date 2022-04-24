@@ -10,7 +10,7 @@
 #include "quicrq_relay.h"
 
 /* A relay is a specialized node, acting both as client when acquiring a media
- * segment and as server when producing data.
+ * fragment and as server when producing data.
  * 
  * There is one QUICRQ context per relay, used both for initiating a connection to
  * the server, and accepting connections from the client.
@@ -48,15 +48,15 @@
   */
 
 #if 1
-typedef struct st_quicrq_relay_cached_segment_t {
-    picosplay_node_t segment_node;
+typedef struct st_quicrq_relay_cached_fragment_t {
+    picosplay_node_t fragment_node;
     uint64_t frame_id;
     uint64_t offset;
-    int is_last_segment;
-    struct st_quicrq_relay_cached_segment_t* next_in_order;
+    int is_last_fragment;
+    struct st_quicrq_relay_cached_fragment_t* next_in_order;
     size_t data_length;
     uint8_t* data;
-} quicrq_relay_cached_segment_t;
+} quicrq_relay_cached_fragment_t;
 
 #else
 typedef struct st_quicrq_relay_cached_frame_t {
@@ -73,9 +73,9 @@ typedef struct st_quicrq_relay_cached_media_t {
     uint64_t nb_frame_received;
     uint64_t subscribe_stream_id;
 #if 1
-    quicrq_relay_cached_segment_t* first_segment;
-    quicrq_relay_cached_segment_t* last_segment;
-    picosplay_tree_t segment_tree;
+    quicrq_relay_cached_fragment_t* first_fragment;
+    quicrq_relay_cached_fragment_t* last_fragment;
+    picosplay_tree_t fragment_tree;
 #else 
     picosplay_tree_t frame_tree;
 #endif
@@ -89,7 +89,7 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int is_media_complete;
     int is_sending_frame;
 #if 1
-    quicrq_relay_cached_segment_t* current_segment;
+    quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
 #else
     quicrq_sent_frame_ranges_t ranges;

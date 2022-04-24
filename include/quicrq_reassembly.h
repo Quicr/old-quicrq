@@ -12,9 +12,9 @@ extern "C" {
 
  /* Handling of frame reassembly
   * Manage a list of frames being reassembled. The list is organized as a splay,
-  * indexed by the frame id and frame offset. When a new segment is received
+  * indexed by the frame id and frame offset. When a new fragment is received
   * the code will check whether the frame is already present, and then whether the
-  * segment for that frame has already arrived.
+  * fragment for that frame has already arrived.
   */
 
 typedef struct st_quicrq_reassembly_context_t {
@@ -47,7 +47,7 @@ int quicrq_reassembly_input(
     const uint8_t* data,
     uint64_t frame_id,
     uint64_t offset,
-    int is_last_segment,
+    int is_last_fragment,
     size_t data_length,
     quicrq_reassembly_frame_ready_fn ready_fn,
     void * app_media_ctx);

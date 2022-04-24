@@ -266,7 +266,7 @@ int test_media_frame_publisher_fn(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
-    int* is_last_segment,
+    int* is_last_fragment,
     int* is_media_finished,
     int * is_still_active,
     uint64_t current_time)
@@ -284,7 +284,7 @@ int test_media_frame_publisher_fn(
         }
         else {
             *is_media_finished = 0;
-            *is_last_segment = 0;
+            *is_last_fragment = 0;
             *data_length = 0;
             ret = test_media_publisher_check_frame(pub_ctx);
 
@@ -301,7 +301,7 @@ int test_media_frame_publisher_fn(
                         size_t available = pub_ctx->media_frame_size - pub_ctx->media_frame_read;
                         size_t copied = data_max_size;
                         if (data_max_size >= available) {
-                            *is_last_segment = 1;
+                            *is_last_fragment = 1;
                             copied = available;
                         }
                         *data_length = copied;
@@ -389,9 +389,9 @@ quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* ur
 
 /* Media receiver definitions.
  * Manage a list of frames being reassembled. The list is organized as a splay,
- * indexed by the frame id and frame offset. When a new segment is received
+ * indexed by the frame id and frame offset. When a new fragment is received
  * the code will check whether the frame is already present, and then whether the
- * segment for that frame has already arrived.
+ * fragment for that frame has already arrived.
  */
 
 typedef struct st_test_media_consumer_context_t {
@@ -576,11 +576,11 @@ int test_media_datagram_input(
     const uint8_t* data,
     uint64_t frame_id,
     uint64_t offset,
-    int is_last_segment,
+    int is_last_fragment,
     size_t data_length)
 {
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-    int ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, frame_id, offset, is_last_segment, data_length, 
+    int ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, frame_id, offset, is_last_fragment, data_length, 
         test_media_consumer_frame_ready, media_ctx);
 
     return ret;
@@ -606,7 +606,7 @@ int test_media_frame_consumer_cb(
     const uint8_t* data,
     uint64_t frame_id,
     uint64_t offset,
-    int is_last_segment,
+    int is_last_fragment,
     size_t data_length)
 {
     int ret = 0;
@@ -614,7 +614,7 @@ int test_media_frame_consumer_cb(
 
     switch (action) {
     case quicrq_media_datagram_ready:
-        ret = test_media_datagram_input(media_ctx, current_time, data, frame_id, (size_t)offset, is_last_segment, data_length);
+        ret = test_media_datagram_input(media_ctx, current_time, data, frame_id, (size_t)offset, is_last_fragment, data_length);
 
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
@@ -794,7 +794,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     void* cons_ctx = NULL;
     uint64_t frame_id = 0;
     uint64_t frame_offset = 0;
-    int is_last_segment = 0;
+    int is_last_fragment = 0;
     int is_media_finished = 0;
     int is_still_active = 0;
     int inactive = 0;
@@ -823,7 +823,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     while (ret == 0 && !is_media_finished && inactive < 32) {
         ret = test_media_frame_publisher_fn(quicrq_media_source_get_data,
             pub_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_last_segment, &is_media_finished, &is_still_active, current_time);
+            &data_length, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret != 0) {
             DBG_PRINTF("Publisher, ret=%d", ret);
         }
@@ -834,11 +834,11 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
         } else {
             inactive = 0;
             ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                frame_id, frame_offset, is_last_segment, data_length);
+                frame_id, frame_offset, is_last_fragment, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Consumer, ret=%d", ret);
             }
-            else if (is_last_segment) {
+            else if (is_last_fragment) {
                 frame_id++;
                 frame_offset = 0;
             }
@@ -942,7 +942,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     void* cons_ctx = NULL;
     uint64_t frame_id = 0;
     uint64_t frame_offset = 0;
-    int is_last_segment = 0;
+    int is_last_fragment = 0;
     int is_media_finished = 0;
     int is_still_active = 0;
     uint64_t simulated_time = 0;
@@ -1010,11 +1010,11 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     while (ret == 0 && !is_media_finished && inactive < 32) {
         ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_last_segment, &is_media_finished, &is_still_active, current_time);
+            &data_length, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret == 0) {
             if (is_media_finished || data_length > 0) {
                 ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    frame_id, frame_offset, is_last_segment, data_length);
+                    frame_id, frame_offset, is_last_fragment, data_length);
                 if (ret == 0) {
                     inactive = 0;
                 }
@@ -1026,7 +1026,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
                 current_time = test_media_publisher_next_time(stream_ctx->media_ctx, current_time);
                 inactive++;
             }
-            if (is_last_segment) {
+            if (is_last_fragment) {
                 frame_id++;
                 frame_offset = 0;
             }
@@ -1101,7 +1101,7 @@ typedef struct st_media_disorder_hole_t {
     struct st_media_disorder_hole_t* next_loss;
     uint64_t frame_id;
     uint64_t offset;
-    int is_last_segment;
+    int is_last_fragment;
     size_t length;
     uint8_t media_buffer[1024];
 } media_disorder_hole_t;
@@ -1123,7 +1123,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     uint64_t frame_id = 0;
     uint64_t frame_offset = 0;
     int is_media_finished = 0;
-    int is_last_segment = 0;
+    int is_last_fragment = 0;
     int is_still_active = 0;
     media_disorder_hole_t* first_loss = NULL;
     media_disorder_hole_t* last_loss = NULL;
@@ -1160,7 +1160,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         /* Get the next frame from the publisher */
         ret = test_media_frame_publisher_fn(
             quicrq_media_source_get_data, pub_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_last_segment, &is_media_finished, &is_still_active, current_time);
+            &data_length, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret != 0) {
             DBG_PRINTF("Media published function: ret = %d", ret);
             break;
@@ -1179,8 +1179,8 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
             (frame_id == loss_frame[actual_losses] || (loss_frame[actual_losses] == UINT64_MAX && is_media_finished)) &&
             (loss_mode[actual_losses] == 3 ||
                 (loss_mode[actual_losses] == 0 && frame_offset == 0) ||
-                (loss_mode[actual_losses] == 2 && is_last_segment == 0) ||
-                (loss_mode[actual_losses == 1 && frame_offset != 0 && is_last_segment]))) {
+                (loss_mode[actual_losses] == 2 && is_last_fragment == 0) ||
+                (loss_mode[actual_losses == 1 && frame_offset != 0 && is_last_fragment]))) {
             /* If the frame packet should be seen as lost, store it for repetition */
             media_disorder_hole_t* loss = (media_disorder_hole_t*)malloc(sizeof(media_disorder_hole_t));
             if (loss == NULL) {
@@ -1191,7 +1191,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
             loss->frame_id = frame_id;
             loss->offset = frame_offset;
             loss->length = data_length;
-            loss->is_last_segment = is_last_segment;
+            loss->is_last_fragment = is_last_fragment;
             memcpy(loss->media_buffer, media_buffer, data_length);
             if (last_loss == NULL) {
                 first_loss = loss;
@@ -1204,14 +1204,14 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         else {
             /* Simulate arrival of packet */
             ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    frame_id, frame_offset, is_last_segment, data_length);
+                    frame_id, frame_offset, is_last_fragment, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Media consumer callback: ret = %d", ret);
                 break;
             }
         }
-        /* Count the segments and the frames */
-        if (is_last_segment) {
+        /* Count the fragments and the frames */
+        if (is_last_fragment) {
             frame_id++;
             frame_offset = 0;
             if (actual_losses < nb_losses &&
@@ -1253,7 +1253,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
                 /* Simulate repair of a hole */
                 actual_dup++;
                 ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
-                    loss->frame_id, loss->offset, loss->is_last_segment, loss->length);
+                    loss->frame_id, loss->offset, loss->is_last_fragment, loss->length);
                 if (ret != 0) {
                     DBG_PRINTF("Media consumer callback: ret = %d", ret);
                 }
@@ -1271,7 +1271,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         while (loss != NULL && ret == 0) {
             /* Simulate repair of a hole */
             ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
-                loss->frame_id, loss->offset, loss->is_last_segment, loss->length);
+                loss->frame_id, loss->offset, loss->is_last_fragment, loss->length);
             if (ret == quicrq_consumer_finished) {
                 consumer_properly_finished = 1;
                 ret = 0;

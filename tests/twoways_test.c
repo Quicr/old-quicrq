@@ -9,8 +9,8 @@
 
 /* two ways test
  * Test a "two ways" configuration, in which two clients communicate through a server.
- * Both clients post a media segment, which the server caches.
- * Both clients get the media segment.
+ * Both clients post a media fragment, which the server caches.
+ * Both clients get the media fragment.
  */
 
 /* Create a test network */

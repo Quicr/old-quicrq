@@ -8,8 +8,8 @@
 
 /* Triangle test
  * Test a "triangle" configuration, in which two clients communicate through a server.
- * Client #1 post a media segment, which the server caches.
- * Client #2 gets the media segment.
+ * Client #1 post a media fragment, which the server caches.
+ * Client #2 gets the media fragment.
  */
 
 /* Create a test network */

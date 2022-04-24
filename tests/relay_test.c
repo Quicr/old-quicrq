@@ -230,3 +230,10 @@ int quicrq_relay_datagram_client_test()
     return ret;
 }
 
+/* Unit tests of the relay specific cache
+ */
+
+int quicrq_relay_cache_fill_test()
+{
+
+}
