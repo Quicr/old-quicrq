@@ -4,6 +4,7 @@
 #include "quicrq.h"
 #include "quicrq_relay.h"
 #include "quicrq_internal.h"
+#include "quicrq_relay_internal.h"
 #include "quicrq_test_internal.h"
 
 /* Create a test network */
@@ -232,8 +233,500 @@ int quicrq_relay_datagram_client_test()
 
 /* Unit tests of the relay specific cache
  */
+#define RELAY_TEST_FRAME_MAX 32
+typedef struct st_relay_test_frame_t {
+    size_t length;
+    uint8_t data[RELAY_TEST_FRAME_MAX];
+} relay_test_frame_t;
+
+relay_test_frame_t relay_test_frames[] = {
+    { 25, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}},
+    { 8, { 10, 11, 12, 13, 14, 15, 16, 17 }},
+    { 9, { 20, 21, 22, 23, 24, 25, 26, 27, 28 }},
+    { 9, { 30, 31, 32, 33, 34, 35, 36, 37, 38 }},
+    { 10, { 40, 41, 42, 43, 44, 45, 46, 47, 48, 49 }},
+    { 5, { 50, 51, 52, 53, 54 }},
+    { 6, { 60, 61, 62, 63, 64, 65 }},
+    { 7, { 70, 71, 72, 73, 74, 75, 76 }},
+    { 30, { 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,
+            90, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+            100, 101, 102, 103, 104, 105, 106, 107, 108, 109 }}
+};
+
+size_t nb_relay_test_frames = sizeof(relay_test_frames) / sizeof(relay_test_frame_t);
+
+int quicrq_relay_cache_verify(quicrq_relay_cached_media_t* cached_ctx)
+{
+    int ret = 0;
+    size_t nb_fragments_found = 0;
+    for (size_t f_id = 0; ret == 0 && f_id < nb_relay_test_frames; f_id++) {
+        size_t offset = 0;
+        while (ret == 0 && offset < relay_test_frames[f_id].length) {
+            /* Get fragment at specified offset */
+            quicrq_relay_cached_fragment_t* fragment = quicrq_relay_cache_get_fragment(cached_ctx, f_id, offset);
+            if (fragment == NULL) {
+                DBG_PRINTF("Cannot find fragment, frame %zu, offset %zu", f_id, offset);
+                ret = -1;
+            }
+            /* Check that length does not overflow */
+            if (ret == 0 && offset + fragment->data_length > relay_test_frames[f_id].length) {
+                DBG_PRINTF("Fragment overflow, frame %zu, offset %zu, length %zu", f_id, offset, fragment->data_length);
+                ret = -1;
+            }
+            /* Verify data matches */
+            if (ret == 0 && memcmp(relay_test_frames[f_id].data + offset, fragment->data, fragment->data_length) != 0) {
+                DBG_PRINTF("Fragment data incorrect, frame %zu, offset %zu, length %zu", f_id, offset, fragment->data_length);
+                ret = -1;
+            }
+            /* Verify is_last_fragment */
+            if (ret == 0) {
+                int should_be_last = (offset + fragment->data_length) >= relay_test_frames[f_id].length;
+                if (should_be_last && !fragment->is_last_fragment) {
+                    DBG_PRINTF("Fragment should be last, frame %zu, offset %zu, length %zu", f_id, offset, fragment->data_length);
+                    ret = -1;
+                }
+                else if (!should_be_last && fragment->is_last_fragment) {
+                    DBG_PRINTF("Fragment should not be last, frame %zu, offset %zu, length %zu", f_id, offset, fragment->data_length);
+                    ret = -1;
+                }
+            }
+            /* Update offset, increment fragment count */
+            if (ret == 0) {
+                offset += fragment->data_length;
+                nb_fragments_found += 1;
+            }
+        }
+    }
+    if (ret == 0) {
+        /* Check that cache contains exactly the expected number of fragments */
+        if (cached_ctx->fragment_tree.size != nb_fragments_found) {
+            DBG_PRINTF("Found %zu fragments, cache contains %zu", nb_fragments_found, cached_ctx->fragment_tree.size);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        /* Verify the chain of fragments */
+        quicrq_relay_cached_fragment_t* fragment = cached_ctx->first_fragment;
+        quicrq_relay_cached_fragment_t* previous_fragment = NULL;
+        size_t nb_in_chain = 0;
+        while (fragment != NULL) {
+            nb_in_chain++;
+            previous_fragment = fragment;
+            fragment = fragment->next_in_order;
+        }
+        if (nb_in_chain != cached_ctx->fragment_tree.size) {
+            DBG_PRINTF("Found %zu fragments in chain, cache contains %zu", nb_in_chain, cached_ctx->fragment_tree.size);
+            ret = -1;
+        }
+        else if (previous_fragment != cached_ctx->last_fragment) {
+            DBG_PRINTF("%s", "Last in chain does not match last fragment");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        /* verify that the number of frames received matches the expected count */
+        if (cached_ctx->nb_frame_received != nb_relay_test_frames) {
+            DBG_PRINTF("Received %zu frames instead of %zu", cached_ctx->nb_frame_received, nb_relay_test_frames - 1);
+            ret = -1;
+        }
+    }
+    return ret;
+}
+
+int quicrq_relay_cache_fill_test_one(size_t fragment_max, size_t start_frame, size_t skip, int nb_pass)
+{
+    int ret = 0;
+    int nb_skipped = 0;
+    /* Create a cache */
+    quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
+    quicrq_relay_cached_media_t* cached_ctx = quicrq_relay_create_cache_ctx();
+
+    if (cached_ctx == NULL || srce_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(srce_ctx, 0, sizeof(quicrq_media_source_ctx_t));
+        cached_ctx->srce_ctx = srce_ctx;
+        /* send a first set of segments,
+         * starting with designated frame */
+        for (int pass = 1; ret == 0 && pass <= nb_pass; pass++) {
+            size_t skip_count = 0;
+            for (size_t f_id = 0; ret == 0 && f_id < nb_relay_test_frames; f_id++) {
+                size_t offset = 0;
+                while (ret == 0 && offset < relay_test_frames[f_id].length) {
+                    size_t data_length = relay_test_frames[f_id].length - offset;
+                    int is_last_fragment = 1;
+                    int should_skip = 0;
+                    if (data_length > fragment_max) {
+                        data_length = fragment_max;
+                        is_last_fragment = 0;
+                    }
+                    /* If we are skipping some frames:
+                     *    - these frames are skipped in the 1st pass
+                     *    - only these frames are skipped in the last pass
+                     *    - non-skipped frames are repeated as duplicate in intermediate frames.
+                     */
+                    if (f_id < start_frame) {
+                        if (pass < nb_pass) {
+                            should_skip = 1;
+                        }
+                        else {
+                            should_skip = 0;
+                        }
+                    }
+                    else if (skip != 0) {
+                        skip_count++;
+                        if (skip_count >= skip) {
+                            if (pass < nb_pass) {
+                                should_skip = 0;
+                            }
+                            else {
+                                should_skip = 1;
+                            }
+                            skip_count = 0;
+                        }
+                        else {
+                            if (pass < nb_pass) {
+                                should_skip = 1;
+                            }
+                            else {
+                                should_skip = 0;
+                            }
+                        }
+                    }
+                    if (!should_skip) {
+                        ret = quicrq_relay_propose_fragment_to_cache(cached_ctx, 
+                            relay_test_frames[f_id].data + offset, f_id, offset, is_last_fragment, data_length);
+                        if (ret != 0) {
+                            DBG_PRINTF("Proposed segment fails, frame %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
+                        }
+                    }
+                    else {
+                        nb_skipped++;
+                    }
+                    offset += data_length;
+                }
+            }
+        }
+        if (skip != 0 && nb_skipped == 0) {
+            DBG_PRINTF("Expected skip %zu, nothing skipped", skip);
+            ret = -1;
+        }
+         /* Verify the cache is as expected */
+        if (ret == 0) {
+            ret = quicrq_relay_cache_verify(cached_ctx);
+        }
+    }
+
+    if (srce_ctx != NULL) {
+        free(srce_ctx);
+    }
+
+    if (cached_ctx != NULL) {
+        /* Delete the cache */
+        quicrq_relay_delete_cache_ctx(cached_ctx);
+    }
+
+    return ret;
+}
+
+/* For the purpose of simulating the picoquic API, we copy here
+ * the definition of the context used by the API
+ * `picoquic_provide_datagram_buffer` */
+typedef struct st_relay_test_datagram_buffer_argument_t {
+    uint8_t* bytes0; /* Points to the beginning of the encoding of the datagram frame */
+    uint8_t* bytes; /* Position after encoding the datagram frame type */
+    uint8_t* bytes_max; /* Pointer to the end of the packet */
+    uint8_t* after_data; /* Pointer to end of data written by app */
+    size_t allowed_space; /* Data size from bytes to end of packet */
+} relay_test_datagram_buffer_argument_t;
+
+/* Simulate a relay trying to forward data after it is added to the cache. */
+int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx, quicrq_relay_cached_media_t* cached_ctx_p, 
+    uint64_t *sequential_frame_id, size_t *sequential_offset,
+    int is_datagram, uint64_t current_time)
+{
+    int ret = 0;
+    uint8_t data[1024];
+    int is_last_fragment;
+    int is_media_finished;
+    int is_still_active;
+    uint64_t frame_id;
+    size_t fragment_offset;
+    uint8_t* fragment = NULL;
+    size_t fragment_length;
+
+    do {
+        fragment_length = 0;
+        if (is_datagram) {
+            int at_least_one_active = 0;
+            int media_was_sent = 0;
+            int not_ready = 0;
+
+            /* Setup a datagram buffer conext to mimic picoquic's behavior */
+            relay_test_datagram_buffer_argument_t d_context = { 0 };
+            data[0] = 0x30;
+            d_context.bytes0 = &data[0];
+            d_context.bytes = &data[1];
+            d_context.after_data = &data[0];
+            d_context.bytes_max = &data[0] + 1024;
+            d_context.allowed_space = 1023;
+            /* Call the prepare function */
+            ret = quicrq_relay_datagram_publisher_prepare(pub_ctx, 0, &d_context, d_context.allowed_space,
+                &media_was_sent, &at_least_one_active, &not_ready);
+            /* Decode the datagram header to find the coded_fragment */
+            if (ret == 0 && d_context.after_data > d_context.bytes0) {
+                const uint8_t* bytes = d_context.bytes0;
+                size_t datagram_length;
+                /* skip the padding */
+                while (*bytes == 0 && bytes < d_context.bytes_max) {
+                    bytes++;
+                }
+                if (*bytes == 0x30) {
+                    bytes++;
+                    datagram_length = d_context.bytes_max - bytes;
+                }
+                else if (*bytes == 0x31) {
+                    /* decode the length */
+                    bytes = picoquic_frames_varlen_decode(bytes, d_context.bytes_max, &datagram_length);
+                    if (bytes == NULL || datagram_length < 1) {
+                        ret = -1;
+                    }
+                }
+                else {
+                    ret = 1;
+                }
+                if (ret == 0) {
+                    /* decode the datagram header */
+                    uint64_t datagram_stream_id;
+                    uint64_t frame_offset;
+                    uint8_t* datagram_max = bytes + datagram_length;
+
+                    bytes = quicrq_datagram_header_decode(bytes, datagram_max, &datagram_stream_id,
+                        &frame_id, &frame_offset, &is_last_fragment);
+                    if (bytes == NULL) {
+                        DBG_PRINTF("Cannot decode datagram header, length = %zu", datagram_length);
+                        ret = -1;
+                    }
+                    else if (datagram_stream_id != 0) {
+                        DBG_PRINTF("Unexpected datagram stream id: %" PRIu64, datagram_stream_id);
+                        ret = -1;
+                    } else {
+                        fragment = bytes;
+                        fragment_length = datagram_max - bytes;
+                        fragment_offset = (size_t)frame_offset;
+                    }
+                }
+            }
+        }
+        else {
+            /* The first call to the publisher functions positions to the current frameid, offset, etc. */
+            ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, NULL, 1024, &fragment_length,
+                &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+            if (fragment_length > 0) {
+                frame_id = pub_ctx->current_frame_id;
+                fragment_offset = pub_ctx->current_offset;
+                if (frame_id != *sequential_frame_id) {
+                    DBG_PRINTF("Expected frame id = %" PRIu64 ", got %" PRIu64, *sequential_frame_id, frame_id);
+                    ret = -1;
+                }
+                if (fragment_offset != *sequential_offset) {
+                    DBG_PRINTF("For frame id = %" PRIu64 ", expected offset %zu got %zu", frame_id, *sequential_offset, fragment_offset);
+                    ret = -1;
+                }
+                /* The second call to the media function copies the data at the required space. */
+                ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, data, 1024, &fragment_length,
+                    &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                fragment = data;
+                if (is_last_fragment) {
+                    *sequential_frame_id++;
+                    *sequential_offset = 0;
+                }
+                else {
+                    *sequential_offset += fragment_length;
+                    if (*sequential_offset > RELAY_TEST_FRAME_MAX) {
+                        DBG_PRINTF("Wrong offset: %zu", *sequential_offset);
+                        ret = -1;
+                    }
+                }
+            }
+        }
+        if (ret == 0 && fragment_length > 0) {
+            /* submit to the media cache */
+            ret = quicrq_relay_propose_fragment_to_cache(cached_ctx_p,
+                fragment, frame_id, fragment_offset, is_last_fragment, fragment_length);
+        }
+    } while (ret == 0 && fragment_length > 0);
+
+    return ret;
+}
+
+int quicrq_relay_cache_publish_test_one(int is_datagram)
+{
+    int ret = 0;
+    int nb_skipped = 0;
+    /* Create caches and contexts */
+    uint64_t current_time = 0;
+    uint64_t sequential_frame_id = 0;
+    size_t sequential_offset = 0;
+    quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
+    quicrq_relay_cached_media_t* cached_ctx = quicrq_relay_create_cache_ctx();
+    quicrq_media_source_ctx_t* srce_ctx_p = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
+    quicrq_relay_cached_media_t* cached_ctx_p = quicrq_relay_create_cache_ctx();
+    quicrq_relay_publisher_context_t* pub_ctx = (quicrq_relay_publisher_context_t*)malloc(sizeof(quicrq_relay_publisher_context_t));
+    if (cached_ctx == NULL || srce_ctx == NULL || cached_ctx_p == NULL || srce_ctx_p == NULL || pub_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        memset(srce_ctx, 0, sizeof(quicrq_media_source_ctx_t));
+        cached_ctx->srce_ctx = srce_ctx;
+        memset(srce_ctx_p, 0, sizeof(quicrq_media_source_ctx_t));
+        cached_ctx_p->srce_ctx = srce_ctx_p;
+        memset(pub_ctx, 0, sizeof(quicrq_relay_publisher_context_t));
+        pub_ctx->cache_ctx = cached_ctx;
+    }
+
+    /* send a first set of segments,
+     * starting with designated frame */
+    for (int pass = 1; ret == 0 && pass <= 2; pass++) {
+        size_t skip_count = 0;
+        for (size_t f_id = 0; ret == 0 && f_id < nb_relay_test_frames; f_id++) {
+            size_t offset = 0;
+            while (ret == 0 && offset < relay_test_frames[f_id].length) {
+                size_t data_length = relay_test_frames[f_id].length - offset;
+                int is_last_fragment = 1;
+                int should_skip = 0;
+                if (data_length > 8) {
+                    data_length = 8;
+                    is_last_fragment = 0;
+                }
+                skip_count++;
+                if (skip_count >= 2) {
+                    if (pass < 2) {
+                        should_skip = 1;
+                    }
+                    else {
+                        should_skip = 0;
+                    }
+                    skip_count = 0;
+                }
+                else {
+                    if (pass < 2) {
+                        should_skip = 0;
+                    }
+                    else {
+                        should_skip = 1;
+                    }
+                }
+                if (!should_skip) {
+                    ret = quicrq_relay_propose_fragment_to_cache(cached_ctx,
+                        relay_test_frames[f_id].data + offset, f_id, offset, is_last_fragment, data_length);
+                    if (ret != 0) {
+                        DBG_PRINTF("Proposed segment fails, frame %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
+                    }
+                    /* Simulate waking up the consumer and polling the data */
+                    ret = quicr_relay_cache_publish_simulate(pub_ctx, cached_ctx_p, &sequential_frame_id, &sequential_offset,
+                        is_datagram, current_time);
+                }
+                else {
+                    nb_skipped++;
+                }
+                offset += data_length;
+                current_time += 1000;
+            }
+        }
+    }
+    /* verify that the relay cache has the expected content */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_verify(cached_ctx);
+    }
+
+    /* Verify that the consumer cache has the expected content */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_verify(cached_ctx_p);
+    }
+
+    if (srce_ctx != NULL) {
+        free(srce_ctx);
+    }
+
+    if (cached_ctx != NULL) {
+        /* Delete the cache */
+        quicrq_relay_delete_cache_ctx(cached_ctx);
+    }
+
+    if (srce_ctx_p != NULL) {
+        free(srce_ctx_p);
+    }
+
+    if (cached_ctx_p != NULL) {
+        /* Delete the cache */
+        quicrq_relay_delete_cache_ctx(cached_ctx_p);
+    }
+
+    if (pub_ctx != NULL) {
+        free(pub_ctx);
+    }
+
+    return ret;
+}
+
 
 int quicrq_relay_cache_fill_test()
 {
+    int ret = 0;
+    /* basic test, single pass, nothing skipped, entire frames. */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_fill_test_one(100, 0, 0, 1);
+        if (ret != 0) {
+            DBG_PRINTF("Basic test returns %d", ret);
+        }
+    }
+    /* fragment test, single pass, nothing skipped. */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_fill_test_one(8, 0, 0, 1);
+        if (ret != 0) {
+            DBG_PRINTF("Fragment test returns %d", ret);
+        }
+    }
+    /* fragment test, two passes, skip even. */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_fill_test_one(8, 0, 2, 2);
+        if (ret != 0) {
+            DBG_PRINTF("Skip even test returns %d", ret);
+        }
+    }
+    /* fragment test, two passes, skip odd. */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_fill_test_one(8, 0, 1, 2);
+        if (ret != 0) {
+            DBG_PRINTF("Skip odd test returns %d", ret);
+        }
+    }
+    /* fragment test, three passes, skip odd. */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_fill_test_one(8, 0, 1, 3);
+        if (ret != 0) {
+            DBG_PRINTF("Three passes test returns %d", ret);
+        }
+    }
+    /* Receive test, stream. */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_publish_test_one(0);
+        if (ret != 0) {
+            DBG_PRINTF("Cached stream relay test returns %d", ret);
+        }
+    }
+    /* Receive test, datagram. */
+    if (ret == 0) {
+        ret = quicrq_relay_cache_publish_test_one(0);
+        if (ret != 0) {
+            DBG_PRINTF("Cached datagram relay test returns %d", ret);
+        }
+    }
 
+
+
+
+    return ret;
 }

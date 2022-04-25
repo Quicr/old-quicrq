@@ -65,6 +65,16 @@ static void quicrq_relay_cache_fragment_node_delete(void* tree, picosplay_node_t
 #endif
     free(quicrq_relay_cache_fragment_node_value(node));
 }
+
+quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t frame_id, uint64_t offset)
+{
+    quicrq_relay_cached_fragment_t key = { 0 };
+    key.frame_id = frame_id;
+    key.offset = offset;
+    picosplay_node_t* fragment_node = picosplay_find(&cached_ctx->fragment_tree, &key);
+    return (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(fragment_node);
+}
+
 #else
 /* manage the splay of cached frames */
 
@@ -171,7 +181,7 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     return ret;
 }
 
-int quicrq_relay_filter_fragment_against_cache(quicrq_relay_cached_media_t* cached_ctx,
+int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
     uint64_t frame_id,
     uint64_t offset,
@@ -325,7 +335,7 @@ int quicrq_relay_consumer_cb(
         /* Check that this datagram was not yet received.
          * This requires accessing the cache by frame_id, offset and length. */
          /* Add fragment (or fragments) to cache */
-        ret = quicrq_relay_filter_fragment_against_cache(cons_ctx->cached_ctx, data, frame_id, offset, is_last_fragment, data_length);
+        ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, frame_id, offset, is_last_fragment, data_length);
         /* Manage fin of transmission */
         if (ret == 0) {
             /* If the final frame id is known, and the number of fully received frames
@@ -338,10 +348,21 @@ int quicrq_relay_consumer_cb(
         break;
     case quicrq_media_final_frame_id:
         /* Document the final frame-ID in context */
+        cons_ctx->cached_ctx->final_frame_id = frame_id;
         /* Manage fin of transmission */
+        if (cons_ctx->cached_ctx->nb_frame_received >= cons_ctx->cached_ctx->final_frame_id) {
+            ret = quicrq_consumer_finished;
+        }
+        if (ret == 0) {
+            /* wake up the clients waiting for data on this media */
+            quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
+        }
         break;
     case quicrq_media_close:
         /* Document the final frame */
+        if (cons_ctx->cached_ctx->final_frame_id == 0) {
+            cons_ctx->cached_ctx->final_frame_id = cons_ctx->cached_ctx->nb_frame_received;
+        }
         /* Notify consumers of the stream */
         quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
         /* Free the media context resource */
@@ -446,12 +467,13 @@ int quicrq_relay_publisher_fn(
         else {
             if (media_ctx->current_fragment == NULL) {
                 /* Find the fragment with the expected offset */
+                media_ctx->current_fragment = quicrq_relay_cache_get_fragment(media_ctx->cache_ctx, media_ctx->current_frame_id, media_ctx->current_offset);
             }
             if (media_ctx->current_fragment == NULL) {
                 /* Check for end of media maybe */
             }
             else {
-                size_t available = media_ctx->length_sent >= media_ctx->current_fragment->data_length;
+                size_t available = media_ctx->current_fragment->data_length - media_ctx->length_sent;
                 size_t copied = data_max_size;
                 size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
                 int end_of_fragment = 0;
@@ -522,35 +544,41 @@ int quicrq_relay_publisher_fn(
     return ret;
 }
 
-static int quicrq_relay_datagram_publisher_fn(
-    quicrq_stream_ctx_t* stream_ctx,
+#if 1
+int quicrq_relay_datagram_publisher_prepare(
+    quicrq_relay_publisher_context_t* media_ctx,
+    uint64_t datagram_stream_id,
     void* context,
     size_t space,
     int* media_was_sent,
-    int* at_least_one_active)
+    int* at_least_one_active,
+    int * not_ready)
 {
     int ret = 0;
     int is_finished = 0;
-    quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)stream_ctx->media_ctx;
 
-#if 1
+    *media_was_sent = 0;
+    *not_ready = 0;
+
     /* Check whether the current fragment is fully sent, progress if needed */
     if (media_ctx->current_fragment == NULL) {
         media_ctx->current_fragment = media_ctx->cache_ctx->first_fragment;
     }
+
     /* Move to the next fragment if it is available */
     while (media_ctx->current_fragment != NULL && media_ctx->length_sent >= media_ctx->current_fragment->data_length &&
         media_ctx->current_fragment->next_in_order != NULL) {
         media_ctx->length_sent = 0;
         media_ctx->current_fragment = media_ctx->current_fragment->next_in_order;
     }
+
     /* Return the flags per fragment */
     if (media_ctx->current_fragment != NULL && media_ctx->length_sent < media_ctx->current_fragment->data_length) {
         /* TODO: how to assess that the media is finished? */
         size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
         uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
-        uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, 
-            stream_ctx->datagram_stream_id, media_ctx->current_fragment->frame_id, offset, 0);
+        uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
+            datagram_stream_id, media_ctx->current_fragment->frame_id, offset, 0);
         if (h_byte == NULL) {
             ret = -1;
         }
@@ -561,6 +589,7 @@ static int quicrq_relay_datagram_publisher_fn(
             if (h_size > space) {
                 /* TODO: should get a min encoding length per stream */
                 /* Can't do anything there */
+                *at_least_one_active = 1;
             }
             else {
                 size_t available = media_ctx->current_fragment->data_length - media_ctx->length_sent;
@@ -579,7 +608,7 @@ static int quicrq_relay_datagram_publisher_fn(
                         /* Push the header */
                         if (is_last_fragment) {
                             h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-                                stream_ctx->datagram_stream_id, media_ctx->current_fragment->frame_id, offset, 1); 
+                                datagram_stream_id, media_ctx->current_fragment->frame_id, offset, 1);
 
                             if (h_byte != datagram_header + h_size) {
                                 /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
@@ -591,6 +620,8 @@ static int quicrq_relay_datagram_publisher_fn(
                             /* Get the media */
                             memcpy(((uint8_t*)buffer) + h_size, media_ctx->current_fragment->data + media_ctx->length_sent, copied);
                             media_ctx->length_sent += copied;
+                            *media_was_sent = 1;
+                            *at_least_one_active = 1;
                         }
                     }
                 }
@@ -598,12 +629,39 @@ static int quicrq_relay_datagram_publisher_fn(
         }
     }
     else {
+        /* not ready yet */
+        *not_ready = 1;
+    }
+
+    return ret;
+}
+#endif
+
+int quicrq_relay_datagram_publisher_fn(
+    quicrq_stream_ctx_t* stream_ctx,
+    void* context,
+    size_t space,
+    int* media_was_sent,
+    int* at_least_one_active)
+{
+    int ret = 0;
+    int is_finished = 0;
+    int not_ready = 0;
+    quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)stream_ctx->media_ctx;
+
+#if 1
+    /* The "prepare" function has no dependency on stream context,
+     * which facilitates the design of unit tests.
+     */
+    ret = quicrq_relay_datagram_publisher_prepare(media_ctx,
+        stream_ctx->datagram_stream_id, context, space, media_was_sent, at_least_one_active, &not_ready);
+
+    if (not_ready){
         /* Nothing to send at this point. If the media sending is finished, mark the stream accordingly.
          * The cache filling function checks that the final ID is only marked when all fragments have been
          * received. At this point, we only check that the final ID is marked, and all fragments have 
          * been sent.
          */
-        *media_was_sent = 0;
 
         if (media_ctx->cache_ctx->final_frame_id != 0 &&
             media_ctx->current_fragment != NULL &&

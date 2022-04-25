@@ -49,7 +49,9 @@ extern "C" {
     int quicrq_fourlegs_datagram_test();
     int quicrq_fourlegs_datagram_last_test();
     int quicrq_fourlegs_datagram_loss_test();
-#if 0
+#if 1
+    int quicrq_relay_cache_fill_test();
+#else
     int quick_relay_range_test();
 #endif
     int quicrq_get_addr_test();

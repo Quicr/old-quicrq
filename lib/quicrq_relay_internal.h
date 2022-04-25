@@ -114,15 +114,51 @@ typedef struct st_quicrq_relay_context_t {
     int use_datagrams : 1;
 } quicrq_relay_context_t;
 
+#if 1
+int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
+    const uint8_t* data,
+    uint64_t frame_id,
+    uint64_t offset,
+    int is_last_fragment,
+    size_t data_length);
+quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t frame_id, uint64_t offset);
 
+int quicrq_relay_datagram_publisher_prepare(
+    quicrq_relay_publisher_context_t* media_ctx,
+    uint64_t datagram_stream_id,
+    void* context,
+    size_t space,
+    int* media_was_sent,
+    int* at_least_one_active,
+    int* not_ready);
+
+int quicrq_relay_datagram_publisher_fn(
+    quicrq_stream_ctx_t* stream_ctx,
+    void* context,
+    size_t space,
+    int* media_was_sent,
+    int* at_least_one_active);
+
+int quicrq_relay_publisher_fn(
+    quicrq_media_source_action_enum action,
+    void* v_media_ctx,
+    uint8_t* data,
+    size_t data_max_size,
+    size_t* data_length,
+    int* is_last_fragment,
+    int* is_media_finished,
+    int* is_still_active,
+    uint64_t current_time);
+#else
 int quicrq_relay_add_frame_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     uint64_t frame_id,
     const uint8_t* data,
     size_t data_length);
 int quicrq_relay_next_available_frame_id(quicrq_sent_frame_ranges_t* frame_ranges, quicrq_relay_cached_media_t* cached_ctx, uint64_t* next_frame_id, int* is_finished);
 int quicrq_relay_add_frame_id_to_ranges(quicrq_sent_frame_ranges_t* frame_ranges, uint64_t frame_id);
+void quick_relay_clear_ranges(quicrq_sent_frame_ranges_t* frame_ranges);
+#endif
 quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx();
 void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx);
-void quick_relay_clear_ranges(quicrq_sent_frame_ranges_t* frame_ranges);
 
 #endif /* QUICRQ_INTERNAL_RELAY_H */
