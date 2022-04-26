@@ -18,7 +18,7 @@
  * 
  * The main transaction is the retrieval of a media stream from a server. In the
  * test implementation, this is done by the client setting a connection to the relay
- * (or reusing a suitable connection), and then queuing a "media segment request", to
+ * (or reusing a suitable connection), and then queuing a "media fragment request", to
  * be sent on the first available client stream. The media request specifies,
  * at a minimum, the identification of the media, possibly the time to start
  * the replay, and the retrieval variant, e.g. stream or datagram.
@@ -168,7 +168,7 @@ int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* con
 
 /* Sending in sequence on a stream. 
  * We do not want to spend too much effort there, so we are going to reuse the "send repair" frame
- * to send data segments of sufficient length. This is a bit of a hack, and it does add some overhead.
+ * to send data fragments of sufficient length. This is a bit of a hack, and it does add some overhead.
  * Need to maintain variables, e.g.:
  * - next frame ID to send
  * - current frame offset
@@ -178,7 +178,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
 {
     /* Find how much data is available on the media stream */
     int is_media_finished = 0;
-    int is_last_segment = 0;
+    int is_last_fragment = 0;
     int is_still_active = 0;
     size_t available = 0;
     size_t data_length = 0;
@@ -202,7 +202,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         }
         else {
             /* Find how much data is actually available */
-            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, &is_still_active, current_time);
+            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         }
     }
 
@@ -245,9 +245,9 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         else {
             /* Encode the actual header, instead of a prediction */
             h_byte = quicrq_repair_request_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_REPAIR,
-                stream_ctx->next_frame_id, stream_ctx->next_frame_offset, is_last_segment, available);
-            if (is_last_segment) {
-                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final segment of frame %" PRIu64 " on stream %" PRIu64,
+                stream_ctx->next_frame_id, stream_ctx->next_frame_offset, is_last_fragment, available);
+            if (is_last_fragment) {
+                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final fragment of frame %" PRIu64 " on stream %" PRIu64,
                     stream_ctx->next_frame_id, stream_ctx->stream_id);
             }
             if (h_byte == NULL) {
@@ -265,7 +265,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                     /* copy the stream header to the packet */
                     memcpy(buffer, stream_header, h_size);
                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, buffer + h_size, available, &data_length,
-                        &is_last_segment, &is_media_finished, &is_still_active, current_time);
+                        &is_last_fragment, &is_media_finished, &is_still_active, current_time);
                     if (ret == 0 && available != data_length) {
                         ret = -1;
                     }
@@ -276,7 +276,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         buffer[0] = (uint8_t)(message_length >> 8);
                         buffer[1] = (uint8_t)(message_length&0xff);
 
-                        if (is_last_segment) {
+                        if (is_last_fragment) {
                             stream_ctx->next_frame_id++;
                             stream_ctx->next_frame_offset = 0;
                         } else {
@@ -323,10 +323,10 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     uint64_t datagram_stream_id;
     uint64_t frame_id;
     uint64_t frame_offset;
-    int is_last_segment;
+    int is_last_fragment;
     const uint8_t* next_bytes;
 
-    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &frame_id, &frame_offset, &is_last_segment);
+    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &frame_id, &frame_offset, &is_last_fragment);
     if (next_bytes == NULL) {
         ret = -1;
     }
@@ -342,11 +342,11 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
         }
         else {
             /* Pass data to the media context. */
-            if (is_last_segment) {
-                picoquic_log_app_message(cnx_ctx->cnx, "Received final segment of frame %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
+            if (is_last_fragment) {
+                picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of frame %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
                     frame_id, datagram_stream_id, stream_ctx->stream_id);
             }
-            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, frame_id, frame_offset, is_last_segment, bytes_max - next_bytes);
+            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, frame_id, frame_offset, is_last_fragment, bytes_max - next_bytes);
             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
         }
     }
@@ -374,7 +374,7 @@ void quicrq_remove_repair_in_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_
 }
 
 int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, const uint8_t* bytes, size_t length,
-    uint64_t frame_id, uint64_t frame_offset, int is_last_segment)
+    uint64_t frame_id, uint64_t frame_offset, int is_last_fragment)
 {
     int ret = 0;
     size_t target_size = sizeof(quicrq_datagram_queued_repair_t) + length;
@@ -391,7 +391,7 @@ int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx
             memset(repair, 0, sizeof(quicrq_datagram_queued_repair_t));
             repair->frame_id = frame_id;
             repair->frame_offset = frame_offset;
-            repair->is_last_segment = is_last_segment;
+            repair->is_last_fragment = is_last_fragment;
             repair->length = length;
             repair->datagram = ((uint8_t*)repair) + sizeof(quicrq_datagram_queued_repair_t);
             memcpy(repair->datagram, bytes, length);
@@ -412,14 +412,14 @@ int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx
 }
 
 int quicrq_check_spurious_repair_in_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, size_t length,
-    uint64_t frame_id, uint64_t frame_offset, int is_last_segment)
+    uint64_t frame_id, uint64_t frame_offset, int is_last_fragment)
 {
     int ret = 0;
     quicrq_datagram_queued_repair_t* repair = stream_ctx->datagram_repair_first;
 
     while (repair != NULL) {
         if (repair->frame_id == frame_id && repair->frame_offset == frame_offset &&
-            repair->length == length && repair->is_last_segment == is_last_segment) {
+            repair->length == length && repair->is_last_fragment == is_last_fragment) {
             break;
         }
         else {
@@ -443,14 +443,14 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     uint64_t datagram_stream_id;
     uint64_t frame_id;
     uint64_t frame_offset;
-    int is_last_segment;
+    int is_last_fragment;
     const uint8_t* next_bytes;
 
     if (bytes == NULL) {
         ret = -1;
     }
     else {
-        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &frame_id, &frame_offset, &is_last_segment);
+        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &frame_id, &frame_offset, &is_last_fragment);
         /* Retrieve the stream context for the datagram */
         if (next_bytes == NULL) {
             ret = -1;
@@ -466,10 +466,10 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
                 ret = -1;
                 break;
             case picoquic_callback_datagram_lost: /* Packet carrying datagram-frame probably lost */
-                ret = quicrq_add_repair_to_stream_ctx(cnx_ctx, stream_ctx, next_bytes, bytes_max - next_bytes, frame_id, frame_offset, is_last_segment);
+                ret = quicrq_add_repair_to_stream_ctx(cnx_ctx, stream_ctx, next_bytes, bytes_max - next_bytes, frame_id, frame_offset, is_last_fragment);
                 break;
             case picoquic_callback_datagram_spurious: /* Packet carrying datagram-frame was not really lost */
-                ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, frame_id, frame_offset, is_last_segment);
+                ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, frame_id, frame_offset, is_last_fragment);
                 break;
             default:
                 ret = -1;
@@ -510,9 +510,9 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 /* Predict length of datagram_stream_id + length of offset.
                  * TODO: the number of bytes available depends on the header size, which depends on
                  * frame_id, and offset. The frame size and frame offset are managed by the
-                 * sender code and are known in advance, but the "last_segment" value is not.
-                 * We do a first encoding supposing last_segment = 0. If this turns out
-                 * to be the actual last segment, the coding will have to be fixed.
+                 * sender code and are known in advance, but the "last_fragment" value is not.
+                 * We do a first encoding supposing last_fragment = 0. If this turns out
+                 * to be the actual last fragment, the coding will have to be fixed.
                  */
                 uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
                 size_t h_size;
@@ -532,10 +532,10 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                     at_least_one_active = 1;
                 }
                 else {
-                    int is_last_segment = 0;
+                    int is_last_fragment = 0;
                     int is_media_finished = 0;
                     int is_still_active = 0;
-                    ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_segment, &is_media_finished, &is_still_active, current_time);
+                    ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
 
                     /* Get a buffer inside the datagram packet */
                     if (ret < 0) {
@@ -559,7 +559,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                             }
                             else {
                                 /* Push the header */
-                                if (is_last_segment) {
+                                if (is_last_fragment) {
                                     h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
                                         stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 1);
                                     if (h_byte != datagram_header + h_size) {
@@ -573,7 +573,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                     memcpy(buffer, datagram_header, h_size);
                                     /* Get the media */
                                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, ((uint8_t*)buffer) + h_size, available, &data_length,
-                                        &is_last_segment, &is_media_finished, &is_still_active, current_time);
+                                        &is_last_fragment, &is_media_finished, &is_still_active, current_time);
                                     if (ret == 0 && available != data_length) {
                                         /* Application returned different size on second call */
                                         quicrq_log_message(stream_ctx->cnx_ctx, "Error,  application datagram provided %zu, expected %zu", data_length, available);
@@ -583,7 +583,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 }
                                 /* Update offset based on what is sent. */
                                 if (ret == 0) {
-                                    if (is_last_segment) {
+                                    if (is_last_fragment) {
                                         stream_ctx->next_frame_id++;
                                         stream_ctx->next_frame_offset = 0;
                                     }
@@ -615,7 +615,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
 
 /* Send the next message on a stream.
  * Messages include:
- * - initial opening message sent by the client, for either receiving or publishing a segment,
+ * - initial opening message sent by the client, for either receiving or publishing a fragment,
  *   and specifying stream or datagram.
  * - possibly, initial synchronization message sent by the server in response to the client
  *   publishing some media.
@@ -652,13 +652,13 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             if (stream_ctx->datagram_repair_first != NULL) {
                 /* Encode the first repair in queue in the protocol buffer */
                 if (quicrq_msg_buffer_alloc(message, quicrq_repair_msg_reserve(stream_ctx->datagram_repair_first->frame_id,
-                    stream_ctx->datagram_repair_first->frame_offset, stream_ctx->datagram_repair_first->is_last_segment,
+                    stream_ctx->datagram_repair_first->frame_offset, stream_ctx->datagram_repair_first->is_last_fragment,
                     stream_ctx->datagram_repair_first->length), 0) != 0) {
                     ret = -1;
                 }
                 else {
                     uint8_t* message_next = quicrq_repair_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_REPAIR,
-                        stream_ctx->datagram_repair_first->frame_id, stream_ctx->datagram_repair_first->frame_offset, stream_ctx->datagram_repair_first->is_last_segment,
+                        stream_ctx->datagram_repair_first->frame_id, stream_ctx->datagram_repair_first->frame_offset, stream_ctx->datagram_repair_first->is_last_fragment,
                         stream_ctx->datagram_repair_first->length, stream_ctx->datagram_repair_first->datagram);
                     if (message_next == NULL) {
                         ret = -1;
@@ -769,7 +769,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
  * - receive stream: receiver state if expecting media on stream.
  * - receive repair: while receiving datagrams, receive repairs, or the final offset
  * - receive done: waiting for end of data by the peer.
- * The media receiver closes the stream when the segment is completely received,
+ * The media receiver closes the stream when the fragment is completely received,
  * or when the receiver stopped listening, or if the sender closed its own stream.
  * The media sender closes the stream if the receiver closes it, or if the sender
  * has to abandon the stream. 
@@ -890,7 +890,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
-                                incoming.data, incoming.frame_id, incoming.offset, incoming.is_last_segment, incoming.length);
+                                incoming.data, incoming.frame_id, incoming.offset, incoming.is_last_fragment, incoming.length);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
                         break;
@@ -1364,7 +1364,7 @@ int quicrq_is_cnx_disconnected(quicrq_cnx_ctx_t* cnx_ctx)
 /* Media publisher API.
  * Simplified API for now:
  * - cnx_ctx: context of the QUICR connection
- * - media_url: URL of the media segment
+ * - media_url: URL of the media fragment
  * - media_publisher_fn: callback function for processing media arrival
  * - media_ctx: media context managed by the publisher
  */

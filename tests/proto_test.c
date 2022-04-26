@@ -340,7 +340,7 @@ int proto_msg_test()
         else if (result.offset != proto_cases[i].result->offset) {
             ret = -1;
         }
-        else if (result.is_last_segment != proto_cases[i].result->is_last_segment) {
+        else if (result.is_last_fragment != proto_cases[i].result->is_last_fragment) {
             ret = -1;
         }
         else if (result.length != proto_cases[i].result->length) {

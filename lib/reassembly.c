@@ -12,9 +12,9 @@
 
  /* Media receiver definitions.
   * Manage a list of frames being reassembled. The list is organized as a splay,
-  * indexed by the frame id and frame offset. When a new segment is received
+  * indexed by the frame id and frame offset. When a new fragment is received
   * the code will check whether the frame is already present, and then whether the
-  * segment for that frame has already arrived.
+  * fragment for that frame has already arrived.
   */
 
 /* Define data types used by implementation of public reassembly API */
@@ -268,7 +268,7 @@ static int quicrq_reassembly_frame_reassemble(quicrq_reassembly_frame_t* frame)
             quicrq_reassembly_packet_t* packet = frame->first_packet;
             while (packet != NULL && ret == 0) {
                 /* TODO: the "running offset" checks are never supposed to fire, unless
-                 * there is a bug in the segment collection program. Should be removed
+                 * there is a bug in the fragment collection program. Should be removed
                  * once debugging is complete */
                 if (packet->offset != running_offset) {
                     ret = -1;
@@ -297,7 +297,7 @@ int quicrq_reassembly_input(
     const uint8_t* data,
     uint64_t frame_id,
     uint64_t offset,
-    int is_last_segment,
+    int is_last_fragment,
     size_t data_length,
     quicrq_reassembly_frame_ready_fn ready_fn,
     void* app_media_ctx)
@@ -313,13 +313,13 @@ int quicrq_reassembly_input(
             /* Create a media frame for reassembly */
             frame = quicrq_reassembly_frame_create(reassembly_ctx, frame_id);
         }
-        /* per segment logic */
+        /* per fragment logic */
         if (frame == NULL) {
             ret = -1;
         }
         else {
-            /* If this is the last segment, update the frame length */
-            if (is_last_segment) {
+            /* If this is the last fragment, update the frame length */
+            if (is_last_fragment) {
                 if (frame->final_offset == 0) {
                     frame->final_offset = offset + data_length;
                 }

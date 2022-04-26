@@ -49,7 +49,7 @@ extern "C" {
     int quicrq_fourlegs_datagram_test();
     int quicrq_fourlegs_datagram_last_test();
     int quicrq_fourlegs_datagram_loss_test();
-    int quick_relay_range_test();
+    int quicrq_relay_cache_fill_test();
     int quicrq_get_addr_test();
 
 #ifdef __cplusplus
