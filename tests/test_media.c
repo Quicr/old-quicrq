@@ -1307,11 +1307,6 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     }
 
     /* Compare media result to media source */
-#if 0
-    if (ret == 0) {
-        ret = quicrq_compare_log_file(media_result_log, media_log_ref_path);
-    }
-#endif
 
     if (ret == 0) {
         ret = quicrq_compare_media_file(media_result_file, media_source_path);

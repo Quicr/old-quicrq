@@ -31,7 +31,7 @@
  * availability between "in-order" and "out-of-sequence" availablity, which
  * may need to be reflected in the contract between connection and sources.
  */
-#if 1
+
 /* Manage the splay of cached fragments */
 static void* quicrq_relay_cache_fragment_node_value(picosplay_node_t* fragment_node)
 {
@@ -75,77 +75,23 @@ quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cac
     return (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(fragment_node);
 }
 
-#else
-/* manage the splay of cached frames */
-
-static void* quicrq_relay_cache_frame_node_value(picosplay_node_t* frame_node)
-{
-    return (frame_node == NULL) ? NULL : (void*)((char*)frame_node - offsetof(struct st_quicrq_relay_cached_frame_t, frame_node));
-}
-
-static int64_t quicrq_relay_cache_frame_node_compare(void* l, void* r) {
-    return (int64_t)((quicrq_relay_cached_frame_t*)l)->frame_id - ((quicrq_relay_cached_frame_t*)r)->frame_id;
-}
-
-static picosplay_node_t* quicrq_relay_cache_frame_node_create(void* v_media_frame)
-{
-    return &((quicrq_relay_cached_frame_t*)v_media_frame)->frame_node;
-}
-
-static void quicrq_relay_cache_frame_node_delete(void* tree, picosplay_node_t* node)
-{
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(tree);
-#endif
-    free(quicrq_relay_cache_frame_node_value(node));
-}
-#endif
-
 void quicrq_relay_cache_media_clear(quicrq_relay_cached_media_t* cached_media)
 {
-#if 1
     cached_media->first_fragment = NULL;
     cached_media->last_fragment = NULL;
     picosplay_empty_tree(&cached_media->fragment_tree);
-#else
-    picosplay_empty_tree(&cached_media->frame_tree);
-#endif
 }
 
 void quicrq_relay_cache_media_init(quicrq_relay_cached_media_t* cached_media)
 {
-#if 1
     picosplay_init_tree(&cached_media->fragment_tree, quicrq_relay_cache_fragment_node_compare,
         quicrq_relay_cache_fragment_node_create, quicrq_relay_cache_fragment_node_delete,
         quicrq_relay_cache_fragment_node_value);
-#else
-    picosplay_init_tree(&cached_media->frame_tree, quicrq_relay_cache_frame_node_compare,
-        quicrq_relay_cache_frame_node_create, quicrq_relay_cache_frame_node_delete,
-        quicrq_relay_cache_frame_node_value);
-#endif
 }
-
-#if 1
-#else
-quicrq_relay_cached_frame_t* quicrq_relay_cache_frame_get(quicrq_relay_cached_media_t* cached_media, uint64_t frame_id)
-{
-    quicrq_relay_cached_frame_t key = { 0 };
-    quicrq_relay_cached_frame_t * result = NULL;
-    picosplay_node_t * found;
-    key.frame_id = frame_id;
-    found = picosplay_find(&cached_media->frame_tree, &key);
-    result = quicrq_relay_cache_frame_node_value(found);
-    if (result != NULL && result->frame_id != frame_id) {
-        result = NULL;
-    }
-    return result;
-}
-#endif
 
 /* Client part of the relay.
  * The connection is started when a context is specialized to become a relay
  */
-#if 1
 int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
     uint64_t frame_id,
@@ -267,54 +213,6 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
 
     return ret;
 }
-#else
-int quicrq_relay_add_frame_to_cache(quicrq_relay_cached_media_t* cached_ctx,
-    uint64_t frame_id,
-    const uint8_t* data,
-    size_t data_length)
-{
-    int ret = 0;
-    quicrq_relay_cached_frame_t* frame = (quicrq_relay_cached_frame_t*)malloc(
-        sizeof(quicrq_relay_cached_frame_t) + data_length);
-    if (frame == NULL) {
-        ret = -1;
-    }
-    else {
-        memset(frame, 0, sizeof(quicrq_relay_cached_frame_t));
-        frame->frame_id = frame_id;
-        frame->data = ((uint8_t*)frame) + sizeof(quicrq_relay_cached_frame_t);
-        frame->data_length = data_length;
-        memcpy(frame->data, data, data_length);
-        picosplay_insert(&cached_ctx->frame_tree, frame);
-    }
-
-    return ret;
-}
-
-int quicrq_relay_consumer_frame_ready(
-    void* media_ctx,
-    uint64_t current_time,
-    uint64_t frame_id,
-    const uint8_t* data,
-    size_t data_length,
-    quicrq_reassembly_frame_mode_enum frame_mode)
-{
-    /* Callback from the reassembly function when a frame is ready.
-     * TODO: If this is a new frame, add it to the cache. */
-    int ret = 0;
-    quicrq_relay_consumer_context_t* cons_ctx = (quicrq_relay_consumer_context_t*)media_ctx;
-
-    if (frame_mode != quicrq_reassembly_frame_repair) {
-        ret = quicrq_relay_add_frame_to_cache(cons_ctx->cached_ctx, frame_id, data, data_length);
-        if (ret == 0) {
-            /* wake up the clients waiting for data on this media */
-            quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
-        }
-    }
-
-    return ret;
-}
-#endif
 
 int quicrq_relay_consumer_cb(
     quicrq_media_consumer_enum action,
@@ -330,7 +228,6 @@ int quicrq_relay_consumer_cb(
     quicrq_relay_consumer_context_t * cons_ctx = (quicrq_relay_consumer_context_t*)media_ctx;
 
     switch (action) {
-#if 1
     case quicrq_media_datagram_ready:
         /* Check that this datagram was not yet received.
          * This requires accessing the cache by frame_id, offset and length. */
@@ -368,37 +265,7 @@ int quicrq_relay_consumer_cb(
         /* Free the media context resource */
         free(media_ctx);
         break;
-#else
-    case quicrq_media_datagram_ready:
-        ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, frame_id, offset,
-            is_last_fragment, data_length, quicrq_relay_consumer_frame_ready, media_ctx);
-        if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
-            ret = quicrq_consumer_finished;
-        }
-        break;
-    case quicrq_media_final_frame_id:
-        ret = quicrq_reassembly_learn_final_frame_id(&cons_ctx->reassembly_ctx, frame_id);
-        if (ret == 0) {
-            cons_ctx->cached_ctx->final_frame_id = frame_id;
-            if (cons_ctx->reassembly_ctx.is_finished) {
-                ret = quicrq_consumer_finished;
-            }
-            if (ret == 0) {
-                /* wake up the clients waiting for data on this media */
-                quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
-            }
-        }
-        break;
-    case quicrq_media_close: 
-        /* Document the final frame */
-        cons_ctx->cached_ctx->final_frame_id = quicrq_reassembly_frame_id_last(&cons_ctx->reassembly_ctx);
-        /* Notify consumers of the stream */
-        quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
-        /* Free the media context resource */
-        quicrq_reassembly_release(&cons_ctx->reassembly_ctx);
-        free(media_ctx);
-        break;
-#endif
+
     default:
         ret = -1;
         break;
@@ -430,10 +297,6 @@ void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx)
 
 void quicrq_relay_publisher_close(quicrq_relay_publisher_context_t* media_ctx)
 {
-#if 1
-#else
-    quick_relay_clear_ranges(&media_ctx->ranges);
-#endif
     free(media_ctx);
 }
 
@@ -456,8 +319,7 @@ int quicrq_relay_publisher_fn(
         *is_last_fragment = 0;
         *is_still_active = 0;
         *data_length = 0;
-#if 1
-        /* In sequence access to frames !
+        /* In sequence access to frames
          * variable current_frame_id = in sequence.
          * variable current_offset = current_offset sent.
          */
@@ -475,7 +337,6 @@ int quicrq_relay_publisher_fn(
             else {
                 size_t available = media_ctx->current_fragment->data_length - media_ctx->length_sent;
                 size_t copied = data_max_size;
-                size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
                 int end_of_fragment = 0;
 
                 if (data_max_size >= available) {
@@ -504,38 +365,6 @@ int quicrq_relay_publisher_fn(
                 }
             }
         }
-#else
-        if (media_ctx->cache_ctx->final_frame_id != 0 && media_ctx->current_frame_id >= media_ctx->cache_ctx->final_frame_id) {
-            *is_media_finished = 1;
-        }
-        else {
-            /* Access the current frame */
-            quicrq_relay_cached_frame_t* frame = quicrq_relay_cache_frame_get(media_ctx->cache_ctx, media_ctx->current_frame_id);
-            if (frame != NULL) {
-                /* Copy data from frame in memory */
-                size_t available = frame->data_length - media_ctx->current_offset;
-                size_t copied = data_max_size;
-                if (data_max_size >= available) {
-                    *is_last_fragment = 1;
-                    copied = available;
-                }
-                *data_length = copied;
-                *is_still_active = 1;
-                if (data != NULL) {
-                    /* If data is set to NULL, return the available size but do not copy anything */
-                    memcpy(data, frame->data + media_ctx->current_offset, copied);
-                    media_ctx->current_offset += copied;
-                    if (media_ctx->current_offset >= frame->data_length) {
-                        media_ctx->current_frame_id++;
-                        media_ctx->current_offset = 0;
-                    }
-                }
-            }
-            else {
-                /* Error, data is not yet available */
-            }
-        }
-#endif
     }
     else if (action == quicrq_media_source_close) {
         /* close the context */
@@ -544,7 +373,6 @@ int quicrq_relay_publisher_fn(
     return ret;
 }
 
-#if 1
 int quicrq_relay_datagram_publisher_prepare(
     quicrq_relay_publisher_context_t* media_ctx,
     uint64_t datagram_stream_id,
@@ -555,7 +383,6 @@ int quicrq_relay_datagram_publisher_prepare(
     int * not_ready)
 {
     int ret = 0;
-    int is_finished = 0;
 
     *media_was_sent = 0;
     *not_ready = 0;
@@ -635,7 +462,6 @@ int quicrq_relay_datagram_publisher_prepare(
 
     return ret;
 }
-#endif
 
 int quicrq_relay_datagram_publisher_fn(
     quicrq_stream_ctx_t* stream_ctx,
@@ -649,9 +475,8 @@ int quicrq_relay_datagram_publisher_fn(
     int not_ready = 0;
     quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)stream_ctx->media_ctx;
 
-#if 1
     /* The "prepare" function has no dependency on stream context,
-     * which facilitates the design of unit tests.
+     * which helps designing unit tests.
      */
     ret = quicrq_relay_datagram_publisher_prepare(media_ctx,
         stream_ctx->datagram_stream_id, context, space, media_was_sent, at_least_one_active, &not_ready);
@@ -674,96 +499,6 @@ int quicrq_relay_datagram_publisher_fn(
             stream_ctx->is_active_datagram = 0;
         }
     }
-#else
-    if (!media_ctx->is_sending_frame) {
-        /* If not currently sending, check what other frame might be available */
-        media_ctx->current_offset = 0;
-        /* TODO: should retrieve the frame, instead of just the number. */
-        if (quicrq_relay_next_available_frame_id(&media_ctx->ranges, media_ctx->cache_ctx, &media_ctx->current_frame_id, &is_finished) == 0) {
-            media_ctx->is_sending_frame = 1;
-        }
-    }
-
-    if (media_ctx->is_sending_frame) {
-        /* retrieve the frame and compute the available size based on frame data */
-        quicrq_relay_cached_frame_t* frame = quicrq_relay_cache_frame_get(media_ctx->cache_ctx, media_ctx->current_frame_id);
-        /* TODO: how to assess that the media is finished? */
-        uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
-        size_t h_size;
-        uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-            media_ctx->current_frame_id, media_ctx->current_offset, 0);
-
-        *media_was_sent = 1;
-        *at_least_one_active = 1;
-
-        if (h_byte == NULL) {
-            ret = -1;
-        }
-        else {
-            int is_last_fragment = 0;
-            h_size = h_byte - datagram_header;
-            if (h_size > space) {
-                /* TODO: should get a min encoding length per stream */
-                /* Can't do anything there */
-            }
-            else {
-                size_t available = frame->data_length - media_ctx->current_offset;
-                if (available > space - h_size) {
-                    available = space - h_size;
-                } else {
-                    is_last_fragment = 1;
-                }
-
-                if (available > 0) {
-                    /* Get a buffer inside the datagram packet */
-                    void* buffer = picoquic_provide_datagram_buffer(context, available + h_size);
-                    if (buffer == NULL) {
-                        ret = -1;
-                    }
-                    else {
-                        /* Push the header */
-                        if (is_last_fragment) {
-                            h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-                                media_ctx->current_frame_id, media_ctx->current_offset, 1);
-                            if (h_byte != datagram_header + h_size) {
-                                /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
-                                ret = -1;
-                            }
-                        }
-                        if (ret == 0) {
-                            memcpy(buffer, datagram_header, h_size);
-                            /* Get the media */
-                            memcpy(((uint8_t*)buffer) + h_size, frame->data + media_ctx->current_offset, available);
-                            /* Update offset based on what is sent. */
-                            if (is_last_fragment) {
-                                media_ctx->is_sending_frame = 0;
-                                /* Mark this frame as sent */
-                                ret = quicrq_relay_add_frame_id_to_ranges(&media_ctx->ranges, media_ctx->current_frame_id);
-                            }
-                            else {
-                                media_ctx->current_offset += available;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    else {
-        /* Nothing to send at this point. If the media sending is finished, mark the stream accordingly. */
-        *media_was_sent = 0;
-
-        if (is_finished) {
-            if (!stream_ctx->is_final_frame_id_sent) {
-                /* Mark the stream as finished, prepare sending a final message */
-                stream_ctx->final_frame_id = media_ctx->current_frame_id;
-                /* Wake up the control stream so the final message can be sent. */
-                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-            }
-            stream_ctx->is_active_datagram = 0;
-        }
-    }
-#endif
 
     return ret;
 }
@@ -831,10 +566,6 @@ quicrq_relay_consumer_context_t* quicrq_relay_create_cons_ctx()
         malloc(sizeof(quicrq_relay_consumer_context_t));
     if (cons_ctx != NULL) {
         memset(cons_ctx, 0, sizeof(quicrq_relay_consumer_context_t));
-#if 1
-#else
-        quicrq_reassembly_init(&cons_ctx->reassembly_ctx);
-#endif
     }
     return cons_ctx;
 }
@@ -1121,152 +852,3 @@ int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
     }
     return ret;
 }
-
-#if 0
-/* Management of out of order submission at relay.
- * When a relay forwards data over a datagram connection, if there is no in-order data
- * available, consider sending out of order data.
- * 
- * The "next available frame" function returns an available frame ID.
- * The "mark frame transmitted" function adds a frame ID to the transmitted ranges.
- */
-int quicrq_relay_next_available_frame_id(quicrq_sent_frame_ranges_t* frame_ranges, quicrq_relay_cached_media_t* cached_media, uint64_t* next_frame_id, int * is_finished)
-{
-    /* First, look for the closest frame id after the last frame */
-    quicrq_sent_frame_one_range_t* next_range = frame_ranges->sent;
-    quicrq_relay_cached_frame_t key = { 0 };
-    picosplay_node_t* found = NULL;
-    quicrq_relay_cached_frame_t* result;
-    int ret = -1;
-
-    if (next_range == NULL || next_range->range_start != 0) {
-        found = picosplay_first(&cached_media->frame_tree);
-    }
-    else {
-        key.frame_id = next_range->range_end;
-        next_range = next_range->next;
-        found = picosplay_find(&cached_media->frame_tree, &key);
-        if (found != NULL) {
-            found = picosplay_next(found);
-        }
-    }
-
-    /* Then, find whether this frame belongs to an already-sent range.
-     * If it does, try find a frame ID after that range, and repeat.
-     */
-    while (found != NULL && next_range != NULL) {
-        result = (quicrq_relay_cached_frame_t*)quicrq_relay_cache_frame_node_value(found);
-        if (result->frame_id < next_range->range_start) {
-            /* Hole to be filled before start of range */
-            break;
-        }
-        else {
-            /* look for the next range */
-            if (result->frame_id != next_range->range_end) {
-                key.frame_id = next_range->range_end;
-                found = picosplay_find(&cached_media->frame_tree, &key);
-            }
-            if (found != NULL) {
-                found = picosplay_next(found);
-            }
-            next_range = next_range->next;
-        }
-    }
-
-    /* Return the frame number that was found */
-    if (found != NULL) {
-        result = (quicrq_relay_cached_frame_t*)quicrq_relay_cache_frame_node_value(found);
-        *next_frame_id = result->frame_id;
-        ret = 0;
-    }
-    else {
-        *next_frame_id = 0;
-        if (cached_media->final_frame_id != 0) {
-            if (frame_ranges->sent != NULL &&
-                frame_ranges->sent->range_start == 0 &&
-                frame_ranges->sent->range_end + 1 == cached_media->final_frame_id)
-            {
-                *next_frame_id = cached_media->final_frame_id;
-                *is_finished = 1;
-            }
-        }
-    }
-
-    return ret;
-}
-
-
-int quicrq_relay_add_frame_id_to_ranges(quicrq_sent_frame_ranges_t* frame_ranges, uint64_t frame_id)
-{
-    int ret = 0;
-    quicrq_sent_frame_one_range_t* next_range = frame_ranges->sent;
-    quicrq_sent_frame_one_range_t* last_range = NULL;
-    int should_create_range = 1;
-    while (next_range != NULL) {
-        /* Is it in order? */
-        if (frame_id < next_range->range_start) {
-            if (frame_id + 1 == next_range->range_start) {
-                next_range->range_start = frame_id;
-                should_create_range = 0;
-            }
-            else {
-                /* Need to create a new range */
-                should_create_range = 1;
-            }
-            break;
-        }
-        else if (frame_id <= next_range->range_end) {
-            /* Already sent, nothing to do */
-            should_create_range = 0;
-            break;
-        }
-        else if (frame_id == next_range->range_end + 1) {
-            /* Extend range by one. If it reaches the next range, merge */
-            next_range->range_end = frame_id;
-            if (next_range->next != NULL && next_range->range_end + 1 >= next_range->next->range_start) {
-                quicrq_sent_frame_one_range_t* to_free = next_range->next;
-                next_range->range_end = to_free->range_end;
-                next_range->next = to_free->next;
-                free(to_free);
-            }
-            should_create_range = 0;
-            break;
-        }
-        else {
-            last_range = next_range;
-            next_range = next_range->next;
-        }
-    }
-
-    if (should_create_range) {
-        quicrq_sent_frame_one_range_t* created = (quicrq_sent_frame_one_range_t*)malloc(sizeof(quicrq_sent_frame_one_range_t));
-        if (created == NULL) {
-            /* Something is wrong, return an error */
-            ret = -1;
-        }
-        else {
-            memset(created, 0, sizeof(quicrq_sent_frame_one_range_t));
-            created->range_start = frame_id;
-            created->range_end = frame_id;
-            created->next = next_range;
-            if (last_range == NULL) {
-                frame_ranges->sent = created;
-            }
-            else {
-                last_range->next = created;
-            }
-        }
-    }
-
-    return ret;
-}
-
-void quick_relay_clear_ranges(quicrq_sent_frame_ranges_t* frame_ranges)
-{
-    while (frame_ranges->sent != NULL) {
-        quicrq_sent_frame_one_range_t* last_range = frame_ranges->sent;
-        frame_ranges->sent = last_range->next;
-        free(last_range);
-    }
-}
-#endif

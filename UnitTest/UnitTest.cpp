@@ -254,19 +254,13 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
-#if 1
+
 		TEST_METHOD(relay_cache_fill) {
 			int ret = quicrq_relay_cache_fill_test();
 
 			Assert::AreEqual(ret, 0);
 		}
-#else
-		TEST_METHOD(relay_range) {
-			int ret = quick_relay_range_test();
 
-			Assert::AreEqual(ret, 0);
-		}
-#endif
 		TEST_METHOD(get_addr) {
 			int ret = quicrq_get_addr_test();
 
