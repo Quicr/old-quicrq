@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 #include "picoquic_set_textlog.h"
 #include "picoquic_set_binlog.h"
 #include "quicrq.h"
@@ -452,7 +453,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
     int is_media_finished;
     int is_still_active;
     uint64_t frame_id;
-    size_t fragment_offset;
+    size_t fragment_offset = 0;
     uint8_t* fragment = NULL;
     size_t fragment_length;
 
@@ -500,7 +501,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                     /* decode the datagram header */
                     uint64_t datagram_stream_id;
                     uint64_t frame_offset;
-                    uint8_t* datagram_max = bytes + datagram_length;
+                    const uint8_t* datagram_max = bytes + datagram_length;
 
                     bytes = quicrq_datagram_header_decode(bytes, datagram_max, &datagram_stream_id,
                         &frame_id, &frame_offset, &is_last_fragment);
@@ -512,7 +513,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                         DBG_PRINTF("Unexpected datagram stream id: %" PRIu64, datagram_stream_id);
                         ret = -1;
                     } else {
-                        fragment = bytes;
+                        fragment = (uint8_t *)bytes;
                         fragment_length = datagram_max - bytes;
                         fragment_offset = (size_t)frame_offset;
                     }
@@ -539,7 +540,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                     &is_last_fragment, &is_media_finished, &is_still_active, current_time);
                 fragment = data;
                 if (is_last_fragment) {
-                    *sequential_frame_id++;
+                    *sequential_frame_id += 1;
                     *sequential_offset = 0;
                 }
                 else {
