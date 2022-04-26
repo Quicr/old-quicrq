@@ -471,7 +471,6 @@ int quicrq_relay_datagram_publisher_fn(
     int* at_least_one_active)
 {
     int ret = 0;
-    int is_finished = 0;
     int not_ready = 0;
     quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)stream_ctx->media_ctx;
 
