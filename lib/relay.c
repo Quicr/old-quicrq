@@ -25,8 +25,8 @@
  * relay creates a context over which to receive the media, and POSTs the content to
  * the server.
  * 
- * The client half creates a list of media frames. For simplification, the server half will
- * only deal with the media frames that are fully received. When a media frame is
+ * The client half creates a list of media objects. For simplification, the server half will
+ * only deal with the media objects that are fully received. When a media object is
  * fully received, it becomes available. We may consider a difference in
  * availability between "in-order" and "out-of-sequence" availablity, which
  * may need to be reflected in the contract between connection and sources.
@@ -41,7 +41,7 @@ static void* quicrq_relay_cache_fragment_node_value(picosplay_node_t* fragment_n
 static int64_t quicrq_relay_cache_fragment_node_compare(void* l, void* r) {
     quicrq_relay_cached_fragment_t* ls = (quicrq_relay_cached_fragment_t*)l;
     quicrq_relay_cached_fragment_t* rs = (quicrq_relay_cached_fragment_t*)r;
-    int64_t ret = ls->frame_id - rs->frame_id;
+    int64_t ret = ls->object_id - rs->object_id;
     if (ret == 0) {
         if (ls->offset < rs->offset) {
             ret = -1;
@@ -53,9 +53,9 @@ static int64_t quicrq_relay_cache_fragment_node_compare(void* l, void* r) {
     return ret;
 }
 
-static picosplay_node_t* quicrq_relay_cache_fragment_node_create(void* v_media_frame)
+static picosplay_node_t* quicrq_relay_cache_fragment_node_create(void* v_media_object)
 {
-    return &((quicrq_relay_cached_fragment_t*)v_media_frame)->fragment_node;
+    return &((quicrq_relay_cached_fragment_t*)v_media_object)->fragment_node;
 }
 
 static void quicrq_relay_cache_fragment_node_delete(void* tree, picosplay_node_t* node)
@@ -66,10 +66,10 @@ static void quicrq_relay_cache_fragment_node_delete(void* tree, picosplay_node_t
     free(quicrq_relay_cache_fragment_node_value(node));
 }
 
-quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t frame_id, uint64_t offset)
+quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t object_id, uint64_t offset)
 {
     quicrq_relay_cached_fragment_t key = { 0 };
-    key.frame_id = frame_id;
+    key.object_id = object_id;
     key.offset = offset;
     picosplay_node_t* fragment_node = picosplay_find(&cached_ctx->fragment_tree, &key);
     return (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(fragment_node);
@@ -94,7 +94,7 @@ void quicrq_relay_cache_media_init(quicrq_relay_cached_media_t* cached_media)
  */
 int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
-    uint64_t frame_id,
+    uint64_t object_id,
     uint64_t offset,
     int is_last_fragment,
     size_t data_length)
@@ -115,7 +115,7 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
         }
         cached_ctx->last_fragment = fragment;
         memset(fragment, 0, sizeof(quicrq_relay_cached_fragment_t));
-        fragment->frame_id = frame_id;
+        fragment->object_id = object_id;
         fragment->offset = offset;
         fragment->is_last_fragment = is_last_fragment;
         fragment->data = ((uint8_t*)fragment) + sizeof(quicrq_relay_cached_fragment_t);
@@ -129,27 +129,27 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
 
 int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
-    uint64_t frame_id,
+    uint64_t object_id,
     uint64_t offset,
     int is_last_fragment,
     size_t data_length)
 {
     int ret = 0;
     int data_was_added = 0;
-    /* First check whether the frame is in the cache. */
-    /* If the frame is in the cache, check whether this fragment is already received */
+    /* First check whether the object is in the cache. */
+    /* If the object is in the cache, check whether this fragment is already received */
     quicrq_relay_cached_fragment_t * first_fragment_state = NULL;
     quicrq_relay_cached_fragment_t key = { 0 };
 
-    key.frame_id = frame_id;
+    key.object_id = object_id;
     key.offset = UINT64_MAX;
     picosplay_node_t* last_fragment_node = picosplay_find_previous(&cached_ctx->fragment_tree, &key);
     do {
         first_fragment_state = (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(last_fragment_node);
-        if (first_fragment_state == NULL || first_fragment_state->frame_id != frame_id ||
+        if (first_fragment_state == NULL || first_fragment_state->object_id != object_id ||
             first_fragment_state->offset + first_fragment_state->data_length < offset) {
             /* Insert the whole fragment */
-            ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, frame_id, offset, is_last_fragment, data_length);
+            ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, is_last_fragment, data_length);
             data_was_added = 1;
             /* Mark done */
             data_length = 0;
@@ -160,7 +160,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
             if (offset + data_length > previous_last_byte) {
                 /* Some of the fragment data comes after this one. Submit */
                 size_t added_length = offset + data_length - previous_last_byte;
-                ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, frame_id, offset, is_last_fragment, added_length);
+                ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, is_last_fragment, added_length);
                 data_was_added = 1;
                 data_length -= added_length;
             }
@@ -181,7 +181,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     if (ret == 0 && data_was_added) {
         /* Wake up the consumers of this source */
         quicrq_source_wakeup(cached_ctx->srce_ctx);
-        /* Check whether this frame is now complete */
+        /* Check whether this object is now complete */
         last_fragment_node = picosplay_find_previous(&cached_ctx->fragment_tree, &key);
         first_fragment_state = (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(last_fragment_node);
         if (first_fragment_state != NULL) {
@@ -195,7 +195,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
                 }
                 else {
                     first_fragment_state = (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(last_fragment_node);
-                    if (first_fragment_state->frame_id != frame_id ||
+                    if (first_fragment_state->object_id != object_id ||
                         first_fragment_state->offset + first_fragment_state->data_length < previous_offset) {
                         last_is_final = 0;
                     }
@@ -205,8 +205,8 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
                 }
             }
             if (last_is_final) {
-                /* The frame was just completely received. Keep counts. */
-                cached_ctx->nb_frame_received += 1;
+                /* The object was just completely received. Keep counts. */
+                cached_ctx->nb_object_received += 1;
             }
         }
     }
@@ -219,7 +219,7 @@ int quicrq_relay_consumer_cb(
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
-    uint64_t frame_id,
+    uint64_t object_id,
     uint64_t offset,
     int is_last_fragment,
     size_t data_length)
@@ -230,24 +230,24 @@ int quicrq_relay_consumer_cb(
     switch (action) {
     case quicrq_media_datagram_ready:
         /* Check that this datagram was not yet received.
-         * This requires accessing the cache by frame_id, offset and length. */
+         * This requires accessing the cache by object_id, offset and length. */
          /* Add fragment (or fragments) to cache */
-        ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, frame_id, offset, is_last_fragment, data_length);
+        ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, object_id, offset, is_last_fragment, data_length);
         /* Manage fin of transmission */
         if (ret == 0) {
-            /* If the final frame id is known, and the number of fully received frames
-             * matches that frame id, then the transmission is finished. */
-            if (cons_ctx->cached_ctx->final_frame_id > 0 &&
-                cons_ctx->cached_ctx->nb_frame_received >= cons_ctx->cached_ctx->final_frame_id) {
+            /* If the final object id is known, and the number of fully received objects
+             * matches that object id, then the transmission is finished. */
+            if (cons_ctx->cached_ctx->final_object_id > 0 &&
+                cons_ctx->cached_ctx->nb_object_received >= cons_ctx->cached_ctx->final_object_id) {
                 ret = quicrq_consumer_finished;
             }
         }
         break;
-    case quicrq_media_final_frame_id:
-        /* Document the final frame-ID in context */
-        cons_ctx->cached_ctx->final_frame_id = frame_id;
+    case quicrq_media_final_object_id:
+        /* Document the final object-ID in context */
+        cons_ctx->cached_ctx->final_object_id = object_id;
         /* Manage fin of transmission */
-        if (cons_ctx->cached_ctx->nb_frame_received >= cons_ctx->cached_ctx->final_frame_id) {
+        if (cons_ctx->cached_ctx->nb_object_received >= cons_ctx->cached_ctx->final_object_id) {
             ret = quicrq_consumer_finished;
         }
         if (ret == 0) {
@@ -256,9 +256,9 @@ int quicrq_relay_consumer_cb(
         }
         break;
     case quicrq_media_close:
-        /* Document the final frame */
-        if (cons_ctx->cached_ctx->final_frame_id == 0) {
-            cons_ctx->cached_ctx->final_frame_id = cons_ctx->cached_ctx->nb_frame_received;
+        /* Document the final object */
+        if (cons_ctx->cached_ctx->final_object_id == 0) {
+            cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->nb_object_received;
         }
         /* Notify consumers of the stream */
         quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
@@ -284,9 +284,9 @@ int quicrq_relay_consumer_cb(
  * Upon notification of a hole, the client may either wait for the inline delivery,
  * so everything is sent in sequence, or accept out of sequence transmission.
  * If out of sequence transmission is accepted, the client starts polling
- * for the new frame-id, offset zero.
+ * for the new object-id, offset zero.
  * When the correction is available, the client is notified, and polls for the
- * missing frame-id.
+ * missing object-id.
  */
 void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx)
 {
@@ -319,17 +319,17 @@ int quicrq_relay_publisher_fn(
         *is_last_fragment = 0;
         *is_still_active = 0;
         *data_length = 0;
-        /* In sequence access to frames
-         * variable current_frame_id = in sequence.
+        /* In sequence access to objects
+         * variable current_object_id = in sequence.
          * variable current_offset = current_offset sent.
          */
-        if (media_ctx->cache_ctx->final_frame_id != 0 && media_ctx->current_frame_id >= media_ctx->cache_ctx->final_frame_id) {
+        if (media_ctx->cache_ctx->final_object_id != 0 && media_ctx->current_object_id >= media_ctx->cache_ctx->final_object_id) {
             *is_media_finished = 1;
         }
         else {
             if (media_ctx->current_fragment == NULL) {
                 /* Find the fragment with the expected offset */
-                media_ctx->current_fragment = quicrq_relay_cache_get_fragment(media_ctx->cache_ctx, media_ctx->current_frame_id, media_ctx->current_offset);
+                media_ctx->current_fragment = quicrq_relay_cache_get_fragment(media_ctx->cache_ctx, media_ctx->current_object_id, media_ctx->current_offset);
             }
             if (media_ctx->current_fragment == NULL) {
                 /* Check for end of media maybe */
@@ -352,7 +352,7 @@ int quicrq_relay_publisher_fn(
                     media_ctx->length_sent += copied;
                     if (end_of_fragment) {
                         if (media_ctx->current_fragment->is_last_fragment) {
-                            media_ctx->current_frame_id++;
+                            media_ctx->current_object_id++;
                             media_ctx->current_offset = 0;
                         }
                         else {
@@ -405,7 +405,7 @@ int quicrq_relay_datagram_publisher_prepare(
         size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
         uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
         uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-            datagram_stream_id, media_ctx->current_fragment->frame_id, offset, 0);
+            datagram_stream_id, media_ctx->current_fragment->object_id, offset, 0);
         if (h_byte == NULL) {
             ret = -1;
         }
@@ -435,7 +435,7 @@ int quicrq_relay_datagram_publisher_prepare(
                         /* Push the header */
                         if (is_last_fragment) {
                             h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-                                datagram_stream_id, media_ctx->current_fragment->frame_id, offset, 1);
+                                datagram_stream_id, media_ctx->current_fragment->object_id, offset, 1);
 
                             if (h_byte != datagram_header + h_size) {
                                 /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
@@ -487,12 +487,12 @@ int quicrq_relay_datagram_publisher_fn(
          * been sent.
          */
 
-        if (media_ctx->cache_ctx->final_frame_id != 0 &&
+        if (media_ctx->cache_ctx->final_object_id != 0 &&
             media_ctx->current_fragment != NULL &&
             media_ctx->length_sent >= media_ctx->current_fragment->data_length &&
             media_ctx->current_fragment->next_in_order == NULL) {
             /* Mark the stream as finished, prepare sending a final message */
-            stream_ctx->final_frame_id = media_ctx->cache_ctx->final_frame_id;
+            stream_ctx->final_object_id = media_ctx->cache_ctx->final_object_id;
             /* Wake up the control stream so the final message can be sent. */
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
             stream_ctx->is_active_datagram = 0;

@@ -35,8 +35,8 @@ void test_media_publisher_close(void* media_ctx)
     if (pub_ctx->generation_context != NULL) {
         free(pub_ctx->generation_context);
     }
-    if (pub_ctx->media_frame != NULL) {
-        free(pub_ctx->media_frame);
+    if (pub_ctx->media_object != NULL) {
+        free(pub_ctx->media_object);
     }
     free(pub_ctx);
 }
@@ -85,81 +85,81 @@ void* test_media_publisher_subscribe(void* v_srce_ctx)
 
 
 /* Media publisher callback for stream mode.
- * In stream mode, the frame data is directly copied to the output.
+ * In stream mode, the object data is directly copied to the output.
  */
 
-int test_media_allocate_frame(test_media_publisher_context_t* pub_ctx, size_t target_size)
+int test_media_allocate_object(test_media_publisher_context_t* pub_ctx, size_t target_size)
 {
     int ret = 0;
 
-    if (pub_ctx->media_frame_size > target_size) {
+    if (pub_ctx->media_object_size > target_size) {
         ret = -1;
-    } else if (pub_ctx->media_frame_alloc < target_size) {
+    } else if (pub_ctx->media_object_alloc < target_size) {
         uint8_t* new_memory = (uint8_t*)malloc(target_size);
         if (new_memory == NULL){
             ret = -1;
         }
         else {
-            if (pub_ctx->media_frame_size > 0 && pub_ctx->media_frame_size <= target_size) {
-                memcpy(new_memory, pub_ctx->media_frame, pub_ctx->media_frame_size);
+            if (pub_ctx->media_object_size > 0 && pub_ctx->media_object_size <= target_size) {
+                memcpy(new_memory, pub_ctx->media_object, pub_ctx->media_object_size);
             }
-            if (pub_ctx->media_frame_alloc > 0) {
-                free(pub_ctx->media_frame);
+            if (pub_ctx->media_object_alloc > 0) {
+                free(pub_ctx->media_object);
             }
-            pub_ctx->media_frame_alloc = target_size;
-            pub_ctx->media_frame = new_memory;
+            pub_ctx->media_object_alloc = target_size;
+            pub_ctx->media_object = new_memory;
         }
     }
     return ret;
 }
 
-int test_media_read_frame_from_file(test_media_publisher_context_t* pub_ctx)
+int test_media_read_object_from_file(test_media_publisher_context_t* pub_ctx)
 {
     /* If there is no memory, allocate default size. */
     size_t nb_read;
-    pub_ctx->media_frame_size = 0;
-    int ret = test_media_allocate_frame(pub_ctx, QUIRRQ_MEDIA_TEST_HEADER_SIZE);
+    pub_ctx->media_object_size = 0;
+    int ret = test_media_allocate_object(pub_ctx, QUIRRQ_MEDIA_TEST_HEADER_SIZE);
     if (ret == 0) {
-        /* Read the frame header */
-        nb_read = fread(pub_ctx->media_frame, 1, QUIRRQ_MEDIA_TEST_HEADER_SIZE, pub_ctx->F);
+        /* Read the object header */
+        nb_read = fread(pub_ctx->media_object, 1, QUIRRQ_MEDIA_TEST_HEADER_SIZE, pub_ctx->F);
         if (nb_read != QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
             /* Assume this is the end of file. */
             pub_ctx->is_finished = 1;
         }
         else {
-            /* decode the frame header */
-            const uint8_t* fh_max = pub_ctx->media_frame + QUIRRQ_MEDIA_TEST_HEADER_SIZE;
-            const uint8_t* fh = quicr_decode_frame_header(pub_ctx->media_frame, fh_max, &pub_ctx->current_header);
+            /* decode the object header */
+            const uint8_t* fh_max = pub_ctx->media_object + QUIRRQ_MEDIA_TEST_HEADER_SIZE;
+            const uint8_t* fh = quicr_decode_object_header(pub_ctx->media_object, fh_max, &pub_ctx->current_header);
 
             if (fh != NULL){
-                /* If there is not enough memory, allocate data for a full frame */
-                size_t target_size = (fh - pub_ctx->media_frame) + pub_ctx->current_header.length;
-                pub_ctx->media_frame_size = QUIRRQ_MEDIA_TEST_HEADER_SIZE;
-                ret = test_media_allocate_frame(pub_ctx, target_size);
+                /* If there is not enough memory, allocate data for a full object */
+                size_t target_size = (fh - pub_ctx->media_object) + pub_ctx->current_header.length;
+                pub_ctx->media_object_size = QUIRRQ_MEDIA_TEST_HEADER_SIZE;
+                ret = test_media_allocate_object(pub_ctx, target_size);
                 if (ret == 0){
-                    /* Read the frame content */
-                    size_t required = target_size - pub_ctx->media_frame_size;
-                    nb_read = fread(pub_ctx->media_frame + pub_ctx->media_frame_size, 1, required, pub_ctx->F);
+                    /* Read the object content */
+                    size_t required = target_size - pub_ctx->media_object_size;
+                    nb_read = fread(pub_ctx->media_object + pub_ctx->media_object_size, 1, required, pub_ctx->F);
                     if (nb_read != required) {
                         ret = -1;
-                        DBG_PRINTF("Reading %zu frame bytes, required %zu, ret=%d", nb_read, required, ret);
+                        DBG_PRINTF("Reading %zu object bytes, required %zu, ret=%d", nb_read, required, ret);
                     }
                     else {
-                        pub_ctx->media_frame_size = target_size;
+                        pub_ctx->media_object_size = target_size;
                     }
                 }
             }
             else {
                 /* malformed header ! */
                 ret = -1;
-                DBG_PRINTF("Reading malformed frame header, ret=%d", ret);
+                DBG_PRINTF("Reading malformed object header, ret=%d", ret);
             }       
         }
     }
     return ret;
 }
 
-size_t test_media_generate_frame_size(generation_parameters_t * gen_ctx)
+size_t test_media_generate_object_size(generation_parameters_t * gen_ctx)
 {
     size_t l = 0;
     size_t size_min = gen_ctx->target_p_min;
@@ -168,8 +168,8 @@ size_t test_media_generate_frame_size(generation_parameters_t * gen_ctx)
     size_t multiply = 1;
     size_t reminder = 0;
     size_t r_delta = 0;
-    /* Is this an I frame? If yes, size_min and size_max are bigger */
-    if (gen_ctx->frames_in_epoch > 0 && (gen_ctx->nb_frames_sent% gen_ctx->frames_in_epoch) == 0) {
+    /* Is this an I object? If yes, size_min and size_max are bigger */
+    if (gen_ctx->objects_in_epoch > 0 && (gen_ctx->nb_objects_sent% gen_ctx->objects_in_epoch) == 0) {
         size_min *= gen_ctx->nb_p_in_i;
         size_max *= gen_ctx->nb_p_in_i;
     }
@@ -189,7 +189,7 @@ size_t test_media_generate_frame_size(generation_parameters_t * gen_ctx)
     return l;
 }
 
-int test_media_generate_frame(test_media_publisher_context_t* pub_ctx)
+int test_media_generate_object(test_media_publisher_context_t* pub_ctx)
 {
     int ret = 0;
 
@@ -197,70 +197,70 @@ int test_media_generate_frame(test_media_publisher_context_t* pub_ctx)
         * At this point, we have a conflict between the way time in microseconds
         * per QUIC API, and specifications like "30 fps" that do not result in
         * an integer number of microseconds. We deal with that by computing a
-        * virtual time as "number of elapsed frames * 1,000,000 / fps ".
+        * virtual time as "number of elapsed objects * 1,000,000 / fps ".
         * 
         */
-    pub_ctx->current_header.number = pub_ctx->generation_context->nb_frames_sent;
+    pub_ctx->current_header.number = pub_ctx->generation_context->nb_objects_sent;
     pub_ctx->current_header.timestamp = 
-        (pub_ctx->generation_context->nb_frames_elapsed * 1000000ull) /
-        pub_ctx->generation_context->frames_per_second;
+        (pub_ctx->generation_context->nb_objects_elapsed * 1000000ull) /
+        pub_ctx->generation_context->objects_per_second;
     if (pub_ctx->current_header.timestamp >= pub_ctx->generation_context->target_duration) {
-        /* No frame to generate, same as end of file */
+        /* No object to generate, same as end of file */
         pub_ctx->is_finished = 1;
     }
     else {
-        size_t frame_size_max;
+        size_t object_size_max;
 
         /* Compute the content size */
-        pub_ctx->current_header.length = test_media_generate_frame_size(pub_ctx->generation_context);
-        frame_size_max = pub_ctx->current_header.length + QUIRRQ_MEDIA_TEST_HEADER_SIZE;
-        ret = test_media_allocate_frame(pub_ctx, frame_size_max);
+        pub_ctx->current_header.length = test_media_generate_object_size(pub_ctx->generation_context);
+        object_size_max = pub_ctx->current_header.length + QUIRRQ_MEDIA_TEST_HEADER_SIZE;
+        ret = test_media_allocate_object(pub_ctx, object_size_max);
         if (ret == 0) {
             const uint8_t* fh;
-            /* Generate the frame header */
-            fh = quicr_encode_frame_header(pub_ctx->media_frame, pub_ctx->media_frame + QUIRRQ_MEDIA_TEST_HEADER_SIZE, &pub_ctx->current_header);
+            /* Generate the object header */
+            fh = quicr_encode_object_header(pub_ctx->media_object, pub_ctx->media_object + QUIRRQ_MEDIA_TEST_HEADER_SIZE, &pub_ctx->current_header);
             if (fh == NULL) {
                 ret = -1;
             }
             else {
-                /* Generate the frame content */
-                uint8_t* content = pub_ctx->media_frame + (fh - pub_ctx->media_frame);
+                /* Generate the object content */
+                uint8_t* content = pub_ctx->media_object + (fh - pub_ctx->media_object);
 
                 for (size_t i = 0; i < pub_ctx->current_header.length; i++) {
                     content[i] = (uint8_t)(rand() & 0xff);
                 }
-                pub_ctx->media_frame_size = (fh - pub_ctx->media_frame) + pub_ctx->current_header.length;
+                pub_ctx->media_object_size = (fh - pub_ctx->media_object) + pub_ctx->current_header.length;
                 /* Update the generation context */
-                pub_ctx->generation_context->nb_frames_elapsed += 1;
-                pub_ctx->generation_context->nb_frames_sent += 1;
+                pub_ctx->generation_context->nb_objects_elapsed += 1;
+                pub_ctx->generation_context->nb_objects_sent += 1;
             }
         }
     }
     return ret;
 }
 
-static int test_media_publisher_check_frame(test_media_publisher_context_t* pub_ctx)
+static int test_media_publisher_check_object(test_media_publisher_context_t* pub_ctx)
 {
     int ret = 0;
 
-    if (pub_ctx->media_frame_size <= pub_ctx->media_frame_read) {
-        /* No more frame data available. */
-        pub_ctx->media_frame_size = 0;
-        pub_ctx->media_frame_read = 0;
+    if (pub_ctx->media_object_size <= pub_ctx->media_object_read) {
+        /* No more object data available. */
+        pub_ctx->media_object_size = 0;
+        pub_ctx->media_object_read = 0;
         if (pub_ctx->F != NULL) {
-            /* Read the next frame from the file */
-            ret = test_media_read_frame_from_file(pub_ctx);
+            /* Read the next object from the file */
+            ret = test_media_read_object_from_file(pub_ctx);
         }
         else {
-            /* Generate a frame */
-            ret = test_media_generate_frame(pub_ctx);
+            /* Generate a object */
+            ret = test_media_generate_object(pub_ctx);
         }
     }
 
     return ret;
 }
 
-int test_media_frame_publisher_fn(
+int test_media_object_publisher_fn(
     quicrq_media_source_action_enum action,
     void* media_ctx,
     uint8_t* data,
@@ -286,7 +286,7 @@ int test_media_frame_publisher_fn(
             *is_media_finished = 0;
             *is_last_fragment = 0;
             *data_length = 0;
-            ret = test_media_publisher_check_frame(pub_ctx);
+            ret = test_media_publisher_check_object(pub_ctx);
 
             if (ret == 0) {
                 *is_still_active = 1;
@@ -294,11 +294,11 @@ int test_media_frame_publisher_fn(
                     *is_media_finished = 1;
                     *is_still_active = 0;
                 }
-                else if (pub_ctx->media_frame_size > pub_ctx->media_frame_read) {
+                else if (pub_ctx->media_object_size > pub_ctx->media_object_read) {
                     if (!pub_ctx->is_real_time ||
                         current_time >= pub_ctx->current_header.timestamp + pub_ctx->start_time) {
-                        /* Copy data from frame in memory */
-                        size_t available = pub_ctx->media_frame_size - pub_ctx->media_frame_read;
+                        /* Copy data from object in memory */
+                        size_t available = pub_ctx->media_object_size - pub_ctx->media_object_read;
                         size_t copied = data_max_size;
                         if (data_max_size >= available) {
                             *is_last_fragment = 1;
@@ -307,8 +307,8 @@ int test_media_frame_publisher_fn(
                         *data_length = copied;
                         if (data != NULL) {
                             /* If data is set to NULL, return the available size but do not copy anything */
-                            memcpy(data, pub_ctx->media_frame + pub_ctx->media_frame_read, copied);
-                            pub_ctx->media_frame_read += copied;
+                            memcpy(data, pub_ctx->media_object + pub_ctx->media_object_read, copied);
+                            pub_ctx->media_object_read += copied;
                         }
                         *pub_ctx->p_next_time = UINT64_MAX;
                     }
@@ -337,7 +337,7 @@ uint64_t test_media_publisher_next_time(void * media_ctx, uint64_t current_time)
 {
     test_media_publisher_context_t* pub_ctx = (test_media_publisher_context_t*)media_ctx;
     uint64_t next_time = current_time;
-    int ret = test_media_publisher_check_frame(pub_ctx);
+    int ret = test_media_publisher_check_object(pub_ctx);
 
     if (ret == 0 && pub_ctx->current_header.timestamp + pub_ctx->start_time > next_time) {
         next_time = pub_ctx->current_header.timestamp + pub_ctx->start_time;
@@ -379,7 +379,7 @@ quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* ur
 
     if (pub_source_ctx != NULL) {
         srce_ctx = quicrq_publish_source(qr_ctx, url, url_length, pub_source_ctx,
-            test_media_publisher_subscribe, test_media_frame_publisher_fn, test_media_delete);
+            test_media_publisher_subscribe, test_media_object_publisher_fn, test_media_delete);
         if (srce_ctx == NULL) {
             free(pub_source_ctx);
         }
@@ -388,18 +388,18 @@ quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* ur
 }
 
 /* Media receiver definitions.
- * Manage a list of frames being reassembled. The list is organized as a splay,
- * indexed by the frame id and frame offset. When a new fragment is received
- * the code will check whether the frame is already present, and then whether the
- * fragment for that frame has already arrived.
+ * Manage a list of objects being reassembled. The list is organized as a splay,
+ * indexed by the object id and object offset. When a new fragment is received
+ * the code will check whether the object is already present, and then whether the
+ * fragment for that object has already arrived.
  */
 
 typedef struct st_test_media_consumer_context_t {
     FILE* Res;
     FILE* Log;
     uint8_t header_bytes[QUIRRQ_MEDIA_TEST_HEADER_SIZE];
-    quicrq_media_frame_header_t current_header;
-    size_t media_frame_received;
+    quicrq_media_object_header_t current_header;
+    size_t media_object_received;
     size_t target_size;
 
     quicrq_reassembly_context_t reassembly_ctx;
@@ -475,7 +475,7 @@ int test_media_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uin
         else
         {
             /* set the parameter in the stream context. */
-            ret = quicrq_set_media_stream_ctx(stream_ctx, test_media_frame_consumer_cb, media_ctx);
+            ret = quicrq_set_media_stream_ctx(stream_ctx, test_media_object_consumer_cb, media_ctx);
         }
     }
 
@@ -526,32 +526,32 @@ void* test_media_consumer_init(char const* media_result_file, char const* media_
     return cons_ctx;
 }
 
-int test_media_consumer_frame_ready(
+int test_media_consumer_object_ready(
     void* media_ctx,
     uint64_t current_time,
-    uint64_t frame_id,
+    uint64_t object_id,
     const uint8_t* data,
     size_t data_length,
-    quicrq_reassembly_frame_mode_enum frame_mode)
+    quicrq_reassembly_object_mode_enum object_mode)
 {
     int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
 
-    /* Find the frame header */
+    /* Find the object header */
     if (data_length < QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
-        /* Malformed frame */
+        /* Malformed object */
         ret = -1;
     }
     else {
-        quicrq_media_frame_header_t current_header;
-        const uint8_t* fh = quicr_decode_frame_header(data,
+        quicrq_media_object_header_t current_header;
+        const uint8_t* fh = quicr_decode_object_header(data,
             data + QUIRRQ_MEDIA_TEST_HEADER_SIZE, &current_header);
         if (fh == NULL) {
             ret = -1;
         }
         if (ret == 0) {
             /* if first time seen, document the delivery in the log */
-            if (frame_mode != quicrq_reassembly_frame_repair) {
+            if (object_mode != quicrq_reassembly_object_repair) {
                 if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu\n",
                     current_time, current_header.timestamp, current_header.number, current_header.length) <= 0) {
                     ret = -1;
@@ -560,7 +560,7 @@ int test_media_consumer_frame_ready(
         }
         if (ret == 0) {
             /* if in sequence, write the data to the file. */
-            if (frame_mode != quicrq_reassembly_frame_peek) {
+            if (object_mode != quicrq_reassembly_object_peek) {
                 if (fwrite(data, 1, data_length, cons_ctx->Res) != data_length) {
                     ret = -1;
                 }
@@ -574,37 +574,37 @@ int test_media_datagram_input(
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
-    uint64_t frame_id,
+    uint64_t object_id,
     uint64_t offset,
     int is_last_fragment,
     size_t data_length)
 {
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-    int ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, frame_id, offset, is_last_fragment, data_length, 
-        test_media_consumer_frame_ready, media_ctx);
+    int ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, object_id, offset, is_last_fragment, data_length, 
+        test_media_consumer_object_ready, media_ctx);
 
     return ret;
 }
 
-int test_media_consumer_learn_final_frame_id(
+int test_media_consumer_learn_final_object_id(
     void* media_ctx,
-    uint64_t final_frame_id)
+    uint64_t final_object_id)
 {
     int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
 
-    ret = quicrq_reassembly_learn_final_frame_id(&cons_ctx->reassembly_ctx, final_frame_id);
+    ret = quicrq_reassembly_learn_final_object_id(&cons_ctx->reassembly_ctx, final_object_id);
 
     return ret;
 }
 
 
-int test_media_frame_consumer_cb(
+int test_media_object_consumer_cb(
     quicrq_media_consumer_enum action,
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
-    uint64_t frame_id,
+    uint64_t object_id,
     uint64_t offset,
     int is_last_fragment,
     size_t data_length)
@@ -614,14 +614,14 @@ int test_media_frame_consumer_cb(
 
     switch (action) {
     case quicrq_media_datagram_ready:
-        ret = test_media_datagram_input(media_ctx, current_time, data, frame_id, (size_t)offset, is_last_fragment, data_length);
+        ret = test_media_datagram_input(media_ctx, current_time, data, object_id, (size_t)offset, is_last_fragment, data_length);
 
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
         break;
-    case quicrq_media_final_frame_id:
-        test_media_consumer_learn_final_frame_id(media_ctx, frame_id);
+    case quicrq_media_final_object_id:
+        test_media_consumer_learn_final_object_id(media_ctx, object_id);
 
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
@@ -646,7 +646,7 @@ int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_len
         ret = -1;
     }
     else {
-        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams, test_media_frame_consumer_cb, media_ctx);
+        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams, test_media_object_consumer_cb, media_ctx);
     }
 
     return ret;
@@ -655,7 +655,7 @@ int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_len
 
 
 /* Compare media file.
- * These are binary files composed of sequences of frames.
+ * These are binary files composed of sequences of objects.
  */
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file)
 {
@@ -671,15 +671,15 @@ int quicrq_compare_media_file(char const* media_result_file, char const* media_r
         DBG_PRINTF("Could not create result(0x%x) or reference(0x%x) publisher contexts, ret=%d", result_ctx, ref_ctx, ret);
     }
     else {
-        /* Read the frames on both. They should match, or both should come to an end */
+        /* Read the objects on both. They should match, or both should come to an end */
         while (ret == 0 && !result_ctx->is_finished && !ref_ctx->is_finished) {
-            ret = test_media_read_frame_from_file(result_ctx);
+            ret = test_media_read_object_from_file(result_ctx);
             if (ret != 0) {
-                DBG_PRINTF("Could not read frame from results, ret=%d", ret);
+                DBG_PRINTF("Could not read object from results, ret=%d", ret);
             } else {
-                ret = test_media_read_frame_from_file(ref_ctx);
+                ret = test_media_read_object_from_file(ref_ctx);
                 if (ret == 0) {
-                    /* Compare the media frames */
+                    /* Compare the media objects */
                     if (result_ctx->is_finished) {
                         if (!ref_ctx->is_finished) {
                             ret = -1;
@@ -707,14 +707,14 @@ int quicrq_compare_media_file(char const* media_result_file, char const* media_r
                         DBG_PRINTF("Lengths differ, %lu vs %lu: ret=%d", (unsigned long)ref_ctx->current_header.number,
                             (unsigned long)result_ctx->current_header.number, ret);
                     }
-                    else if (ref_ctx->media_frame_size != result_ctx->media_frame_size){
+                    else if (ref_ctx->media_object_size != result_ctx->media_object_size){
                         ret = -1;
-                        DBG_PRINTF("Frame sizes differ, %zu vs %zu: ret=%d",  ref_ctx->media_frame_size,
-                            result_ctx->media_frame_size, ret);
+                        DBG_PRINTF("object sizes differ, %zu vs %zu: ret=%d",  ref_ctx->media_object_size,
+                            result_ctx->media_object_size, ret);
                     }
-                    else if (memcmp(ref_ctx->media_frame, result_ctx->media_frame, ref_ctx->media_frame_size) != 0) {
+                    else if (memcmp(ref_ctx->media_object, result_ctx->media_object, ref_ctx->media_object_size) != 0) {
                         ret = -1;
-                        DBG_PRINTF("Frame contents differ: ret=%d", ret);
+                        DBG_PRINTF("object contents differ: ret=%d", ret);
                     }
                 }
             }
@@ -776,7 +776,7 @@ int quicrq_compare_log_file(char const* media_result_log, char const* media_refe
 
 /* The media test provides two results:
  * - a media result file, which shuld be identical to the media source file
- * - a media result log, which provides for each received frame the receive time, compared to the media time
+ * - a media result log, which provides for each received object the receive time, compared to the media time
  */
 
 int quicrq_media_api_test_one(char const *media_source_name, char const* media_log_reference, 
@@ -792,8 +792,8 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     void* srce_ctx = NULL;
     void* pub_ctx = NULL;
     void* cons_ctx = NULL;
-    uint64_t frame_id = 0;
-    uint64_t frame_offset = 0;
+    uint64_t object_id = 0;
+    uint64_t object_offset = 0;
     int is_last_fragment = 0;
     int is_media_finished = 0;
     int is_still_active = 0;
@@ -821,7 +821,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
 
     /* Loop through publish and consume until finished */
     while (ret == 0 && !is_media_finished && inactive < 32) {
-        ret = test_media_frame_publisher_fn(quicrq_media_source_get_data,
+        ret = test_media_object_publisher_fn(quicrq_media_source_get_data,
             pub_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret != 0) {
@@ -833,17 +833,17 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
             inactive++;
         } else {
             inactive = 0;
-            ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                frame_id, frame_offset, is_last_fragment, data_length);
+            ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
+                object_id, object_offset, is_last_fragment, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Consumer, ret=%d", ret);
             }
             else if (is_last_fragment) {
-                frame_id++;
-                frame_offset = 0;
+                object_id++;
+                object_offset = 0;
             }
             else {
-                frame_offset += data_length;
+                object_offset += data_length;
             }
         }
     }
@@ -854,8 +854,8 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     }
 
     if (ret == 0) {
-        ret = test_media_frame_consumer_cb(quicrq_media_final_frame_id, cons_ctx, current_time, NULL,
-            frame_id, 0, 0, 0);
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL,
+            object_id, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
@@ -899,10 +899,10 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
 #define QUICRQ_TEST_VIDEO1_RT_LOG    "video1_rt_log.csv"
 #define QUICRQ_TEST_VIDEO1_LOSS_RESULT "video1_loss_result.bin"
 #define QUICRQ_TEST_VIDEO1_LOSS_LOG    "video1_loss_log.csv"
-#define QUICRQ_TEST_MEDIA_FRAME_RESULT "media_frame_result.bin"
-#define QUICRQ_TEST_MEDIA_FRAME_LOG    "media_frame_log.csv"
-#define QUICRQ_TEST_MEDIA_FRAME_LOSS_RESULT "media_frame_loss_result.bin"
-#define QUICRQ_TEST_MEDIA_FRAME_LOSS_LOG    "media_frame_loss_log.csv"
+#define QUICRQ_TEST_MEDIA_object_RESULT "media_object_result.bin"
+#define QUICRQ_TEST_MEDIA_object_LOG    "media_object_log.csv"
+#define QUICRQ_TEST_MEDIA_object_LOSS_RESULT "media_object_loss_result.bin"
+#define QUICRQ_TEST_MEDIA_object_LOSS_LOG    "media_object_loss_log.csv"
 
 
 
@@ -940,8 +940,8 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     uint64_t current_time = 0;
     size_t data_length;
     void* cons_ctx = NULL;
-    uint64_t frame_id = 0;
-    uint64_t frame_offset = 0;
+    uint64_t object_id = 0;
+    uint64_t object_offset = 0;
     int is_last_fragment = 0;
     int is_media_finished = 0;
     int is_still_active = 0;
@@ -1013,13 +1013,13 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
             &data_length, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret == 0) {
             if (is_media_finished || data_length > 0) {
-                ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    frame_id, frame_offset, is_last_fragment, data_length);
+                ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
+                    object_id, object_offset, is_last_fragment, data_length);
                 if (ret == 0) {
                     inactive = 0;
                 }
                 else {
-                    DBG_PRINTF("Frame consumer callback, ret: %d", ret);
+                    DBG_PRINTF("object consumer callback, ret: %d", ret);
                 }
             }
             else {
@@ -1027,26 +1027,26 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
                 inactive++;
             }
             if (is_last_fragment) {
-                frame_id++;
-                frame_offset = 0;
+                object_id++;
+                object_offset = 0;
             }
             else {
-                frame_offset += data_length;
+                object_offset += data_length;
             }
         }
         else {
-            DBG_PRINTF("Frame publisher callback, ret: %d", ret);
+            DBG_PRINTF("object publisher callback, ret: %d", ret);
         }
     }
 
     /* Close publisher by closing the connection context */
     if (ret == 0) {
-        ret = test_media_frame_consumer_cb(quicrq_media_final_frame_id, cons_ctx, current_time, NULL, frame_id, 0, 0, 0);
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, object_id, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
         else {
-            DBG_PRINTF("Consumer not finished after final frame id! ret = %d", ret);
+            DBG_PRINTF("Consumer not finished after final object id! ret = %d", ret);
             ret = -1;
         }
     }
@@ -1099,14 +1099,14 @@ int quicrq_media_source_rt_test()
 
 typedef struct st_media_disorder_hole_t {
     struct st_media_disorder_hole_t* next_loss;
-    uint64_t frame_id;
+    uint64_t object_id;
     uint64_t offset;
     int is_last_fragment;
     size_t length;
     uint8_t media_buffer[1024];
 } media_disorder_hole_t;
 
-int quicrq_media_datagram_test_one(char const* media_source_name, char const* media_result_file, char const* media_result_log, size_t nb_losses, uint64_t* loss_frame, int * loss_mode, size_t nb_dup)
+int quicrq_media_datagram_test_one(char const* media_source_name, char const* media_result_file, char const* media_result_log, size_t nb_losses, uint64_t* loss_object, int * loss_mode, size_t nb_dup)
 {
 
     int ret = 0;
@@ -1120,8 +1120,8 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     void* cons_ctx = NULL;
     size_t actual_losses = 0;
     int consumer_properly_finished = 0;
-    uint64_t frame_id = 0;
-    uint64_t frame_offset = 0;
+    uint64_t object_id = 0;
+    uint64_t object_offset = 0;
     int is_media_finished = 0;
     int is_last_fragment = 0;
     int is_still_active = 0;
@@ -1137,7 +1137,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     }
 
     /* Initialize a consumer context for testing */
-    /* TODO: this should now be a frame consumer */
+    /* TODO: this should now be a object consumer */
     if (ret == 0) {
         cons_ctx = test_media_consumer_init(media_result_file, media_result_log);
         if (cons_ctx == NULL) {
@@ -1155,10 +1155,10 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         }
     }
 
-    /* Loop through read and consume until finished, marking some frames as lost */
+    /* Loop through read and consume until finished, marking some objects as lost */
     while (ret == 0) {
-        /* Get the next frame from the publisher */
-        ret = test_media_frame_publisher_fn(
+        /* Get the next object from the publisher */
+        ret = test_media_object_publisher_fn(
             quicrq_media_source_get_data, pub_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret != 0) {
@@ -1176,20 +1176,20 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         }
         /* Test whether to simulate losses or arrival */
         if (actual_losses < nb_losses &&
-            (frame_id == loss_frame[actual_losses] || (loss_frame[actual_losses] == UINT64_MAX && is_media_finished)) &&
+            (object_id == loss_object[actual_losses] || (loss_object[actual_losses] == UINT64_MAX && is_media_finished)) &&
             (loss_mode[actual_losses] == 3 ||
-                (loss_mode[actual_losses] == 0 && frame_offset == 0) ||
+                (loss_mode[actual_losses] == 0 && object_offset == 0) ||
                 (loss_mode[actual_losses] == 2 && is_last_fragment == 0) ||
-                (loss_mode[actual_losses == 1 && frame_offset != 0 && is_last_fragment]))) {
-            /* If the frame packet should be seen as lost, store it for repetition */
+                (loss_mode[actual_losses == 1 && object_offset != 0 && is_last_fragment]))) {
+            /* If the object packet should be seen as lost, store it for repetition */
             media_disorder_hole_t* loss = (media_disorder_hole_t*)malloc(sizeof(media_disorder_hole_t));
             if (loss == NULL) {
                 ret = -1;
                 break;
             }
             memset(loss, 0, sizeof(media_disorder_hole_t));
-            loss->frame_id = frame_id;
-            loss->offset = frame_offset;
+            loss->object_id = object_id;
+            loss->offset = object_offset;
             loss->length = data_length;
             loss->is_last_fragment = is_last_fragment;
             memcpy(loss->media_buffer, media_buffer, data_length);
@@ -1203,30 +1203,30 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         }
         else {
             /* Simulate arrival of packet */
-            ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    frame_id, frame_offset, is_last_fragment, data_length);
+            ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
+                    object_id, object_offset, is_last_fragment, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Media consumer callback: ret = %d", ret);
                 break;
             }
         }
-        /* Count the fragments and the frames */
+        /* Count the fragments and the objects */
         if (is_last_fragment) {
-            frame_id++;
-            frame_offset = 0;
+            object_id++;
+            object_offset = 0;
             if (actual_losses < nb_losses &&
-                (frame_id == loss_frame[actual_losses] || (loss_frame[actual_losses] == UINT64_MAX && is_media_finished))) {
+                (object_id == loss_object[actual_losses] || (loss_object[actual_losses] == UINT64_MAX && is_media_finished))) {
                 actual_losses++;
             }
         }
         else {
-            frame_offset += data_length;
+            object_offset += data_length;
         }
     }
 
-    /* Indicate the final frame_id, to simulate what datagrams would do */
+    /* Indicate the final object_id, to simulate what datagrams would do */
     if (ret == 0) {
-        ret = test_media_frame_consumer_cb(quicrq_media_final_frame_id, cons_ctx, current_time, NULL, frame_id, 0, 0, 0);
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, object_id, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             consumer_properly_finished = 1;
             if (nb_losses > 0) {
@@ -1242,8 +1242,8 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     }
 
     /* At this point, all blocks have been sent, except for the holes */
-    /* TODO: holes should have frame numbers and offset */
-    /* TODO: use the frame APIs */
+    /* TODO: holes should have object numbers and offset */
+    /* TODO: use the object APIs */
     if (ret == 0 && first_loss != NULL) {
         media_disorder_hole_t* loss = first_loss;
         if (nb_dup > 0) {
@@ -1252,8 +1252,8 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
             while (loss != NULL && actual_dup < nb_dup && ret == 0) {
                 /* Simulate repair of a hole */
                 actual_dup++;
-                ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
-                    loss->frame_id, loss->offset, loss->is_last_fragment, loss->length);
+                ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
+                    loss->object_id, loss->offset, loss->is_last_fragment, loss->length);
                 if (ret != 0) {
                     DBG_PRINTF("Media consumer callback: ret = %d", ret);
                 }
@@ -1270,8 +1270,8 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         loss = first_loss;
         while (loss != NULL && ret == 0) {
             /* Simulate repair of a hole */
-            ret = test_media_frame_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
-                loss->frame_id, loss->offset, loss->is_last_fragment, loss->length);
+            ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
+                loss->object_id, loss->offset, loss->is_last_fragment, loss->length);
             if (ret == quicrq_consumer_finished) {
                 consumer_properly_finished = 1;
                 ret = 0;
@@ -1315,20 +1315,20 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     return ret;
 }
 
-int quicrq_media_frame_noloss()
+int quicrq_media_object_noloss()
 {
-    int ret = quicrq_media_datagram_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_MEDIA_FRAME_RESULT, QUICRQ_TEST_MEDIA_FRAME_LOG,
+    int ret = quicrq_media_datagram_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_MEDIA_object_RESULT, QUICRQ_TEST_MEDIA_object_LOG,
         0, NULL, NULL, 0);
     return ret;
 }
 
-int quicrq_media_frame_loss()
+int quicrq_media_object_loss()
 {
-    uint64_t loss_frame[] = { 0, 4, 5, 6, 9, 11, 15, UINT64_MAX };
+    uint64_t loss_object[] = { 0, 4, 5, 6, 9, 11, 15, UINT64_MAX };
     int loss_mode[] = { 3, 3, 3, 3, 0,  1, 2,  3 };
 
-    int ret = quicrq_media_datagram_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_MEDIA_FRAME_LOSS_RESULT, QUICRQ_TEST_MEDIA_FRAME_LOSS_LOG,
-        sizeof(loss_frame) / sizeof(uint64_t), loss_frame, loss_mode, 0);
+    int ret = quicrq_media_datagram_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_MEDIA_object_LOSS_RESULT, QUICRQ_TEST_MEDIA_object_LOSS_LOG,
+        sizeof(loss_object) / sizeof(uint64_t), loss_object, loss_mode, 0);
 
     return ret;
 }

@@ -25,8 +25,8 @@
  * relay creates a context over which to receive the media, and POSTs the content to
  * the server.
  * 
- * The client half creates a list of media frames. For simplification, the server half will
- * only deal with the media frames that are fully received. When a media frame is
+ * The client half creates a list of media objects. For simplification, the server half will
+ * only deal with the media objects that are fully received. When a media object is
  * fully received, it becomes available. We may consider a difference in
  * availability between "in-order" and "out-of-sequence" availablity, which
  * may need to be reflected in the contract between connection and sources.
@@ -34,15 +34,15 @@
 
  /* Relay definitions.
   * When acting as a client, the relay adds the media to a cache, which can then be read by the
-  * server part of the relay. The publisher state indicates the current frame being read from the
+  * server part of the relay. The publisher state indicates the current object being read from the
   * cache, and the state of the response.
   *
-  * In the current version, the cached media is represented in memory by an array of frames,
-  * identified by a frame number. We may need to add metadata later,such as adding a timestamp
-  * to a frame, or marking frames as potential restart point, potential skip on restart,
+  * In the current version, the cached media is represented in memory by an array of objects,
+  * identified by a object number. We may need to add metadata later,such as adding a timestamp
+  * to a object, or marking objects as potential restart point, potential skip on restart,
   * and maybe an indication of encoding layer.
   *
-  * The frames are added when received on a client connection, organized as a binary tree.
+  * The objects are added when received on a client connection, organized as a binary tree.
   * The relayed media is kept until the end of the relay connection. This is of course not
   * sustainable, some version of cache management will have to be added later.
   */
@@ -50,7 +50,7 @@
 #if 1
 typedef struct st_quicrq_relay_cached_fragment_t {
     picosplay_node_t fragment_node;
-    uint64_t frame_id;
+    uint64_t object_id;
     uint64_t offset;
     int is_last_fragment;
     struct st_quicrq_relay_cached_fragment_t* next_in_order;
@@ -59,45 +59,45 @@ typedef struct st_quicrq_relay_cached_fragment_t {
 } quicrq_relay_cached_fragment_t;
 
 #else
-typedef struct st_quicrq_relay_cached_frame_t {
-    picosplay_node_t frame_node;
-    uint64_t frame_id;
+typedef struct st_quicrq_relay_cached_object_t {
+    picosplay_node_t object_node;
+    uint64_t object_id;
     uint8_t* data;
     size_t data_length;
-} quicrq_relay_cached_frame_t;
+} quicrq_relay_cached_object_t;
 #endif
 
 typedef struct st_quicrq_relay_cached_media_t {
     quicrq_media_source_ctx_t* srce_ctx;
-    uint64_t final_frame_id;
-    uint64_t nb_frame_received;
+    uint64_t final_object_id;
+    uint64_t nb_object_received;
     uint64_t subscribe_stream_id;
 #if 1
     quicrq_relay_cached_fragment_t* first_fragment;
     quicrq_relay_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree;
 #else 
-    picosplay_tree_t frame_tree;
+    picosplay_tree_t object_tree;
 #endif
 } quicrq_relay_cached_media_t;
 
 typedef struct st_quicrq_relay_publisher_context_t {
     quicrq_relay_cached_media_t* cache_ctx;
-    uint64_t current_frame_id;
+    uint64_t current_object_id;
     size_t current_offset;
-    int is_frame_complete;
+    int is_object_complete;
     int is_media_complete;
-    int is_sending_frame;
+    int is_sending_object;
 #if 1
     quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
 #else
-    quicrq_sent_frame_ranges_t ranges;
+    quicrq_sent_object_ranges_t ranges;
 #endif
 } quicrq_relay_publisher_context_t;
 
 typedef struct st_quicrq_relay_consumer_context_t {
-    uint64_t last_frame_id;
+    uint64_t last_object_id;
     quicrq_relay_cached_media_t* cached_ctx;
 #if 1
 #else
@@ -117,11 +117,11 @@ typedef struct st_quicrq_relay_context_t {
 #if 1
 int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
-    uint64_t frame_id,
+    uint64_t object_id,
     uint64_t offset,
     int is_last_fragment,
     size_t data_length);
-quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t frame_id, uint64_t offset);
+quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t object_id, uint64_t offset);
 
 int quicrq_relay_datagram_publisher_prepare(
     quicrq_relay_publisher_context_t* media_ctx,
@@ -150,13 +150,13 @@ int quicrq_relay_publisher_fn(
     int* is_still_active,
     uint64_t current_time);
 #else
-int quicrq_relay_add_frame_to_cache(quicrq_relay_cached_media_t* cached_ctx,
-    uint64_t frame_id,
+int quicrq_relay_add_object_to_cache(quicrq_relay_cached_media_t* cached_ctx,
+    uint64_t object_id,
     const uint8_t* data,
     size_t data_length);
-int quicrq_relay_next_available_frame_id(quicrq_sent_frame_ranges_t* frame_ranges, quicrq_relay_cached_media_t* cached_ctx, uint64_t* next_frame_id, int* is_finished);
-int quicrq_relay_add_frame_id_to_ranges(quicrq_sent_frame_ranges_t* frame_ranges, uint64_t frame_id);
-void quick_relay_clear_ranges(quicrq_sent_frame_ranges_t* frame_ranges);
+int quicrq_relay_next_available_object_id(quicrq_sent_object_ranges_t* object_ranges, quicrq_relay_cached_media_t* cached_ctx, uint64_t* next_object_id, int* is_finished);
+int quicrq_relay_add_object_id_to_ranges(quicrq_sent_object_ranges_t* object_ranges, uint64_t object_id);
+void quick_relay_clear_ranges(quicrq_sent_object_ranges_t* object_ranges);
 #endif
 quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx();
 void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx);

@@ -57,15 +57,15 @@ void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx);
 void quicrq_get_peer_address(quicrq_cnx_ctx_t* cnx_ctx, struct sockaddr_storage* stored_addr);
 
 /* Media stream definition.
- * Media is composed of series of frames, frames have
+ * Media is composed of series of objects, objects have
  * headers and content. Header provides information
  * about sufficient for synchronization and replay.
  */
-typedef struct st_quicrq_media_frame_header_t {
+typedef struct st_quicrq_media_object_header_t {
     uint64_t timestamp; /* time from start of media fragment */
     uint64_t number; /* start at 1 for media fragment */
     size_t length; /* number of content bytes */
-} quicrq_media_frame_header_t;
+} quicrq_media_object_header_t;
 
 /* Media publisher API.
  * 
@@ -85,7 +85,7 @@ typedef struct st_quicrq_media_frame_header_t {
  * context, it will make a first call to the "subscribe" function, which will
  * return a "media context" specific to that source and that subscription.
  * 
- * After that, the stack will try to send the media as a series of frames, each
+ * After that, the stack will try to send the media as a series of objects, each
  * composed of a series of fragments. The data is obtained by a series of calls
  * to the "publisher" function, with the following parameters:
  * 
@@ -96,7 +96,7 @@ typedef struct st_quicrq_media_frame_header_t {
  *   be copied. (See below for the logic of calling the function twice)
  * - data_max_size: the space available at the memory location.
  * - &data_length: the data available to fill that space.
- * - &is_last_fragment: whether this is the last fragment in a frame
+ * - &is_last_fragment: whether this is the last fragment in a object
  * - &is_media_finished: whether there is no more data to send.
  * - current_time: time, in microseconds. (May be virtual time during simulations
  *   and tests.)
@@ -107,11 +107,11 @@ typedef struct st_quicrq_media_frame_header_t {
  * essential that data_length, is_last_fragment and is_media_finished are set to
  * the same value in both calls.
  * 
- * The media is sent as a series of frames. The stack inserts a small header in
- * front of each fragment to specify the frame number, the offset in the frame,
+ * The media is sent as a series of objects. The stack inserts a small header in
+ * front of each fragment to specify the object number, the offset in the object,
  * and whether this is the last fragment. This is used by the reassembly
  * processes (see quicrq_reassembly.h). Intermediate relay may wait until the
- * last fragment is received to forward data belonging to a frame.
+ * last fragment is received to forward data belonging to a object.
  */
 
 typedef enum {
@@ -163,7 +163,7 @@ void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn de
   */
 typedef enum {
     quicrq_media_datagram_ready = 0,
-    quicrq_media_final_frame_id,
+    quicrq_media_final_object_id,
     quicrq_media_close
 } quicrq_media_consumer_enum;
 
@@ -176,7 +176,7 @@ typedef int (*quicrq_media_consumer_fn)(
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
-    uint64_t frame_id,
+    uint64_t object_id,
     uint64_t offset,
     int is_last_fragment,
     size_t data_length);

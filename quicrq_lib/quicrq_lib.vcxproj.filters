@@ -29,8 +29,11 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\lib\quicrq_relay_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\lib\quicrq_internal.h">
-      <Filter>Source Files</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
