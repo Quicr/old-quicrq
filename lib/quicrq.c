@@ -5,8 +5,8 @@
  * 
  * The prototype will implement several variations of QUICR: stream, rush, and datagrams.
  * These variants use common "glue" code to interface with picoquic:
- *  - feeding media frames for transmission
- *  - providing media frames for rendering
+ *  - feeding media objects for transmission
+ *  - providing media objects for rendering
  *  - implementing the picoquic callback
  *  - implementing the socket loop used by picoquic.
  * The socket loop is adapted to wait for media input or end of rendering as well as packet arrival.
@@ -167,11 +167,11 @@ int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* con
 }
 
 /* Sending in sequence on a stream. 
- * We do not want to spend too much effort there, so we are going to reuse the "send repair" frame
+ * We do not want to spend too much effort there, so we are going to reuse the "send repair" object
  * to send data fragments of sufficient length. This is a bit of a hack, and it does add some overhead.
  * Need to maintain variables, e.g.:
- * - next frame ID to send
- * - current frame offset
+ * - next object ID to send
+ * - current object offset
  * - next 
  */
 int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space, uint64_t current_time)
@@ -187,9 +187,9 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     int ret = 0;
 
     /* First, create a "mock" buffer based on the available space instead of the actual number of bytes.
-     * By design, we are creating a "repair" frame, but using the "repair request" encoding. */
+     * By design, we are creating a "repair" object, but using the "repair request" encoding. */
     uint8_t* h_byte = quicrq_repair_request_encode(stream_header+2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_REPAIR,
-        stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 0, space);
+        stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, space);
     if (h_byte == NULL) {
         /* That should not happen, unless the stream_header size is way too small */
         ret = -1;
@@ -209,12 +209,12 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     if (ret == 0) {
         if (available == 0) {
             if (is_media_finished) {
-                /* Send the fin frame immediately, because it would be very hard to get
+                /* Send the fin object immediately, because it would be very hard to get
                  * a new "prepare to send" callback after an empty response.
                  */
-                stream_ctx->final_frame_id = stream_ctx->next_frame_id;
+                stream_ctx->final_object_id = stream_ctx->next_object_id;
                 h_byte = quicrq_fin_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FIN_DATAGRAM,
-                    stream_ctx->final_frame_id);
+                    stream_ctx->final_object_id);
                 if (h_byte == NULL || h_byte > stream_header + space) {
                     ret = -1;
                 }
@@ -227,13 +227,13 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         ret = -1;
                     }
                     else {
-                        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Fin frame of stream %" PRIu64 " : %" PRIu64,
-                            stream_ctx->stream_id, stream_ctx->final_frame_id);
+                        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Fin object of stream %" PRIu64 " : %" PRIu64,
+                            stream_ctx->stream_id, stream_ctx->final_object_id);
 
                         stream_header[0] = (uint8_t)(h_size >> 8);
                         stream_header[1] = (uint8_t)(h_size & 0xff);
                         memcpy(buffer, stream_header, h_size);
-                        stream_ctx->is_final_frame_id_sent = 1;
+                        stream_ctx->is_final_object_id_sent = 1;
                     }
                 }
             }
@@ -245,10 +245,10 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         else {
             /* Encode the actual header, instead of a prediction */
             h_byte = quicrq_repair_request_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_REPAIR,
-                stream_ctx->next_frame_id, stream_ctx->next_frame_offset, is_last_fragment, available);
+                stream_ctx->next_object_id, stream_ctx->next_object_offset, is_last_fragment, available);
             if (is_last_fragment) {
-                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final fragment of frame %" PRIu64 " on stream %" PRIu64,
-                    stream_ctx->next_frame_id, stream_ctx->stream_id);
+                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final fragment of object %" PRIu64 " on stream %" PRIu64,
+                    stream_ctx->next_object_id, stream_ctx->stream_id);
             }
             if (h_byte == NULL) {
                 /* That should not happen, unless the stream_header size was way too small */
@@ -277,14 +277,14 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         buffer[1] = (uint8_t)(message_length&0xff);
 
                         if (is_last_fragment) {
-                            stream_ctx->next_frame_id++;
-                            stream_ctx->next_frame_offset = 0;
+                            stream_ctx->next_object_id++;
+                            stream_ctx->next_object_offset = 0;
                         } else {
-                            stream_ctx->next_frame_offset += available;
+                            stream_ctx->next_object_offset += available;
                         }
 
                         if (is_media_finished) {
-                            stream_ctx->final_frame_id = stream_ctx->next_frame_id;
+                            stream_ctx->final_object_id = stream_ctx->next_object_id;
                             stream_ctx->send_state = quicrq_sending_ready;
                         }
                     }
@@ -321,12 +321,12 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     /* Parse the datagram header */
     const uint8_t* bytes_max = bytes + length;
     uint64_t datagram_stream_id;
-    uint64_t frame_id;
-    uint64_t frame_offset;
+    uint64_t object_id;
+    uint64_t object_offset;
     int is_last_fragment;
     const uint8_t* next_bytes;
 
-    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &frame_id, &frame_offset, &is_last_fragment);
+    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &object_id, &object_offset, &is_last_fragment);
     if (next_bytes == NULL) {
         ret = -1;
     }
@@ -343,10 +343,10 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
         else {
             /* Pass data to the media context. */
             if (is_last_fragment) {
-                picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of frame %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
-                    frame_id, datagram_stream_id, stream_ctx->stream_id);
+                picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
+                    object_id, datagram_stream_id, stream_ctx->stream_id);
             }
-            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, frame_id, frame_offset, is_last_fragment, bytes_max - next_bytes);
+            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, object_id, object_offset, is_last_fragment, bytes_max - next_bytes);
             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
         }
     }
@@ -374,7 +374,7 @@ void quicrq_remove_repair_in_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_
 }
 
 int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, const uint8_t* bytes, size_t length,
-    uint64_t frame_id, uint64_t frame_offset, int is_last_fragment)
+    uint64_t object_id, uint64_t object_offset, int is_last_fragment)
 {
     int ret = 0;
     size_t target_size = sizeof(quicrq_datagram_queued_repair_t) + length;
@@ -389,8 +389,8 @@ int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx
         }
         else {
             memset(repair, 0, sizeof(quicrq_datagram_queued_repair_t));
-            repair->frame_id = frame_id;
-            repair->frame_offset = frame_offset;
+            repair->object_id = object_id;
+            repair->object_offset = object_offset;
             repair->is_last_fragment = is_last_fragment;
             repair->length = length;
             repair->datagram = ((uint8_t*)repair) + sizeof(quicrq_datagram_queued_repair_t);
@@ -412,13 +412,13 @@ int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx
 }
 
 int quicrq_check_spurious_repair_in_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, size_t length,
-    uint64_t frame_id, uint64_t frame_offset, int is_last_fragment)
+    uint64_t object_id, uint64_t object_offset, int is_last_fragment)
 {
     int ret = 0;
     quicrq_datagram_queued_repair_t* repair = stream_ctx->datagram_repair_first;
 
     while (repair != NULL) {
-        if (repair->frame_id == frame_id && repair->frame_offset == frame_offset &&
+        if (repair->object_id == object_id && repair->object_offset == object_offset &&
             repair->length == length && repair->is_last_fragment == is_last_fragment) {
             break;
         }
@@ -441,8 +441,8 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     /* Obtain the datagram ID */
     const uint8_t* bytes_max = bytes + length;
     uint64_t datagram_stream_id;
-    uint64_t frame_id;
-    uint64_t frame_offset;
+    uint64_t object_id;
+    uint64_t object_offset;
     int is_last_fragment;
     const uint8_t* next_bytes;
 
@@ -450,7 +450,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
         ret = -1;
     }
     else {
-        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &frame_id, &frame_offset, &is_last_fragment);
+        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &object_id, &object_offset, &is_last_fragment);
         /* Retrieve the stream context for the datagram */
         if (next_bytes == NULL) {
             ret = -1;
@@ -462,14 +462,14 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
                 ret = -1;
             }
             else switch (picoquic_event) {
-            case picoquic_callback_datagram_acked: /* Ack for packet carrying datagram-frame received from peer */
+            case picoquic_callback_datagram_acked: /* Ack for packet carrying datagram-object received from peer */
                 ret = -1;
                 break;
-            case picoquic_callback_datagram_lost: /* Packet carrying datagram-frame probably lost */
-                ret = quicrq_add_repair_to_stream_ctx(cnx_ctx, stream_ctx, next_bytes, bytes_max - next_bytes, frame_id, frame_offset, is_last_fragment);
+            case picoquic_callback_datagram_lost: /* Packet carrying datagram-object probably lost */
+                ret = quicrq_add_repair_to_stream_ctx(cnx_ctx, stream_ctx, next_bytes, bytes_max - next_bytes, object_id, object_offset, is_last_fragment);
                 break;
-            case picoquic_callback_datagram_spurious: /* Packet carrying datagram-frame was not really lost */
-                ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, frame_id, frame_offset, is_last_fragment);
+            case picoquic_callback_datagram_spurious: /* Packet carrying datagram-object was not really lost */
+                ret = quicrq_check_spurious_repair_in_stream_ctx(cnx_ctx, stream_ctx, length, object_id, object_offset, is_last_fragment);
                 break;
             default:
                 ret = -1;
@@ -509,7 +509,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 size_t data_length = 0;
                 /* Predict length of datagram_stream_id + length of offset.
                  * TODO: the number of bytes available depends on the header size, which depends on
-                 * frame_id, and offset. The frame size and frame offset are managed by the
+                 * object_id, and offset. The object size and object offset are managed by the
                  * sender code and are known in advance, but the "last_fragment" value is not.
                  * We do a first encoding supposing last_fragment = 0. If this turns out
                  * to be the actual last fragment, the coding will have to be fixed.
@@ -517,7 +517,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
                 size_t h_size;
                 uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-                    stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 0);
+                    stream_ctx->next_object_id, stream_ctx->next_object_offset, 0);
                 if (h_byte == NULL) {
                     /* Not enough space in header buffer to encode the header. That should never happen */
                     quicrq_log_message(stream_ctx->cnx_ctx, "Error: datagram header longer than %zu", QUICRQ_DATAGRAM_HEADER_MAX);
@@ -544,7 +544,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                     } else {
                         if (is_media_finished) {
                             /* Mark the stream as finished, prepare sending a final message */
-                            stream_ctx->final_frame_id = stream_ctx->next_frame_id;
+                            stream_ctx->final_object_id = stream_ctx->next_object_id;
                             /* Wake up the control stream so the final message can be sent. */
                             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             stream_ctx->is_active_datagram = 0;
@@ -561,7 +561,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 /* Push the header */
                                 if (is_last_fragment) {
                                     h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-                                        stream_ctx->next_frame_id, stream_ctx->next_frame_offset, 1);
+                                        stream_ctx->next_object_id, stream_ctx->next_object_offset, 1);
                                     if (h_byte != datagram_header + h_size) {
                                         /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
                                         quicrq_log_message(stream_ctx->cnx_ctx, "Error, cannot encode datagram header, expected = %zu", h_size);
@@ -584,11 +584,11 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 /* Update offset based on what is sent. */
                                 if (ret == 0) {
                                     if (is_last_fragment) {
-                                        stream_ctx->next_frame_id++;
-                                        stream_ctx->next_frame_offset = 0;
+                                        stream_ctx->next_object_id++;
+                                        stream_ctx->next_object_offset = 0;
                                     }
                                     else {
-                                        stream_ctx->next_frame_offset += available;
+                                        stream_ctx->next_object_offset += available;
                                     }
                                 }
                             }
@@ -651,14 +651,14 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         if (stream_ctx->is_sender) {
             if (stream_ctx->datagram_repair_first != NULL) {
                 /* Encode the first repair in queue in the protocol buffer */
-                if (quicrq_msg_buffer_alloc(message, quicrq_repair_msg_reserve(stream_ctx->datagram_repair_first->frame_id,
-                    stream_ctx->datagram_repair_first->frame_offset, stream_ctx->datagram_repair_first->is_last_fragment,
+                if (quicrq_msg_buffer_alloc(message, quicrq_repair_msg_reserve(stream_ctx->datagram_repair_first->object_id,
+                    stream_ctx->datagram_repair_first->object_offset, stream_ctx->datagram_repair_first->is_last_fragment,
                     stream_ctx->datagram_repair_first->length), 0) != 0) {
                     ret = -1;
                 }
                 else {
                     uint8_t* message_next = quicrq_repair_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_REPAIR,
-                        stream_ctx->datagram_repair_first->frame_id, stream_ctx->datagram_repair_first->frame_offset, stream_ctx->datagram_repair_first->is_last_fragment,
+                        stream_ctx->datagram_repair_first->object_id, stream_ctx->datagram_repair_first->object_offset, stream_ctx->datagram_repair_first->is_last_fragment,
                         stream_ctx->datagram_repair_first->length, stream_ctx->datagram_repair_first->datagram);
                     if (message_next == NULL) {
                         ret = -1;
@@ -670,16 +670,16 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-            else if (stream_ctx->final_frame_id > 0 && !stream_ctx->is_final_frame_id_sent) {
-                quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", sending final frame id: %" PRIu64,
-                    stream_ctx->stream_id, stream_ctx->final_frame_id);
+            else if (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent) {
+                quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", sending final object id: %" PRIu64,
+                    stream_ctx->stream_id, stream_ctx->final_object_id);
                 /* TODO: encode the final offset message in the protocol buffer */
-                if (quicrq_msg_buffer_alloc(message, quicrq_fin_msg_reserve(stream_ctx->final_frame_id), 0) != 0) {
+                if (quicrq_msg_buffer_alloc(message, quicrq_fin_msg_reserve(stream_ctx->final_object_id), 0) != 0) {
                     ret = -1;
                 }
                 else {
                     uint8_t* message_next = quicrq_fin_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_FIN_DATAGRAM,
-                        stream_ctx->final_frame_id);
+                        stream_ctx->final_object_id);
                     if (message_next == NULL) {
                         ret = -1;
                     }
@@ -693,18 +693,18 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
                 quicrq_log_message(stream_ctx->cnx_ctx, "Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64,
-                    stream_ctx->stream_id, stream_ctx->send_state, stream_ctx->final_frame_id);
+                    stream_ctx->stream_id, stream_ctx->send_state, stream_ctx->final_object_id);
                 DBG_PRINTF("Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64, 
-                    stream_ctx->stream_id, stream_ctx->send_state, stream_ctx->final_frame_id);
+                    stream_ctx->stream_id, stream_ctx->send_state, stream_ctx->final_object_id);
                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
             }
         }
         else {
             /* TODO: consider receiver messages */
             quicrq_log_message(stream_ctx->cnx_ctx, "Consider receiver messages on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
-                stream_ctx->final_frame_id);
+                stream_ctx->final_object_id);
             DBG_PRINTF("Consider receiver messages on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
-                stream_ctx->final_frame_id);
+                stream_ctx->final_object_id);
         }
     }
 
@@ -721,13 +721,13 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         case quicrq_sending_initial:
             /* Send available buffer data. Mark state ready after sent. */
             more_to_send = (stream_ctx->datagram_repair_first != NULL ||
-                (stream_ctx->final_frame_id > 0 && !stream_ctx->is_final_frame_id_sent));
+                (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             break;
         case quicrq_sending_repair:
             /* Send available buffer data and repair data. Dequeue repair and mark state ready after sent. */
             more_to_send = (stream_ctx->datagram_repair_first->next_repair != NULL ||
-                (stream_ctx->final_frame_id > 0 && !stream_ctx->is_final_frame_id_sent));
+                (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 quicrq_remove_repair_in_stream_ctx(stream_ctx, stream_ctx->datagram_repair_first);
@@ -738,7 +738,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             more_to_send = (stream_ctx->datagram_repair_first != NULL);
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
-                stream_ctx->is_final_frame_id_sent = 1;
+                stream_ctx->is_final_object_id_sent = 1;
             }
             break;
         case quicrq_sending_fin:
@@ -864,17 +864,17 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         ret = quicrq_cnx_post_accepted(stream_ctx, incoming.use_datagram, incoming.datagram_stream_id);
                         break;
                     case QUICRQ_ACTION_FIN_DATAGRAM:
-                        if (stream_ctx->receive_state != quicrq_receive_repair || stream_ctx->final_frame_id != 0) {
+                        if (stream_ctx->receive_state != quicrq_receive_repair || stream_ctx->final_object_id != 0) {
                             /* Protocol error */
                             ret = -1;
                         }
                         else {
                             /* Pass the final offset to the media consumer. */
-                            quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", final frame notified: %" PRIu64,
-                                stream_ctx->stream_id, stream_ctx->final_frame_id);
-                            stream_ctx->final_frame_id = incoming.frame_id;
-                            ret = stream_ctx->consumer_fn(quicrq_media_final_frame_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
-                                stream_ctx->final_frame_id, 0, 0, 0);
+                            quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", final object notified: %" PRIu64,
+                                stream_ctx->stream_id, stream_ctx->final_object_id);
+                            stream_ctx->final_object_id = incoming.object_id;
+                            ret = stream_ctx->consumer_fn(quicrq_media_final_object_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
+                                stream_ctx->final_object_id, 0, 0, 0);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 1, 0, ret);
                         }
                         break;
@@ -890,7 +890,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
-                                incoming.data, incoming.frame_id, incoming.offset, incoming.is_last_fragment, incoming.length);
+                                incoming.data, incoming.object_id, incoming.offset, incoming.is_last_fragment, incoming.length);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
                         break;
@@ -1024,12 +1024,12 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             /* Check that the transport parameters are what the sample expects */
             break;
         case picoquic_callback_datagram_acked:
-            /* Ack for packet carrying datagram-frame received from peer */
+            /* Ack for packet carrying datagram-object received from peer */
             break;
         case picoquic_callback_datagram_lost:
-            /* Packet carrying datagram-frame probably lost */
+            /* Packet carrying datagram-object probably lost */
         case picoquic_callback_datagram_spurious:
-            /* Packet carrying datagram-frame was not really lost */
+            /* Packet carrying datagram-object was not really lost */
             ret = quicrq_handle_datagram_ack_nack(cnx_ctx, fin_or_event, bytes, length);
             break;
         case picoquic_callback_pacing_changed:
@@ -1067,14 +1067,12 @@ void quicrq_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     }
     tp->idle_timeout = 30000;
     tp->max_packet_size = PICOQUIC_MAX_PACKET_SIZE;
-    tp->max_datagram_frame_size = 0;
     tp->ack_delay_exponent = 3;
     tp->active_connection_id_limit = 4;
     tp->max_ack_delay = 10000ull;
     tp->enable_loss_bit = 2;
     tp->min_ack_delay = 1000ull;
     tp->enable_time_stamp = 0;
-    tp->enable_bdp_frame = 0;
     tp->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
 }
 
@@ -1370,11 +1368,11 @@ int quicrq_is_cnx_disconnected(quicrq_cnx_ctx_t* cnx_ctx)
  */
 
 
-/* Utility function, encode or decode a frame header.
+/* Utility function, encode or decode a object header.
  */
-const uint8_t* quicr_decode_frame_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_frame_header_t* hdr)
+const uint8_t* quicr_decode_object_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_object_header_t* hdr)
 {
-    /* decode the frame header */
+    /* decode the object header */
     if ((fh = picoquic_frames_uint64_decode(fh, fh_max, &hdr->timestamp)) != NULL &&
         (fh = picoquic_frames_uint64_decode(fh, fh_max, &hdr->number)) != NULL){
         uint32_t length = 0;
@@ -1384,9 +1382,9 @@ const uint8_t* quicr_decode_frame_header(const uint8_t* fh, const uint8_t* fh_ma
     return fh;
 }
 
-uint8_t* quicr_encode_frame_header(uint8_t* fh, const uint8_t* fh_max, const quicrq_media_frame_header_t* hdr)
+uint8_t* quicr_encode_object_header(uint8_t* fh, const uint8_t* fh_max, const quicrq_media_object_header_t* hdr)
 {
-    /* decode the frame header */
+    /* decode the object header */
     if ((fh = picoquic_frames_uint64_encode(fh, fh_max, hdr->timestamp)) != NULL &&
         (fh = picoquic_frames_uint64_encode(fh, fh_max, hdr->number)) != NULL) {
         fh = picoquic_frames_uint32_encode(fh, fh_max, (uint32_t)hdr->length);

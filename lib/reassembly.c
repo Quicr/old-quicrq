@@ -11,10 +11,10 @@
 #include "quicrq_reassembly.h"
 
  /* Media receiver definitions.
-  * Manage a list of frames being reassembled. The list is organized as a splay,
-  * indexed by the frame id and frame offset. When a new fragment is received
-  * the code will check whether the frame is already present, and then whether the
-  * fragment for that frame has already arrived.
+  * Manage a list of objects being reassembled. The list is organized as a splay,
+  * indexed by the object id and object offset. When a new fragment is received
+  * the code will check whether the object is already present, and then whether the
+  * fragment for that object has already arrived.
   */
 
 /* Define data types used by implementation of public reassembly API */
@@ -28,34 +28,34 @@ typedef struct st_quicrq_reassembly_packet_t {
     size_t data_length;
 } quicrq_reassembly_packet_t;
 
-typedef struct st_quicrq_reassembly_frame_t {
-    picosplay_node_t frame_node;
+typedef struct st_quicrq_reassembly_object_t {
+    picosplay_node_t object_node;
     struct st_quicrq_reassembly_packet_t* first_packet;
     struct st_quicrq_reassembly_packet_t* last_packet;
-    uint64_t frame_id;
+    uint64_t object_id;
     uint64_t final_offset;
     uint64_t data_received;
     uint64_t last_update_time;
     uint8_t* reassembled;
-} quicrq_reassembly_frame_t;
+} quicrq_reassembly_object_t;
 
-/* manage the splay of frames waiting reassembly */
+/* manage the splay of objects waiting reassembly */
 
-static void* quicrq_frame_node_value(picosplay_node_t* frame_node)
+static void* quicrq_object_node_value(picosplay_node_t* object_node)
 {
-    return (frame_node == NULL) ? NULL : (void*)((char*)frame_node - offsetof(struct st_quicrq_reassembly_frame_t, frame_node));
+    return (object_node == NULL) ? NULL : (void*)((char*)object_node - offsetof(struct st_quicrq_reassembly_object_t, object_node));
 }
 
-static int64_t quicrq_frame_node_compare(void* l, void* r) {
-    return (int64_t)((quicrq_reassembly_frame_t*)l)->frame_id - ((quicrq_reassembly_frame_t*)r)->frame_id;
+static int64_t quicrq_object_node_compare(void* l, void* r) {
+    return (int64_t)((quicrq_reassembly_object_t*)l)->object_id - ((quicrq_reassembly_object_t*)r)->object_id;
 }
 
-static picosplay_node_t* quicrq_frame_node_create(void* v_media_frame)
+static picosplay_node_t* quicrq_object_node_create(void* v_media_object)
 {
-    return &((quicrq_reassembly_frame_t*)v_media_frame)->frame_node;
+    return &((quicrq_reassembly_object_t*)v_media_object)->object_node;
 }
 
-static void quicrq_frame_node_delete(void* tree, picosplay_node_t* node)
+static void quicrq_object_node_delete(void* tree, picosplay_node_t* node)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);
@@ -63,35 +63,35 @@ static void quicrq_frame_node_delete(void* tree, picosplay_node_t* node)
     memset(node, 0, sizeof(picosplay_node_t));
 }
 
-void quicrq_reassembly_init(quicrq_reassembly_context_t* frame_list)
+void quicrq_reassembly_init(quicrq_reassembly_context_t* object_list)
 {
-    picosplay_init_tree(&frame_list->frame_tree, quicrq_frame_node_compare,
-        quicrq_frame_node_create, quicrq_frame_node_delete, quicrq_frame_node_value);
+    picosplay_init_tree(&object_list->object_tree, quicrq_object_node_compare,
+        quicrq_object_node_create, quicrq_object_node_delete, quicrq_object_node_value);
 }
 
 /* Free the reassembly context
  */
 void quicrq_reassembly_release(quicrq_reassembly_context_t* reassembly_ctx)
 {
-    picosplay_empty_tree(&reassembly_ctx->frame_tree);
+    picosplay_empty_tree(&reassembly_ctx->object_tree);
     memset(reassembly_ctx, 0, sizeof(quicrq_reassembly_context_t));
 }
 
-static quicrq_reassembly_frame_t* quicrq_frame_find(quicrq_reassembly_context_t* frame_list, uint64_t frame_id)
+static quicrq_reassembly_object_t* quicrq_object_find(quicrq_reassembly_context_t* object_list, uint64_t object_id)
 {
-    quicrq_reassembly_frame_t* frame = NULL;
-    quicrq_reassembly_frame_t key_frame = { 0 };
-    key_frame.frame_id = frame_id;
-    picosplay_node_t* node = picosplay_find(&frame_list->frame_tree, (void*)&key_frame);
+    quicrq_reassembly_object_t* object = NULL;
+    quicrq_reassembly_object_t key_object = { 0 };
+    key_object.object_id = object_id;
+    picosplay_node_t* node = picosplay_find(&object_list->object_tree, (void*)&key_object);
     if (node != NULL) {
-        frame = (quicrq_reassembly_frame_t*)quicrq_frame_node_value(node);
+        object = (quicrq_reassembly_object_t*)quicrq_object_node_value(node);
     }
-    return frame;
+    return object;
 }
 
-/* Management of the list of frames undergoing reassembly, frame-id based logic */
-static quicrq_reassembly_packet_t* quicrq_reassembly_frame_create_packet(
-    quicrq_reassembly_frame_t* frame,
+/* Management of the list of objects undergoing reassembly, object-id based logic */
+static quicrq_reassembly_packet_t* quicrq_reassembly_object_create_packet(
+    quicrq_reassembly_object_t* object,
     quicrq_reassembly_packet_t* previous_packet,
     uint64_t current_time,
     const uint8_t* data,
@@ -112,68 +112,68 @@ static quicrq_reassembly_packet_t* quicrq_reassembly_frame_create_packet(
 
             packet->previous_packet = previous_packet;
             if (previous_packet == NULL) {
-                packet->next_packet = frame->first_packet;
-                frame->first_packet = packet;
+                packet->next_packet = object->first_packet;
+                object->first_packet = packet;
             }
             else {
                 packet->next_packet = previous_packet->next_packet;
                 previous_packet->next_packet = packet;
             }
             if (packet->next_packet == NULL) {
-                frame->last_packet = packet;
+                object->last_packet = packet;
             }
             else {
                 packet->next_packet->previous_packet = packet;
             }
-            frame->data_received += data_length;
-            frame->last_update_time = current_time;
+            object->data_received += data_length;
+            object->last_update_time = current_time;
         }
     }
 
     return packet;
 }
 
-static quicrq_reassembly_frame_t* quicrq_reassembly_frame_create(quicrq_reassembly_context_t* reassembly_ctx, uint64_t frame_id)
+static quicrq_reassembly_object_t* quicrq_reassembly_object_create(quicrq_reassembly_context_t* reassembly_ctx, uint64_t object_id)
 {
-    quicrq_reassembly_frame_t* frame = (quicrq_reassembly_frame_t*)malloc(sizeof(quicrq_reassembly_frame_t));
-    if (frame != NULL) {
-        memset(frame, 0, sizeof(quicrq_reassembly_frame_t));
-        frame->frame_id = frame_id;
-        picosplay_insert(&reassembly_ctx->frame_tree, frame);
+    quicrq_reassembly_object_t* object = (quicrq_reassembly_object_t*)malloc(sizeof(quicrq_reassembly_object_t));
+    if (object != NULL) {
+        memset(object, 0, sizeof(quicrq_reassembly_object_t));
+        object->object_id = object_id;
+        picosplay_insert(&reassembly_ctx->object_tree, object);
     }
-    return frame;
+    return object;
 }
 
-static void quicrq_reassembly_frame_delete(quicrq_reassembly_context_t* reassembly_ctx, quicrq_reassembly_frame_t* frame)
+static void quicrq_reassembly_object_delete(quicrq_reassembly_context_t* reassembly_ctx, quicrq_reassembly_object_t* object)
 {
-    /* Free the frame's resource */
+    /* Free the object's resource */
     quicrq_reassembly_packet_t* packet;
 
-    if (frame->reassembled != NULL) {
-        free(frame->reassembled);
+    if (object->reassembled != NULL) {
+        free(object->reassembled);
     }
 
-    while ((packet = frame->first_packet) != NULL) {
-        frame->first_packet = packet->next_packet;
+    while ((packet = object->first_packet) != NULL) {
+        object->first_packet = packet->next_packet;
         free(packet);
     }
 
-    /* Remove the frame from the list */
-    picosplay_delete_hint(&reassembly_ctx->frame_tree, &frame->frame_node);
+    /* Remove the object from the list */
+    picosplay_delete_hint(&reassembly_ctx->object_tree, &object->object_node);
 
     /* and free the memory */
-    free(frame);
+    free(object);
 }
 
-static int quicrq_reassembly_frame_add_packet(
-    quicrq_reassembly_frame_t* frame,
+static int quicrq_reassembly_object_add_packet(
+    quicrq_reassembly_object_t* object,
     uint64_t current_time,
     const uint8_t* data,
     uint64_t offset,
     size_t data_length)
 {
     int ret = 0;
-    quicrq_reassembly_packet_t* packet = frame->first_packet;
+    quicrq_reassembly_packet_t* packet = object->first_packet;
     quicrq_reassembly_packet_t* previous_packet = NULL;
 
     while (packet != NULL) {
@@ -181,7 +181,7 @@ static int quicrq_reassembly_frame_add_packet(
             /* filling a hole */
             if (offset + data_length <= packet->offset) {
                 /* No overlap. Just insert the packet after the previous one */
-                quicrq_reassembly_packet_t* new_packet = quicrq_reassembly_frame_create_packet(frame, previous_packet, current_time, data, offset, data_length);
+                quicrq_reassembly_packet_t* new_packet = quicrq_reassembly_object_create_packet(object, previous_packet, current_time, data, offset, data_length);
                 if (new_packet == NULL) {
                     ret = -1;
                 }
@@ -193,7 +193,7 @@ static int quicrq_reassembly_frame_add_packet(
             else if (offset < packet->offset) {
                 /* partial overlap. Create a packet for the non overlapping part, then retain the bytes at the end. */
                 size_t consumed = (size_t)(packet->offset - offset);
-                quicrq_reassembly_packet_t* new_packet = quicrq_reassembly_frame_create_packet(frame, previous_packet, current_time, data, offset, consumed);
+                quicrq_reassembly_packet_t* new_packet = quicrq_reassembly_object_create_packet(object, previous_packet, current_time, data, offset, consumed);
                 if (new_packet == NULL) {
                     ret = -1;
                     break;
@@ -228,7 +228,7 @@ static int quicrq_reassembly_frame_add_packet(
     /* All packets in store have been checked */
     if (ret == 0 && data_length > 0) {
         /* Some of the incoming data was not inserted */
-        quicrq_reassembly_packet_t* new_packet = quicrq_reassembly_frame_create_packet(frame, previous_packet, current_time, data, offset, data_length);
+        quicrq_reassembly_packet_t* new_packet = quicrq_reassembly_object_create_packet(object, previous_packet, current_time, data, offset, data_length);
         if (new_packet == NULL) {
             ret = -1;
         }
@@ -240,32 +240,32 @@ static int quicrq_reassembly_frame_add_packet(
     return ret;
 }
 
-static int quicrq_reassembly_frame_reassemble(quicrq_reassembly_frame_t* frame)
+static int quicrq_reassembly_object_reassemble(quicrq_reassembly_object_t* object)
 {
     int ret = 0;
 
     /* Check that that the received bytes are in order */
-    if (frame->final_offset == 0 || frame->data_received != frame->final_offset) {
+    if (object->final_offset == 0 || object->data_received != object->final_offset) {
         ret = -1;
     }
-    else if (frame->first_packet == NULL || frame->first_packet->offset != 0) {
+    else if (object->first_packet == NULL || object->first_packet->offset != 0) {
         ret = -1;
     }
-    else if (frame->last_packet == NULL ||
-        frame->last_packet->offset + frame->last_packet->data_length != frame->final_offset) {
+    else if (object->last_packet == NULL ||
+        object->last_packet->offset + object->last_packet->data_length != object->final_offset) {
         ret = -1;
     }
-    else if (frame->final_offset > SIZE_MAX) {
+    else if (object->final_offset > SIZE_MAX) {
         ret = -1;
     }
     else {
-        frame->reassembled = (uint8_t*)malloc((size_t)frame->final_offset);
-        if (frame->reassembled == NULL) {
+        object->reassembled = (uint8_t*)malloc((size_t)object->final_offset);
+        if (object->reassembled == NULL) {
             ret = -1;
         }
         else {
             size_t running_offset = 0;
-            quicrq_reassembly_packet_t* packet = frame->first_packet;
+            quicrq_reassembly_packet_t* packet = object->first_packet;
             while (packet != NULL && ret == 0) {
                 /* TODO: the "running offset" checks are never supposed to fire, unless
                  * there is a bug in the fragment collection program. Should be removed
@@ -273,17 +273,17 @@ static int quicrq_reassembly_frame_reassemble(quicrq_reassembly_frame_t* frame)
                 if (packet->offset != running_offset) {
                     ret = -1;
                 }
-                else if (running_offset + packet->data_length > frame->final_offset) {
+                else if (running_offset + packet->data_length > object->final_offset) {
                     ret = -1;
                 }
                 else {
-                    memcpy(frame->reassembled + running_offset, packet->data, packet->data_length);
+                    memcpy(object->reassembled + running_offset, packet->data, packet->data_length);
                     running_offset += packet->data_length;
                     packet = packet->next_packet;
                 }
             }
             /* Final check also is just for debugging, should never fire */
-            if (ret == 0 && running_offset != frame->final_offset) {
+            if (ret == 0 && running_offset != object->final_offset) {
                 ret = -1;
             }
         }
@@ -295,71 +295,71 @@ int quicrq_reassembly_input(
     quicrq_reassembly_context_t* reassembly_ctx,
     uint64_t current_time,
     const uint8_t* data,
-    uint64_t frame_id,
+    uint64_t object_id,
     uint64_t offset,
     int is_last_fragment,
     size_t data_length,
-    quicrq_reassembly_frame_ready_fn ready_fn,
+    quicrq_reassembly_object_ready_fn ready_fn,
     void* app_media_ctx)
 {
     int ret = 0;
-    if (frame_id < reassembly_ctx->next_frame_id) {
-        /* No need for this frame. */
+    if (object_id < reassembly_ctx->next_object_id) {
+        /* No need for this object. */
     }
     else {
-        quicrq_reassembly_frame_t* frame = quicrq_frame_find(reassembly_ctx, frame_id);
+        quicrq_reassembly_object_t* object = quicrq_object_find(reassembly_ctx, object_id);
 
-        if (frame == NULL) {
-            /* Create a media frame for reassembly */
-            frame = quicrq_reassembly_frame_create(reassembly_ctx, frame_id);
+        if (object == NULL) {
+            /* Create a media object for reassembly */
+            object = quicrq_reassembly_object_create(reassembly_ctx, object_id);
         }
         /* per fragment logic */
-        if (frame == NULL) {
+        if (object == NULL) {
             ret = -1;
         }
         else {
-            /* If this is the last fragment, update the frame length */
+            /* If this is the last fragment, update the object length */
             if (is_last_fragment) {
-                if (frame->final_offset == 0) {
-                    frame->final_offset = offset + data_length;
+                if (object->final_offset == 0) {
+                    object->final_offset = offset + data_length;
                 }
-                else if (frame->final_offset != offset + data_length) {
+                else if (object->final_offset != offset + data_length) {
                     ret = -1;
                 }
             }
-            /* Insert the frame at the proper location */
-            ret = quicrq_reassembly_frame_add_packet(frame, current_time, data, offset, data_length);
+            /* Insert the object at the proper location */
+            ret = quicrq_reassembly_object_add_packet(object, current_time, data, offset, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Add packet, ret = %d", ret);
             }
-            else if (frame->final_offset > 0 && frame->data_received >= frame->final_offset) {
-                /* If the frame is complete, verify and submit */
-                quicrq_reassembly_frame_mode_enum frame_mode = (reassembly_ctx->next_frame_id == frame_id) ?
-                    quicrq_reassembly_frame_in_sequence : quicrq_reassembly_frame_peek;
-                if (frame->reassembled == NULL) {
+            else if (object->final_offset > 0 && object->data_received >= object->final_offset) {
+                /* If the object is complete, verify and submit */
+                quicrq_reassembly_object_mode_enum object_mode = (reassembly_ctx->next_object_id == object_id) ?
+                    quicrq_reassembly_object_in_sequence : quicrq_reassembly_object_peek;
+                if (object->reassembled == NULL) {
                     /* Reassemble and verify -- maybe should do that in real time instead of at the end? */
-                    ret = quicrq_reassembly_frame_reassemble(frame);
+                    ret = quicrq_reassembly_object_reassemble(object);
                     if (ret == 0) {
-                        /* If the frame is fully received, pass it to the application, indicating sequence or not. */
-                        ret = ready_fn(app_media_ctx, current_time, frame_id, frame->reassembled, (size_t)frame->final_offset, frame_mode);
+                        /* If the object is fully received, pass it to the application, indicating sequence or not. */
+                        ret = ready_fn(app_media_ctx, current_time, object_id, object->reassembled, (size_t)object->final_offset, object_mode);
                     }
-                    if (ret == 0 && frame_mode == quicrq_reassembly_frame_in_sequence) {
-                        /* delete the frame that was just reassembled. */
-                        quicrq_reassembly_frame_delete(reassembly_ctx, frame);
-                        /* update the next_frame id */
-                        reassembly_ctx->next_frame_id++;
-                        /* try processing all frames that might now be ready */
-                        while (ret == 0 && (frame = quicrq_frame_find(reassembly_ctx, reassembly_ctx->next_frame_id)) != NULL && frame->reassembled != NULL) {
-                            /* Submit the frame in order */
-                            ret = ready_fn(app_media_ctx, current_time, frame->frame_id, frame->reassembled,
-                                (size_t)frame->final_offset, quicrq_reassembly_frame_repair);
-                            /* delete the frame that was just repaired. */
-                            quicrq_reassembly_frame_delete(reassembly_ctx, frame);
-                            /* update the next_frame id */
-                            reassembly_ctx->next_frame_id++;
+                    if (ret == 0 && object_mode == quicrq_reassembly_object_in_sequence) {
+                        /* delete the object that was just reassembled. */
+                        quicrq_reassembly_object_delete(reassembly_ctx, object);
+                        /* update the next_object id */
+                        reassembly_ctx->next_object_id++;
+                        /* try processing all objects that might now be ready */
+                        while (ret == 0 && (object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_object_id)) != NULL && object->reassembled != NULL) {
+                            /* Submit the object in order */
+                            ret = ready_fn(app_media_ctx, current_time, object->object_id, object->reassembled,
+                                (size_t)object->final_offset, quicrq_reassembly_object_repair);
+                            /* delete the object that was just repaired. */
+                            quicrq_reassembly_object_delete(reassembly_ctx, object);
+                            /* update the next_object id */
+                            reassembly_ctx->next_object_id++;
                         }
                         /* Mark finished if everything was received */
-                        if (reassembly_ctx->final_frame_id > 0 && reassembly_ctx->next_frame_id >= reassembly_ctx->final_frame_id) {
+                        if (reassembly_ctx->final_object_id > 0 && reassembly_ctx->next_object_id >= reassembly_ctx->final_object_id) {
                             reassembly_ctx->is_finished = 1;
                         }
                     }
@@ -371,27 +371,27 @@ int quicrq_reassembly_input(
     return ret;
 }
 
-int quicrq_reassembly_learn_final_frame_id(
+int quicrq_reassembly_learn_final_object_id(
     quicrq_reassembly_context_t* reassembly_ctx,
-    uint64_t final_frame_id)
+    uint64_t final_object_id)
 {
     int ret = 0;
 
-    if (reassembly_ctx->final_frame_id == 0) {
-        reassembly_ctx->final_frame_id = final_frame_id;
+    if (reassembly_ctx->final_object_id == 0) {
+        reassembly_ctx->final_object_id = final_object_id;
     }
-    else if (final_frame_id != reassembly_ctx->final_frame_id) {
+    else if (final_object_id != reassembly_ctx->final_object_id) {
         ret = -1;
     }
 
-    if (ret == 0 && reassembly_ctx->next_frame_id >= final_frame_id) {
+    if (ret == 0 && reassembly_ctx->next_object_id >= final_object_id) {
         reassembly_ctx->is_finished = 1;
     }
 
     return ret;
 }
 
-uint64_t quicrq_reassembly_frame_id_last(quicrq_reassembly_context_t* reassembly_ctx)
+uint64_t quicrq_reassembly_object_id_last(quicrq_reassembly_context_t* reassembly_ctx)
 {
-    return reassembly_ctx->next_frame_id;
+    return reassembly_ctx->next_object_id;
 }

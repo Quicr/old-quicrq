@@ -334,7 +334,7 @@ int proto_msg_test()
         else if (result.url_length != 0 && memcmp(result.url, proto_cases[i].result->url, result.url_length) != 0) {
             ret = -1;
         }
-        else if (result.frame_id != proto_cases[i].result->frame_id) {
+        else if (result.object_id != proto_cases[i].result->object_id) {
             ret = -1;
         }
         else if (result.offset != proto_cases[i].result->offset) {

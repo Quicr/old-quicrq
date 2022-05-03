@@ -50,15 +50,15 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
-		TEST_METHOD(media_frame_noloss)
+		TEST_METHOD(media_object_noloss)
 		{
-			int ret = quicrq_media_frame_noloss();
+			int ret = quicrq_media_object_noloss();
 
 			Assert::AreEqual(ret, 0);
 		}
-		TEST_METHOD(media_frame_loss)
+		TEST_METHOD(media_object_loss)
 		{
-			int ret = quicrq_media_frame_loss();
+			int ret = quicrq_media_object_loss();
 
 			Assert::AreEqual(ret, 0);
 		}
