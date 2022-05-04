@@ -124,6 +124,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
 quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t object_id, uint64_t offset);
 
 int quicrq_relay_datagram_publisher_prepare(
+    quicrq_stream_ctx_t* stream_ctx,
     quicrq_relay_publisher_context_t* media_ctx,
     uint64_t datagram_stream_id,
     void* context,

@@ -87,11 +87,28 @@ typedef struct st_quicrq_message_t {
     unsigned int use_datagram;
 } quicrq_message_t;
 
-/* Encode and decode protocol messages */
+/* Encode and decode protocol messages
+ * 
+ * The protocol defines a set of actions, identified by a code.
+ * 
+ * - rq_msg: request message, ask for a media identified by an URL
+ * - fin_msg: signal the last obect identifier in the media flow
+ * - repair_request: require repeat of a specific object fragment (not used yet)
+ * - repair_msg: provide the value of a specific fragment
+ * - quicr_msg: generic message, with type and value specified inside "msg" argument
+ * 
+ * For each action we get a specific encoding, decoding, and size reservation function.
+ * The "*_reserve" predict the size of the buffer required for encoding
+ * the message. A typical flow would be:
+ * 
+ * - use xxxx_reserve and estimate the size
+ * - allocate a buffer with at least that size
+ * - encode the message using xxxx_encode
+ */
 size_t quicrq_rq_msg_reserve(size_t url_length);
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint64_t datagram_stream_id);
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint64_t* datagram_stream_id);
-size_t quicrq_fin_msg_reserve(uint64_t final_offset);
+size_t quicrq_fin_msg_reserve(uint64_t final_object_id);
 uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_object_id);
 const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* final_object_id);
 size_t quicrq_repair_request_reserve(uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
@@ -111,6 +128,8 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 /* Stream header is indentical to repair message */
 #define QUICRQ_STREAM_HEADER_MAX 2+1+8+4+2
 
+/* Initialize the tracking of a datagram after sending it in a stream context */
+int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset, size_t length, int is_last_fragment);
 
 /* Transmission of out of order datagrams is possible for relays.
  * We use a function pointer to isolate the relay code for the main code,
@@ -185,6 +204,18 @@ typedef struct st_quicrq_datagram_queued_repair_t {
     size_t length;
 } quicrq_datagram_queued_repair_t;
 
+typedef struct st_quicrq_datagram_ack_state_t {
+    picosplay_node_t datagram_ack_node;
+    uint64_t object_id;
+    uint64_t object_offset;
+    int is_last_fragment;
+    size_t length;
+    int is_acked;
+    int fec_needed;
+    uint64_t last_sent_time;
+} quicrq_datagram_ack_state_t;
+
+#if 0
 #define QUIRCQ_FRAME_RANGE_MAX 32
 typedef struct st_quicrq_sent_object_one_range_t {
     struct st_quicrq_sent_object_one_range_t* next;
@@ -195,6 +226,7 @@ typedef struct st_quicrq_sent_object_one_range_t {
 typedef struct st_quicrq_sent_object_ranges_t {
     quicrq_sent_object_one_range_t * sent;
 } quicrq_sent_object_ranges_t;
+#endif
 
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;
@@ -212,6 +244,13 @@ struct st_quicrq_stream_ctx_t {
     uint64_t next_object_id;
     uint64_t next_object_offset;
     uint64_t final_object_id;
+
+    /* Control of datagrams sent for that media */
+    uint64_t horizon_object_id;
+    uint64_t horizon_offset;
+    int horizon_is_last_fragment;
+    int nb_horizon_events;
+    picosplay_tree_t datagram_ack_tree;
 
     quicrq_stream_sending_state_enum send_state;
     quicrq_stream_receive_state_enum receive_state;

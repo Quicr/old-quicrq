@@ -374,6 +374,7 @@ int quicrq_relay_publisher_fn(
 }
 
 int quicrq_relay_datagram_publisher_prepare(
+    quicrq_stream_ctx_t* stream_ctx,
     quicrq_relay_publisher_context_t* media_ctx,
     uint64_t datagram_stream_id,
     void* context,
@@ -449,6 +450,13 @@ int quicrq_relay_datagram_publisher_prepare(
                             media_ctx->length_sent += copied;
                             *media_was_sent = 1;
                             *at_least_one_active = 1;
+                            if (stream_ctx != NULL) {
+                                /* Keep track in stream context */
+                                ret = quicrq_datagram_ack_init(stream_ctx, media_ctx->current_fragment->object_id, offset, copied, is_last_fragment);
+                                if (ret != 0) {
+                                    DBG_PRINTF("Datagram ack init returns %d", ret);
+                                }
+                            }
                         }
                     }
                 }
@@ -477,7 +485,7 @@ int quicrq_relay_datagram_publisher_fn(
     /* The "prepare" function has no dependency on stream context,
      * which helps designing unit tests.
      */
-    ret = quicrq_relay_datagram_publisher_prepare(media_ctx,
+    ret = quicrq_relay_datagram_publisher_prepare(stream_ctx, media_ctx,
         stream_ctx->datagram_stream_id, context, space, media_was_sent, at_least_one_active, &not_ready);
 
     if (not_ready){

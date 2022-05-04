@@ -73,6 +73,26 @@ void quicrq_reassembly_init(quicrq_reassembly_context_t* object_list)
  */
 void quicrq_reassembly_release(quicrq_reassembly_context_t* reassembly_ctx)
 {
+#if 1
+    int nb_objects = 0;
+    int nb_incomplete = 0;
+    picosplay_node_t * next_node = picosplay_first(&reassembly_ctx->object_tree);
+
+    while (next_node != NULL) {
+        quicrq_reassembly_object_t* object = (quicrq_reassembly_object_t*)quicrq_object_node_value(next_node);
+        nb_objects++;
+        if (object->reassembled != NULL){
+            if (nb_incomplete == 0) {
+                DBG_PRINTF("Object %" PRIu64 " is not reassembled", object->object_id);
+            }
+            nb_incomplete++;
+        }
+    }
+    DBG_PRINTF("Reassembly next: %" PRIu64 ", final: %" PRIu64 ", is_finished: %d",
+        reassembly_ctx->next_object_id, reassembly_ctx->final_object_id, reassembly_ctx->is_finished);
+    DBG_PRINTF("Reassembly contains %d objects, %d incomplete", nb_objects, nb_incomplete);
+
+#endif
     picosplay_empty_tree(&reassembly_ctx->object_tree);
     memset(reassembly_ctx, 0, sizeof(quicrq_reassembly_context_t));
 }

@@ -216,6 +216,12 @@ int quicrq_test_loop_step_ex(quicrq_test_config_t* config, int* is_active, uint6
     if (next_time < UINT64_MAX) {
         /* Update the time */
         if (next_time > config->simulated_time) {
+#if 1
+            if (next_time - config->simulated_time > 1000000) {
+                DBG_PRINTF("%s", "Bug");
+                config->simulated_time += 1000000;
+            } else
+#endif
             config->simulated_time = next_time;
         }
         switch (next_step_type) {
@@ -563,6 +569,11 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
 
         nb_steps++;
+#if 1
+        if (config->simulated_time > 12000000) {
+            DBG_PRINTF("%s", "Bug");
+        }
+#endif
 
         if (is_active) {
             nb_inactive = 0;
@@ -651,7 +662,7 @@ int quicrq_datagram_client_test()
 /* Datagram test, with datagram limit. */
 int quicrq_datagram_limit_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0, 1200);
+    return quicrq_basic_test_one(1, 1, 0, 0, 1100);
 }
 
 int quicrq_get_addr_test()
