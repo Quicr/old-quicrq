@@ -622,11 +622,6 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
     const uint8_t* data, size_t data_length)
 {
     int ret = 0;
-#if 1
-    if (data_length > 1500) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
     /* Check that the connection is there */
     if (stream_ctx->cnx_ctx == NULL || stream_ctx->cnx_ctx->cnx == NULL) {
         ret = -1;
@@ -646,11 +641,6 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
         else {
             memcpy(bytes, data, data_length);
             bytes += data_length;
-#if 1
-            if (bytes - datagram > 1500) {
-                DBG_PRINTF("%s", "bug");
-            }
-#endif
             ret = picoquic_queue_datagram_frame(stream_ctx->cnx_ctx->cnx, bytes - datagram, datagram);
         }
     }
@@ -779,11 +769,15 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                     int is_last_fragment = 0;
                     int is_media_finished = 0;
                     int is_still_active = 0;
-#if 1
-                    if (space > 1200) {
-                        space = 1200;
+
+                    if (space > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
+                        /* Limiting the size of datagrams to what can be queued with min MTU
+                         * This restriction is imposed by the reliance of `picoquic_datagram_queue()`
+                         * in the error correction code. It could be lifted if error correction
+                         * supported some form of segmentation and reassembly (TODO).
+                         */
+                        space = PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH;
                     }
-#endif
 
                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
 
@@ -797,10 +791,6 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                             stream_ctx->final_object_id = stream_ctx->next_object_id;
                             /* Wake up the control stream so the final message can be sent. */
                             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-#if 1
-#else
-                            stream_ctx->is_active_datagram = 0;
-#endif
                         }
                         if (available > 0) {
                             void* buffer = picoquic_provide_datagram_buffer(context, available + h_size);
