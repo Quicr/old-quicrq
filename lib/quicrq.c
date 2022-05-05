@@ -29,6 +29,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include "picoquic_utils.h"
 #include "quicrq.h"
 #include "quicrq_internal.h"
