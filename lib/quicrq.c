@@ -461,9 +461,12 @@ static int64_t quicrq_datagram_ack_node_compare(void* l, void* r)
     return ret;
 }
 
-static picosplay_node_t* quicrq_datagram_ack_node_create(void* v_media_object)
+static picosplay_node_t* quicrq_datagram_ack_node_create(void* v_datagram_ack_state)
 {
-    return &((quicrq_datagram_ack_state_t*)v_media_object)->datagram_ack_node;
+    /* Do not actually create data. Simply return a pointer to the "node"
+     * property in the datagram ack state record. This is in line with
+     * expected behavior of "picosplay". */
+    return &((quicrq_datagram_ack_state_t*)v_datagram_ack_state)->datagram_ack_node;
 }
 
 static void quicrq_datagram_ack_node_delete(void* tree, picosplay_node_t* node)
@@ -471,7 +474,6 @@ static void quicrq_datagram_ack_node_delete(void* tree, picosplay_node_t* node)
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);
 #endif
-    memset(node, 0, sizeof(picosplay_node_t));
     free(quicrq_datagram_ack_node_value(node));
 }
 
@@ -516,14 +518,14 @@ static void quicrq_datagram_ack_ctx_release(quicrq_stream_ctx_t* stream_ctx)
     picosplay_empty_tree(&stream_ctx->datagram_ack_tree);
 }
 
-quicrq_datagram_ack_state_t* quicrq_datagram_ack_find(quicrq_stream_ctx_t* stream_ctx_t, uint64_t object_id, uint64_t object_offset)
+quicrq_datagram_ack_state_t* quicrq_datagram_ack_find(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset)
 {
     quicrq_datagram_ack_state_t* found = NULL;
     quicrq_datagram_ack_state_t target = { 0 };
     target.object_id = object_id;
     target.object_offset = object_offset;
 
-    picosplay_node_t* node = picosplay_find(&stream_ctx_t->datagram_ack_tree, (void*)&target);
+    picosplay_node_t* node = picosplay_find(&stream_ctx->datagram_ack_tree, (void*)&target);
     if (node != NULL) {
         found = (quicrq_datagram_ack_state_t*)quicrq_datagram_ack_node_value(node);
     }
@@ -539,11 +541,12 @@ int64_t quicrq_datagram_check_horizon(quicrq_stream_ctx_t* stream_ctx, uint64_t 
     return ret;
 }
 
-int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset, size_t length, int is_last_fragment)
+int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset, size_t length,
+    int is_last_fragment, void** p_created_state)
 {
     int ret = 0;
     /* Check whether the object is below the horizon */
-    if (quicrq_datagram_check_horizon(stream_ctx, object_id, object_offset) <= 0) {
+    if (quicrq_datagram_check_horizon(stream_ctx, object_id, object_offset) < 0) {
         /* at or below horizon, not new. */
         stream_ctx->nb_horizon_events++;
     } else {
@@ -568,6 +571,9 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id
                 da_new->length = length;
                 da_new->is_last_fragment = is_last_fragment;
                 picosplay_insert(&stream_ctx->datagram_ack_tree, da_new);
+                if (p_created_state != NULL) {
+                    *p_created_state = da_new;
+                }
             }
         }
     }
@@ -581,6 +587,7 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
     quicrq_datagram_ack_state_t* found = quicrq_datagram_ack_find(stream_ctx, object_id, object_offset);
 
     /* if there, mark as acknowledged */
+    /* TODO: handle length? */
     if (found) {
         found->is_acked = 1;
         /* Check if this is the oldest segment */
@@ -618,6 +625,12 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
     return ret;
 }
 
+ /* If a datagram frame needs to be repeated, a copy of the frame will be
+ * queued using the picoquic_queue_datagram_frame() API. That API can 
+ * only handle datagram of at most PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH
+ * bytes. If the original datagram is longer, it needs to be split.
+ */
+
 int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
     quicrq_datagram_ack_state_t* found,
     const uint8_t* data, size_t data_length)
@@ -628,21 +641,59 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
         ret = -1;
     }
     else {
-        uint8_t datagram[PICOQUIC_MAX_PACKET_SIZE];
-        /* Encode the header */
-        uint8_t * bytes = datagram;
-        uint8_t * bytes_max = datagram + PICOQUIC_MAX_PACKET_SIZE;
-        found->last_sent_time = picoquic_get_quic_time(picoquic_get_quic_ctx(stream_ctx->cnx_ctx->cnx));
-        bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->datagram_stream_id,
-            found->object_id, found->object_offset, found->is_last_fragment);
-        /* Copy the data */
-        if (bytes + data_length > bytes_max) {
-            ret = -1;
-        }
-        else {
-            memcpy(bytes, data, data_length);
-            bytes += data_length;
-            ret = picoquic_queue_datagram_frame(stream_ctx->cnx_ctx->cnx, bytes - datagram, datagram);
+        while (data_length > 0 && ret == 0) {
+            uint8_t datagram[PICOQUIC_MAX_PACKET_SIZE];
+            uint8_t* bytes = datagram;
+            uint8_t* bytes_max = datagram + PICOQUIC_MAX_PACKET_SIZE;
+            size_t fragment_length = data_length;
+            size_t header_length;
+            size_t datagram_length;
+            /* Encode the header */
+            found->last_sent_time = picoquic_get_quic_time(picoquic_get_quic_ctx(stream_ctx->cnx_ctx->cnx));
+            bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->datagram_stream_id,
+                found->object_id, found->object_offset, found->is_last_fragment);
+            /* Check how much data should be send in this fragment */
+            header_length = bytes - datagram;
+            datagram_length = header_length + data_length;
+            if (header_length + fragment_length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
+                if (found->is_last_fragment) {
+                    /* Erase the last segment mark in datagram header */
+                    bytes = quicrq_datagram_header_encode(datagram, bytes_max, stream_ctx->datagram_stream_id,
+                        found->object_id, found->object_offset, 0);
+                    header_length = bytes - datagram;
+                }
+                fragment_length = PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH - header_length;
+                datagram_length = PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH;
+            }
+            /* Copy the data */
+            if (bytes + fragment_length > bytes_max) {
+                ret = -1;
+            }
+            else {
+                memcpy(bytes, data, fragment_length);
+                ret = picoquic_queue_datagram_frame(stream_ctx->cnx_ctx->cnx, datagram_length, datagram);
+                if (ret == 0 && fragment_length < data_length) {
+                    void* p_next_record = NULL;
+                    size_t next_offset = found->object_offset + fragment_length;
+                    data += fragment_length;
+                    data_length -= fragment_length;
+
+                    /* split the fragment, get a new one, update old record, point found to new record. */
+                    ret = quicrq_datagram_ack_init(stream_ctx, found->object_id, next_offset, data_length,
+                        found->is_last_fragment, &p_next_record);
+                    if (ret == 0) {
+                        quicrq_datagram_ack_state_t* next_record = (quicrq_datagram_ack_state_t*)p_next_record;
+                        next_record->is_last_fragment = found->is_last_fragment;
+                        next_record->fec_needed = found->fec_needed;
+                        found->is_last_fragment = 0;
+                        found->length = fragment_length;
+                        found = next_record;
+                    }
+                }
+                else {
+                    break;
+                }
+            }
         }
     }
     return ret;
@@ -771,15 +822,6 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                     int is_media_finished = 0;
                     int is_still_active = 0;
 
-                    if (space > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
-                        /* Limiting the size of datagrams to what can be queued with min MTU
-                         * This restriction is imposed by the reliance of `picoquic_datagram_queue()`
-                         * in the error correction code. It could be lifted if error correction
-                         * supported some form of segmentation and reassembly (TODO).
-                         */
-                        space = PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH;
-                    }
-
                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
 
                     /* Get a buffer inside the datagram packet */
@@ -827,7 +869,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 }
                                 /* Keep track in stream context */
                                 if (ret == 0) {
-                                    ret = quicrq_datagram_ack_init(stream_ctx, stream_ctx->next_object_id, stream_ctx->next_object_offset, data_length, is_last_fragment);
+                                    ret = quicrq_datagram_ack_init(stream_ctx, stream_ctx->next_object_id, stream_ctx->next_object_offset, data_length, is_last_fragment, NULL);
                                     if (ret != 0) {
                                         DBG_PRINTF("Datagram ack init returns %d", ret);
                                     }

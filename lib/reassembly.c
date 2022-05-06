@@ -90,6 +90,7 @@ void quicrq_reassembly_release(quicrq_reassembly_context_t* reassembly_ctx)
                 }
                 nb_incomplete++;
             }
+            next_node = picosplay_next(next_node);
         }
         DBG_PRINTF("Reassembly next: %" PRIu64 ", final: %" PRIu64 ", is_finished: %d",
             reassembly_ctx->next_object_id, reassembly_ctx->final_object_id, reassembly_ctx->is_finished);

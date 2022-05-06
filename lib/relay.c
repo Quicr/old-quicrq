@@ -452,7 +452,7 @@ int quicrq_relay_datagram_publisher_prepare(
                             *at_least_one_active = 1;
                             if (stream_ctx != NULL) {
                                 /* Keep track in stream context */
-                                ret = quicrq_datagram_ack_init(stream_ctx, media_ctx->current_fragment->object_id, offset, copied, is_last_fragment);
+                                ret = quicrq_datagram_ack_init(stream_ctx, media_ctx->current_fragment->object_id, offset, copied, is_last_fragment, NULL);
                                 if (ret != 0) {
                                     DBG_PRINTF("Datagram ack init returns %d", ret);
                                 }

@@ -129,7 +129,7 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 #define QUICRQ_STREAM_HEADER_MAX 2+1+8+4+2
 
 /* Initialize the tracking of a datagram after sending it in a stream context */
-int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset, size_t length, int is_last_fragment);
+int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset, size_t length, int is_last_fragment, void** p_created_state);
 
 /* Transmission of out of order datagrams is possible for relays.
  * We use a function pointer to isolate the relay code for the main code,
@@ -214,19 +214,6 @@ typedef struct st_quicrq_datagram_ack_state_t {
     int fec_needed;
     uint64_t last_sent_time;
 } quicrq_datagram_ack_state_t;
-
-#if 0
-#define QUIRCQ_FRAME_RANGE_MAX 32
-typedef struct st_quicrq_sent_object_one_range_t {
-    struct st_quicrq_sent_object_one_range_t* next;
-    uint64_t range_start;
-    uint64_t range_end;
-} quicrq_sent_object_one_range_t;
-
-typedef struct st_quicrq_sent_object_ranges_t {
-    quicrq_sent_object_one_range_t * sent;
-} quicrq_sent_object_ranges_t;
-#endif
 
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;

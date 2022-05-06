@@ -156,7 +156,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
         /* Run the simulation. Monitor the connection. Monitor the media. */
         int is_active = 0;
 
-        ret = quicrq_test_loop_step(config, &is_active);
+        ret = quicrq_test_loop_step(config, &is_active, UINT64_MAX);
         if (ret != 0) {
             DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
         }

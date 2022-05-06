@@ -171,7 +171,7 @@ int quicrq_test_packet_arrival(quicrq_test_config_t* config, int link_id, int * 
 }
 
 /* Execute the loop */
-int quicrq_test_loop_step_ex(quicrq_test_config_t* config, int* is_active, uint64_t app_wake_time)
+int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t app_wake_time)
 {
     int ret = 0;
     int next_step_type = 0;
@@ -241,11 +241,6 @@ int quicrq_test_loop_step_ex(quicrq_test_config_t* config, int* is_active, uint6
     }
 
     return ret;
-}
-
-/* Execute the loop */
-int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active) {
-    return quicrq_test_loop_step_ex(config, is_active, UINT64_MAX);
 }
 
 /* Manage different file names for different receivers and sources */
@@ -557,7 +552,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         /* Run the simulation. Monitor the connection. Monitor the media. */
         int is_active = 0;
 
-        ret = quicrq_test_loop_step(config, &is_active);
+        ret = quicrq_test_loop_step(config, &is_active, UINT64_MAX);
         if (ret != 0) {
             DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
         }

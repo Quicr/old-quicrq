@@ -211,7 +211,7 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
             }
         }
         if (ret == 0) {
-            ret = quicrq_test_loop_step_ex(config, &is_active, app_wake_time);
+            ret = quicrq_test_loop_step(config, &is_active, app_wake_time);
             if (ret != 0) {
                 DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
             }

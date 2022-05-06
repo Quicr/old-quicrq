@@ -140,7 +140,7 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         /* Run the simulation. Monitor the connection. Monitor the media. */
         int is_active = 0;
 
-        ret = quicrq_test_loop_step(config, &is_active);
+        ret = quicrq_test_loop_step(config, &is_active, UINT64_MAX);
         if (ret != 0) {
             DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
         }
@@ -168,7 +168,7 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 
             if (!is_closed && client_stream_closed && server_stream_closed) {
                 /* Client is done. Close connection without waiting for timer */
-                ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
+                ret = picoquic_close(config->nodes[2]->first_cnx->cnx, 0);
                 is_closed = 1;
                 if (ret != 0) {
                     DBG_PRINTF("Cannot close client connection, ret = %d", ret);
