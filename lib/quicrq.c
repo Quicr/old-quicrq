@@ -374,67 +374,6 @@ void quicrq_remove_repair_in_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_
     free(repair);
 }
 
-int quicrq_add_repair_to_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, const uint8_t* bytes, size_t length,
-    uint64_t object_id, uint64_t object_offset, int is_last_fragment)
-{
-    int ret = 0;
-    size_t target_size = sizeof(quicrq_datagram_queued_repair_t) + length;
-
-    if (target_size < sizeof(quicrq_datagram_queued_repair_t)) {
-        ret = -1;
-    } else {
-        /* Create a repair message, reserving space at the end to copy the datagram */
-        quicrq_datagram_queued_repair_t* repair = (quicrq_datagram_queued_repair_t*)malloc(target_size);
-        if (repair == NULL) {
-            ret = -1;
-        }
-        else {
-            memset(repair, 0, sizeof(quicrq_datagram_queued_repair_t));
-            repair->object_id = object_id;
-            repair->object_offset = object_offset;
-            repair->is_last_fragment = is_last_fragment;
-            repair->length = length;
-            repair->datagram = ((uint8_t*)repair) + sizeof(quicrq_datagram_queued_repair_t);
-            memcpy(repair->datagram, bytes, length);
-            if (stream_ctx->datagram_repair_last == NULL) {
-                stream_ctx->datagram_repair_last = repair;
-                stream_ctx->datagram_repair_first = repair;
-            }
-            else {
-                repair->previous_repair = stream_ctx->datagram_repair_last;
-                stream_ctx->datagram_repair_last->next_repair = repair;
-                stream_ctx->datagram_repair_last = repair;
-            }
-            /* Wake up the control stream so the final message can be sent. */
-            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-        }
-    }
-    return ret;
-}
-
-int quicrq_check_spurious_repair_in_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx, size_t length,
-    uint64_t object_id, uint64_t object_offset, int is_last_fragment)
-{
-    int ret = 0;
-    quicrq_datagram_queued_repair_t* repair = stream_ctx->datagram_repair_first;
-
-    while (repair != NULL) {
-        if (repair->object_id == object_id && repair->object_offset == object_offset &&
-            repair->length == length && repair->is_last_fragment == is_last_fragment) {
-            break;
-        }
-        else {
-            repair = repair->next_repair;
-        }
-    }
-
-    if (repair != NULL && (stream_ctx->datagram_repair_first != repair || stream_ctx->send_state != quicrq_sending_repair)) {
-        quicrq_remove_repair_in_stream_ctx(stream_ctx, repair);
-    }
-
-    return ret;
-}
-
 /* Handle the list of datagrams pending acknowledgement or retransmission.
  * The code maintains an acknowledgement tree of the fragments that were sent.
  * TODO: handle whether we can have overlapping fragments. We will assume that
@@ -580,16 +519,54 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id
     return ret;
 }
 
-int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset)
+int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset, size_t length)
 {
     int ret = 0;
-    /* Find whether the ack record is there. */
-    quicrq_datagram_ack_state_t* found = quicrq_datagram_ack_find(stream_ctx, object_id, object_offset);
+    /* handle the case where the acked data overlaps the horizon */
+    int is_below_horizon = 0;
+    int should_check_horizon = 0;
+    int64_t horizon_delta = object_id - stream_ctx->horizon_object_id;
+    int64_t acked_length = length;
+    uint64_t acked_offset = object_offset;
 
-    /* if there, mark as acknowledged */
-    /* TODO: handle length? */
-    if (found) {
-        found->is_acked = 1;
+    if (horizon_delta == 0) {
+        if (object_offset + length < stream_ctx->horizon_offset) {
+            is_below_horizon = 1;
+        }
+        else if (object_offset < stream_ctx->horizon_offset) {
+            /* update the ACK to only retain the part above the horizon */
+            acked_offset = stream_ctx->horizon_offset;
+            acked_length -= (stream_ctx->horizon_offset - object_offset);
+        }
+    }
+    else if (horizon_delta < 0) {
+        is_below_horizon = 1;
+    }
+
+    if (!is_below_horizon) {
+        /* Find whether the ack record is there. */
+        quicrq_datagram_ack_state_t* found = quicrq_datagram_ack_find(stream_ctx, object_id, object_offset);
+
+        /* if there, mark as acknowledged */
+        /* in some cases, e.g. spurious repeat, the ack of a previous transmission may have a larger acked length than the current record */
+        while (found != NULL && acked_length > 0) {
+            should_check_horizon = 1;
+            found->is_acked = 1;
+            acked_length -= found->length;
+            acked_offset += found->length;
+            if (acked_length > 0) {
+                found = (quicrq_datagram_ack_state_t*)quicrq_datagram_ack_node_value(picosplay_next(&found->datagram_ack_node));
+                if (found->object_id != object_id || found->object_offset != object_offset) {
+                    break;
+                }
+            }
+            else {
+                break;
+            }
+        }
+    }
+
+    if (should_check_horizon){
         /* Check if this is the oldest segment */
         if (quicrq_datagram_check_horizon(stream_ctx, object_id, object_offset) <= 1) {
             /* Progress the horizon */
@@ -745,16 +722,17 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
              */
             quicrq_stream_ctx_t* stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 1);
             if (stream_ctx != NULL) {
+                size_t data_length = (size_t)(bytes_max - next_bytes);
                 switch (picoquic_event) {
                 case picoquic_callback_datagram_acked: /* Ack for packet carrying datagram-object received from peer */
-                    ret = quicrq_datagram_handle_ack(stream_ctx, object_id, object_offset);
+                    ret = quicrq_datagram_handle_ack(stream_ctx, object_id, object_offset, data_length);
                     break;
                 case picoquic_callback_datagram_lost: /* Packet carrying datagram-object probably lost */
                     ret = quicrq_datagram_handle_lost(stream_ctx, object_id, object_offset, send_time,
-                        next_bytes, (size_t)(bytes_max - next_bytes));
+                        next_bytes, data_length);
                     break;
                 case picoquic_callback_datagram_spurious: /* Packet carrying datagram-object was not really lost */
-                    ret = quicrq_datagram_handle_ack(stream_ctx, object_id, object_offset);
+                    ret = quicrq_datagram_handle_ack(stream_ctx, object_id, object_offset, data_length);
                     break;
                 default:
                     ret = -1;
@@ -1289,14 +1267,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_stream_reset: /* Client reset stream #x */
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
-#if 0
             /* TODO: react to abandon stream, etc. */
-            if (stream_ctx != NULL) {
-                /* Mark stream as abandoned, close the file, etc. */
-                sample_server_delete_stream_context(cnx_ctx, stream_ctx);
-                picoquic_reset_stream(cnx, stream_id, PICOQUIC_SAMPLE_FILE_CANCEL_ERROR);
-            }
-#endif
             break;
         case picoquic_callback_stateless_reset: /* Received an error message */
         case picoquic_callback_close: /* Received connection close */
