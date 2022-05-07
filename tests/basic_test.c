@@ -189,7 +189,11 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
 
     /* Check which node has the lowest wait time */
     for (int i = 0; i < config->nb_nodes; i++) {
+        uint64_t extra_repeat_time = quicrq_handle_extra_repeat(config->nodes[i], config->simulated_time);
         uint64_t quic_time = picoquic_get_next_wake_time(config->nodes[i]->quic, config->simulated_time);
+        if (extra_repeat_time < quic_time) {
+            quic_time = extra_repeat_time;
+        }
         if (quic_time < next_time) {
             next_time = quic_time;
             next_step_type = 2;
@@ -417,7 +421,7 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
     return config;
 }
 
-quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss)
+quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss, uint64_t extra_delay)
 {
     /* Create a configuration with just two nodes, two links, one source and two attachment points.*/
     quicrq_test_config_t* config = quicrq_test_config_create(2, 2, 2, 1);
@@ -446,6 +450,10 @@ quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss)
         config->attachments[1].node_id = 1;
         /* Set the desired loss pattern */
         config->simulate_loss = simulate_loss;
+        /* set the extra delays */
+        for (int i = 0; i < config->nb_nodes; i++) {
+            quicrq_set_extra_repeat_delay(config->nodes[i], extra_delay);
+        }
     }
     return config;
 }
@@ -468,7 +476,7 @@ quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, in
 }
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client, int min_packet_size)
+int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client, int min_packet_size, uint64_t extra_delay)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -476,7 +484,7 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     int is_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
-    quicrq_test_config_t* config = quicrq_test_basic_config_create(simulate_losses);
+    quicrq_test_config_t* config = quicrq_test_basic_config_create(simulate_losses, extra_delay);
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     char media_source_path[512];
     char result_file_name[512];
@@ -484,8 +492,8 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     char text_log_name[512];
     size_t nb_log_chars = 0;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%llx-%zx.txt", is_real_time, use_datagrams, is_from_client, 
-        (unsigned long long)simulate_losses, min_packet_size);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%llx-%zx-%llu.txt", is_real_time, use_datagrams, is_from_client, 
+        (unsigned long long)simulate_losses, min_packet_size, (unsigned long long)extra_delay);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, is_from_client,
         result_file_name, result_log_name, sizeof(result_file_name));
@@ -610,49 +618,55 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 /* Basic connection test, using streams, not real time. */
 int quicrq_basic_test()
 {
-    return quicrq_basic_test_one(0, 0, 0, 0, 0);
+    return quicrq_basic_test_one(0, 0, 0, 0, 0, 0);
 }
 
 /* Basic connection test, using streams, real time. */
 int quicrq_basic_rt_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 0, 0);
+    return quicrq_basic_test_one(1, 0, 0, 0, 0, 0);
 }
 
 /* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
 int quicrq_datagram_basic_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0, 0);
+    return quicrq_basic_test_one(1, 1, 0, 0, 0, 0);
 }
 
 /* Datagram test, with forced packet losses. */
 int quicrq_datagram_loss_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0);
+    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 0);
+}
+
+/* Datagram test, with forced packet losses and extra repeat */
+int quicrq_datagram_extra_test()
+{
+    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 10000);
 }
 
 /* Publish from client, using streams */
 int quicrq_basic_client_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 1, 0);
+    return quicrq_basic_test_one(1, 0, 0, 1, 0, 0);
 }
 
 /* Publish from client, using datagrams */
 int quicrq_datagram_client_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 1, 0);
+    return quicrq_basic_test_one(1, 1, 0, 1, 0, 0);
 }
 
 /* Datagram test, with datagram limit. */
 int quicrq_datagram_limit_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0, 1100);
+    return quicrq_basic_test_one(1, 1, 0, 0, 1100, 0);
 }
 
 int quicrq_get_addr_test()
 {
     int ret = 0;
-    quicrq_test_config_t* config = quicrq_test_basic_config_create(0);
+    quicrq_test_config_t* config = quicrq_test_basic_config_create(0, 0);
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     struct sockaddr* addr_to = NULL;
 

@@ -75,6 +75,13 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(datagram_extra)
+		{
+			int ret = quicrq_datagram_extra_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(basic_client) {
 			int ret = quicrq_basic_client_test();
 
@@ -149,6 +156,12 @@ namespace UnitTest
 
 		TEST_METHOD(triangle_datagram_loss) {
 			int ret = quicrq_triangle_datagram_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_datagram_extra) {
+			int ret = quicrq_triangle_datagram_extra_test();
 
 			Assert::AreEqual(ret, 0);
 		}

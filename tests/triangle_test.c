@@ -13,7 +13,7 @@
  */
 
 /* Create a test network */
-quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss)
+quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss, uint64_t extra_delay)
 {
     /* Create a configuration with three nodes, four links, one source and 8 attachment points.*/
     quicrq_test_config_t* config = quicrq_test_config_create(3, 4, 4, 1);
@@ -51,12 +51,16 @@ quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss)
         config->attachments[3].node_id = 2;
         /* Set the desired loss pattern */
         config->simulate_loss = simulate_loss;
+
+        /* set the extra delay as specified */
+        for (int i = 0; i < config->nb_nodes; i++)
+            quicrq_set_extra_repeat_delay(config->nodes[i], extra_delay);
     }
     return config;
 }
 
 /* Basic relay test */
-int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses)
+int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, uint64_t extra_delay)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -64,7 +68,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     int is_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
-    quicrq_test_config_t* config = quicrq_test_triangle_config_create(simulate_losses);
+    quicrq_test_config_t* config = quicrq_test_triangle_config_create(simulate_losses, extra_delay);
     quicrq_cnx_ctx_t* cnx_ctx_1 = NULL;
     quicrq_cnx_ctx_t* cnx_ctx_2 = NULL;
     char media_source_path[512];
@@ -75,8 +79,8 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     int partial_closure = 0;
     uint64_t client2_close_time = UINT64_MAX;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx.txt", is_real_time, use_datagrams,
-        (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx-%llu.txt", is_real_time, use_datagrams,
+        (unsigned long long)simulate_losses, (unsigned long long) extra_delay);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, 1,
@@ -230,29 +234,35 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
 
 int quicrq_triangle_basic_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0);
+    int ret = quicrq_triangle_test_one(1, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_basic_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0x7080);
+    int ret = quicrq_triangle_test_one(1, 0, 0x7080, 0);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0);
+    int ret = quicrq_triangle_test_one(1, 1, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080);
+    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0);
 
     return ret;
 }
 
+int quicrq_triangle_datagram_extra_test()
+{
+    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000);
+
+    return ret;
+}

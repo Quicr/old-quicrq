@@ -203,9 +203,39 @@ int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
+
+/* Handling of extra repeats
+ *
+ * The "extra repeat" process attempts to limit the extra latency caused by
+ * packet losses and retransmissions. It is only applied for media streams
+ * sent as datagrams.
+ * 
+ * The extra repeat is done in two cases:
+ * - when a node has to repeat a fragment, 
+ * - if a relay or an origin forwards a fragment that was marked as
+ *   delayed on a previous hop
+ * In that case, the code will schedule a second transmission of the fragment
+ * after an "extra delay".
+ * 
+ * The function "quicrq_set_extra_repeat_delay" lets the application
+ * specify that extra delay. The value "10,000 microseconds" is generally
+ * adequate. If the value is set to 0, the extra repeat process is disabled.
+ * (this is the default.)
+ * 
+ * When the value is enabled, the application must call the function
+ * `quicrq_handle_extra_repeat` at regular intervals. In a multi threaded
+ * environment, this must be done inside the "picoquic" network thread,
+ * for example when processing the network loop time check callback
+ * `picoquic_packet_loop_time_check`. The function returns the time
+ * at will the next extra copy should be scheduled, or UINT64_MAX if no
+ * such copy is currently planned.
+ */
+
+void quicrq_set_extra_repeat_delay(quicrq_ctx_t* qr, uint64_t delay_in_microseconds);
+uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time);
+
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif /* QUICRQ_H */
