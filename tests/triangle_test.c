@@ -52,9 +52,15 @@ quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss,
         /* Set the desired loss pattern */
         config->simulate_loss = simulate_loss;
 
-        /* set the extra delay as specified */
-        for (int i = 0; i < config->nb_nodes; i++)
+        /* set the extra delay as specified.
+         * we only test for extra delays in the triangle tests.
+         */
+        for (int i = 0; i < config->nb_nodes; i++) {
+            if (extra_delay > 0) {
+                quicrq_set_extra_repeat(config->nodes[i], 0, 1);
+            }
             quicrq_set_extra_repeat_delay(config->nodes[i], extra_delay);
+        }
     }
     return config;
 }

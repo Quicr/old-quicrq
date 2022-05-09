@@ -327,6 +327,8 @@ struct st_quicrq_ctx_t {
     struct st_quicrq_cnx_ctx_t* first_cnx; /* First in double linked list of open connections in this context */
     struct st_quicrq_cnx_ctx_t* last_cnx; /* last in list of open connections in this context */
     /* Extra repeat option */
+    int extra_repeat_on_nack : 1;
+    int extra_repeat_after_received_delayed : 1;
     uint64_t extra_repeat_delay;
 };
 

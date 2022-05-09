@@ -575,15 +575,13 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id
                 if (p_created_state != NULL) {
                     *p_created_state = da_new;
                 }
-#if 1
-                /* If this is a delayed fragment, we should schedule an extra repeat 
-                 * static void quicrq_datagram_ack_extra_queue(quicrq_stream_ctx_t* stream_ctx, quicrq_datagram_ack_state_t* das, uint8_t * data, uint64_t repeat_time);
+                /* If this is a delayed fragment, we could schedule an extra repeat 
                  */
-                if (stream_ctx->cnx_ctx->qr_ctx->extra_repeat_delay > 0 &&
+                if (stream_ctx->cnx_ctx->qr_ctx->extra_repeat_after_received_delayed &&
+                    stream_ctx->cnx_ctx->qr_ctx->extra_repeat_delay > 0 &&
                     queue_delay > 2 * stream_ctx->cnx_ctx->qr_ctx->extra_repeat_delay) {
                     quicrq_datagram_ack_extra_queue(stream_ctx, da_new, data, current_time + stream_ctx->cnx_ctx->qr_ctx->extra_repeat_delay);
                 }
-#endif
             }
         }
     }
@@ -774,14 +772,8 @@ int quicrq_datagram_handle_lost(quicrq_stream_ctx_t* stream_ctx, uint64_t object
         found->nack_received = 1;
         stream_ctx->nb_fragment_lost++;
         /* Update the datagram header, and queue as datagram */
-#if 1
-        /* By default, do not ask for a premptive repeat here */
-        ret = quicrq_datagram_handle_repeat(stream_ctx, found, bytes, length, 0, current_time);
-#else
-        /* This branch would ask for an extra repeat. The results are questionable,
-         * probably because the extra overhead does not result in sufficent gain. */
-        ret = quicrq_datagram_handle_repeat(stream_ctx, found, bytes, length, 1, current_time);
-#endif
+        ret = quicrq_datagram_handle_repeat(stream_ctx, found, bytes, length, 
+            stream_ctx->cnx_ctx->qr_ctx->extra_repeat_on_nack, current_time);
     }
     return ret;
 }
@@ -835,6 +827,17 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     }
 
     return ret;
+}
+
+/* control whether an extra copy of the packet can be sent:
+* - after the packet is repeated (on nack)
+* - if a packet was delayed at a previous hop (after-delayed)
+*/
+
+void quicrq_set_extra_repeat(quicrq_ctx_t* qr, int on_nack, int after_delayed)
+{
+    qr->extra_repeat_on_nack = (on_nack != 0);
+    qr->extra_repeat_after_received_delayed = (after_delayed != 0);
 }
 
 /* Set the extra repeat delay to a specific value, 

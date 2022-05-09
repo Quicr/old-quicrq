@@ -211,18 +211,21 @@ int quicrq_callback(picoquic_cnx_t* cnx,
  * sent as datagrams.
  * 
  * The extra repeat is done in two cases:
- * - when a node has to repeat a fragment, 
- * - if a relay or an origin forwards a fragment that was marked as
- *   delayed on a previous hop
- * In that case, the code will schedule a second transmission of the fragment
+ * - send an extra copy of a packet after an error correction, i.e., "on nack"
+ * - send an extra copy of a packet if it was delayed at a previous hop,
+ *   i.e., "after delayed"
+ * if desired, the code will schedule a second transmission of the fragment
  * after an "extra delay".
+ * 
+ * The two modes of repeat can be controlled independently by a call
+ * to "quicrq_set_extra_repeat". 
  * 
  * The function "quicrq_set_extra_repeat_delay" lets the application
  * specify that extra delay. The value "10,000 microseconds" is generally
  * adequate. If the value is set to 0, the extra repeat process is disabled.
  * (this is the default.)
  * 
- * When the value is enabled, the application must call the function
+ * When extra repeat is enabled, the application must call the function
  * `quicrq_handle_extra_repeat` at regular intervals. In a multi threaded
  * environment, this must be done inside the "picoquic" network thread,
  * for example when processing the network loop time check callback
@@ -231,6 +234,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
  * such copy is currently planned.
  */
 
+void quicrq_set_extra_repeat(quicrq_ctx_t* qr, int on_nack, int after_delayed);
 void quicrq_set_extra_repeat_delay(quicrq_ctx_t* qr, uint64_t delay_in_microseconds);
 uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time);
 

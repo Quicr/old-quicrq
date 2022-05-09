@@ -452,6 +452,9 @@ quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss, ui
         config->simulate_loss = simulate_loss;
         /* set the extra delays */
         for (int i = 0; i < config->nb_nodes; i++) {
+            if (extra_delay > 0) {
+                quicrq_set_extra_repeat(config->nodes[i], 1, 1);
+            }
             quicrq_set_extra_repeat_delay(config->nodes[i], extra_delay);
         }
     }
