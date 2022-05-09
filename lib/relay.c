@@ -96,6 +96,7 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     int is_last_fragment,
     size_t data_length)
 {
@@ -117,6 +118,7 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
         memset(fragment, 0, sizeof(quicrq_relay_cached_fragment_t));
         fragment->object_id = object_id;
         fragment->offset = offset;
+        fragment->queue_delay = queue_delay;
         fragment->is_last_fragment = is_last_fragment;
         fragment->data = ((uint8_t*)fragment) + sizeof(quicrq_relay_cached_fragment_t);
         fragment->data_length = data_length;
@@ -131,6 +133,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     const uint8_t* data,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     int is_last_fragment,
     size_t data_length)
 {
@@ -149,7 +152,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
         if (first_fragment_state == NULL || first_fragment_state->object_id != object_id ||
             first_fragment_state->offset + first_fragment_state->data_length < offset) {
             /* Insert the whole fragment */
-            ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, is_last_fragment, data_length);
+            ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, data_length);
             data_was_added = 1;
             /* Mark done */
             data_length = 0;
@@ -160,7 +163,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
             if (offset + data_length > previous_last_byte) {
                 /* Some of the fragment data comes after this one. Submit */
                 size_t added_length = offset + data_length - previous_last_byte;
-                ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, is_last_fragment, added_length);
+                ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, added_length);
                 data_was_added = 1;
                 data_length -= added_length;
             }
@@ -221,6 +224,7 @@ int quicrq_relay_consumer_cb(
     const uint8_t* data,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     int is_last_fragment,
     size_t data_length)
 {
@@ -232,7 +236,7 @@ int quicrq_relay_consumer_cb(
         /* Check that this datagram was not yet received.
          * This requires accessing the cache by object_id, offset and length. */
          /* Add fragment (or fragments) to cache */
-        ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, object_id, offset, is_last_fragment, data_length);
+        ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, data_length);
         /* Manage fin of transmission */
         if (ret == 0) {
             /* If the final object id is known, and the number of fully received objects
@@ -451,6 +455,11 @@ int quicrq_relay_datagram_publisher_prepare(
                             *media_was_sent = 1;
                             *at_least_one_active = 1;
                             if (stream_ctx != NULL) {
+#if 1
+                                if (media_ctx->current_fragment->queue_delay) {
+                                    DBG_PRINTF("Retrieve queue delay= %" PRIu64, media_ctx->current_fragment->queue_delay);
+                                }
+#endif
                                 /* Keep track in stream context */
                                 ret = quicrq_datagram_ack_init(stream_ctx, media_ctx->current_fragment->object_id, offset, 
                                     ((uint8_t*)buffer) + h_size, copied,

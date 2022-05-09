@@ -397,7 +397,7 @@ int quicrq_relay_cache_fill_test_one(size_t fragment_max, size_t start_object, s
                     }
                     if (!should_skip) {
                         ret = quicrq_relay_propose_fragment_to_cache(cached_ctx, 
-                            relay_test_objects[f_id].data + offset, f_id, offset, is_last_fragment, data_length);
+                            relay_test_objects[f_id].data + offset, f_id, offset, 0, is_last_fragment, data_length);
                         if (ret != 0) {
                             DBG_PRINTF("Proposed segment fails, object %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
                         }
@@ -556,7 +556,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
         if (ret == 0 && fragment_length > 0) {
             /* submit to the media cache */
             ret = quicrq_relay_propose_fragment_to_cache(cached_ctx_p,
-                fragment, object_id, fragment_offset, is_last_fragment, fragment_length);
+                fragment, object_id, fragment_offset, 0, is_last_fragment, fragment_length);
         }
     } while (ret == 0 && fragment_length > 0);
 
@@ -622,7 +622,7 @@ int quicrq_relay_cache_publish_test_one(int is_datagram)
                 }
                 if (!should_skip) {
                     ret = quicrq_relay_propose_fragment_to_cache(cached_ctx,
-                        relay_test_objects[f_id].data + offset, f_id, offset, is_last_fragment, data_length);
+                        relay_test_objects[f_id].data + offset, f_id, offset, 0, is_last_fragment, data_length);
                     if (ret != 0) {
                         DBG_PRINTF("Proposed segment fails, object %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
                     }
@@ -726,9 +726,6 @@ int quicrq_relay_cache_fill_test()
             DBG_PRINTF("Cached datagram relay test returns %d", ret);
         }
     }
-
-
-
 
     return ret;
 }
