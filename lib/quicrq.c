@@ -612,6 +612,9 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
             acked_length -= (stream_ctx->horizon_offset - object_offset);
             should_check_horizon = 1;
         }
+        else if (object_offset == stream_ctx->horizon_offset) {
+            should_check_horizon = 1;
+        }
     }
     else if (horizon_delta < 0) {
         is_below_horizon = 1;
