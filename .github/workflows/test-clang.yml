@@ -13,6 +13,9 @@ jobs:
   analyze:
     name: TestSuite
     runs-on: ubuntu-latest
+    env:
+        CC: clang
+        CXX: clang++
 
     steps:
       - name: Checkout repository

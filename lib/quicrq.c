@@ -616,7 +616,7 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
 
     if (!is_below_horizon) {
         /* Find whether the ack record is there. */
-        quicrq_datagram_ack_state_t* found = quicrq_datagram_ack_find(stream_ctx, object_id, object_offset);
+        quicrq_datagram_ack_state_t* found = quicrq_datagram_ack_find(stream_ctx, object_id, acked_offset);
 
         /* if there, mark as acknowledged */
         /* in some cases, e.g. spurious repeat, the ack of a previous transmission may have a larger acked length than the current record */
@@ -627,7 +627,7 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
             acked_offset += found->length;
             if (acked_length > 0) {
                 found = (quicrq_datagram_ack_state_t*)quicrq_datagram_ack_node_value(picosplay_next(&found->datagram_ack_node));
-                if (found->object_id != object_id || found->object_offset != object_offset) {
+                if (found->object_id != object_id || found->object_offset != acked_offset) {
                     break;
                 }
             }
