@@ -786,7 +786,7 @@ int quicrq_datagram_handle_lost(quicrq_stream_ctx_t* stream_ctx, uint64_t object
     /* if found and is acked, do not repeat */
     /* If this is not the last transmission, do not repeat */
     if (found != NULL && !found->is_acked){
-        if (!found->is_extra_queued || found->last_sent_time <= sent_time + 10000) {
+        if (!found->is_extra_queued || found->last_sent_time <= sent_time + 1000) {
             found->nack_received = 1;
             stream_ctx->nb_fragment_lost++;
             /* Update the datagram header, and queue as datagram */
