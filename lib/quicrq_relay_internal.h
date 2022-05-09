@@ -51,6 +51,7 @@ typedef struct st_quicrq_relay_cached_fragment_t {
     picosplay_node_t fragment_node;
     uint64_t object_id;
     uint64_t offset;
+    uint64_t queue_delay;
     int is_last_fragment;
     struct st_quicrq_relay_cached_fragment_t* next_in_order;
     size_t data_length;

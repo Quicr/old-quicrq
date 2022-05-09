@@ -406,7 +406,7 @@ int quicrq_relay_datagram_publisher_prepare(
         size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
         uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
         uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-            datagram_stream_id, media_ctx->current_fragment->object_id, offset, 0);
+            datagram_stream_id, media_ctx->current_fragment->object_id, offset, media_ctx->current_fragment->queue_delay, 0);
         if (h_byte == NULL) {
             ret = -1;
         }
@@ -436,7 +436,7 @@ int quicrq_relay_datagram_publisher_prepare(
                         /* Push the header */
                         if (is_last_fragment) {
                             h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-                                datagram_stream_id, media_ctx->current_fragment->object_id, offset, 1);
+                                datagram_stream_id, media_ctx->current_fragment->object_id, offset, media_ctx->current_fragment->queue_delay, 1);
 
                             if (h_byte != datagram_header + h_size) {
                                 /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
@@ -452,7 +452,10 @@ int quicrq_relay_datagram_publisher_prepare(
                             *at_least_one_active = 1;
                             if (stream_ctx != NULL) {
                                 /* Keep track in stream context */
-                                ret = quicrq_datagram_ack_init(stream_ctx, media_ctx->current_fragment->object_id, offset, copied, is_last_fragment, NULL);
+                                ret = quicrq_datagram_ack_init(stream_ctx, media_ctx->current_fragment->object_id, offset, 
+                                    ((uint8_t*)buffer) + h_size, copied,
+                                    media_ctx->current_fragment->queue_delay, is_last_fragment, NULL, 
+                                    picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
                                 if (ret != 0) {
                                     DBG_PRINTF("Datagram ack init returns %d", ret);
                                 }

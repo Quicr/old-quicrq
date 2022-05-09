@@ -501,10 +501,11 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                     /* decode the datagram header */
                     uint64_t datagram_stream_id;
                     uint64_t object_offset;
+                    uint64_t queue_delay;
                     const uint8_t* datagram_max = bytes + datagram_length;
 
                     bytes = quicrq_datagram_header_decode(bytes, datagram_max, &datagram_stream_id,
-                        &object_id, &object_offset, &is_last_fragment);
+                        &object_id, &object_offset, &queue_delay, &is_last_fragment);
                     if (bytes == NULL) {
                         DBG_PRINTF("Cannot decode datagram header, length = %zu", datagram_length);
                         ret = -1;

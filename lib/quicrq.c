@@ -324,10 +324,11 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     uint64_t datagram_stream_id;
     uint64_t object_id;
     uint64_t object_offset;
+    uint64_t queue_delay;
     int is_last_fragment;
     const uint8_t* next_bytes;
 
-    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &object_id, &object_offset, &is_last_fragment);
+    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &object_id, &object_offset, &queue_delay, &is_last_fragment);
     if (next_bytes == NULL) {
         ret = -1;
     }
@@ -435,6 +436,11 @@ static void quicrq_datagram_ack_extra_dequeue(quicrq_stream_ctx_t* stream_ctx, q
 
 static void quicrq_datagram_ack_extra_queue(quicrq_stream_ctx_t* stream_ctx, quicrq_datagram_ack_state_t* das, const uint8_t * data, uint64_t repeat_time)
 {
+    if (das->is_extra_queued) {
+        return;
+    }
+    das->is_extra_queued = 1;
+
     if (das->extra_data != NULL) {
         /* new repeat request replaces the previous one */
         quicrq_datagram_ack_extra_dequeue(stream_ctx, das);
@@ -533,8 +539,9 @@ int64_t quicrq_datagram_check_horizon(quicrq_stream_ctx_t* stream_ctx, uint64_t 
     return ret;
 }
 
-int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset, size_t length,
-    int is_last_fragment, void** p_created_state)
+int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset,
+    uint8_t * data, size_t length,
+    uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time)
 {
     int ret = 0;
     /* Check whether the object is below the horizon */
@@ -562,13 +569,21 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id
                 da_new->object_offset = object_offset;
                 da_new->length = length;
                 da_new->is_last_fragment = is_last_fragment;
+                da_new->queue_delay = queue_delay;
+                da_new->start_time = current_time;
                 picosplay_insert(&stream_ctx->datagram_ack_tree, da_new);
                 if (p_created_state != NULL) {
                     *p_created_state = da_new;
                 }
-                /* TODO: if this is a delayed fragment, we should schedule an extra repeat 
+#if 1
+                /* If this is a delayed fragment, we should schedule an extra repeat 
                  * static void quicrq_datagram_ack_extra_queue(quicrq_stream_ctx_t* stream_ctx, quicrq_datagram_ack_state_t* das, uint8_t * data, uint64_t repeat_time);
                  */
+                if (stream_ctx->cnx_ctx->qr_ctx->extra_repeat_delay > 0 &&
+                    queue_delay > 2 * stream_ctx->cnx_ctx->qr_ctx->extra_repeat_delay) {
+                    quicrq_datagram_ack_extra_queue(stream_ctx, da_new, data, current_time + stream_ctx->cnx_ctx->qr_ctx->extra_repeat_delay);
+                }
+#endif
             }
         }
     }
@@ -680,13 +695,17 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
             uint8_t datagram[PICOQUIC_MAX_PACKET_SIZE];
             uint8_t* bytes = datagram;
             uint8_t* bytes_max = datagram + PICOQUIC_MAX_PACKET_SIZE;
+            uint64_t queue_delay_delta = 0;
             size_t fragment_length = data_length;
             size_t header_length;
             size_t datagram_length;
+            if (current_time > found->start_time) {
+                queue_delay_delta = (current_time - found->start_time + 500) / 1000;
+            }
             /* Encode the header */
             found->last_sent_time = picoquic_get_quic_time(picoquic_get_quic_ctx(stream_ctx->cnx_ctx->cnx));
             bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->datagram_stream_id,
-                found->object_id, found->object_offset, found->is_last_fragment);
+                found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->is_last_fragment);
             /* Check how much data should be send in this fragment */
             header_length = bytes - datagram;
             datagram_length = header_length + data_length;
@@ -694,7 +713,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
                 if (found->is_last_fragment) {
                     /* Erase the last segment mark in datagram header */
                     bytes = quicrq_datagram_header_encode(datagram, bytes_max, stream_ctx->datagram_stream_id,
-                        found->object_id, found->object_offset, 0);
+                        found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, 0);
                     header_length = bytes - datagram;
                 }
                 fragment_length = PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH - header_length;
@@ -720,8 +739,8 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
                         data_length -= fragment_length;
 
                         /* split the fragment, get a new one, update old record, point found to new record. */
-                        ret = quicrq_datagram_ack_init(stream_ctx, found->object_id, next_offset, data_length,
-                            found->is_last_fragment, &p_next_record);
+                        ret = quicrq_datagram_ack_init(stream_ctx, found->object_id, next_offset, data, data_length,
+                            found->queue_delay, found->is_last_fragment, &p_next_record, found->start_time);
                         if (ret == 0) {
                             quicrq_datagram_ack_state_t* next_record = (quicrq_datagram_ack_state_t*)p_next_record;
                             next_record->is_last_fragment = found->is_last_fragment;
@@ -755,7 +774,14 @@ int quicrq_datagram_handle_lost(quicrq_stream_ctx_t* stream_ctx, uint64_t object
         found->nack_received = 1;
         stream_ctx->nb_fragment_lost++;
         /* Update the datagram header, and queue as datagram */
+#if 1
+        /* By default, do not ask for a premptive repeat here */
+        ret = quicrq_datagram_handle_repeat(stream_ctx, found, bytes, length, 0, current_time);
+#else
+        /* This branch would ask for an extra repeat. The results are questionable,
+         * probably because the extra overhead does not result in sufficent gain. */
         ret = quicrq_datagram_handle_repeat(stream_ctx, found, bytes, length, 1, current_time);
+#endif
     }
     return ret;
 }
@@ -770,6 +796,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     uint64_t datagram_stream_id;
     uint64_t object_id;
     uint64_t object_offset;
+    uint64_t queue_delay;
     int is_last_fragment;
     const uint8_t* next_bytes;
 
@@ -777,7 +804,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
         ret = -1;
     }
     else {
-        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &object_id, &object_offset, &is_last_fragment);
+        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &object_id, &object_offset, &queue_delay, &is_last_fragment);
         /* Retrieve the stream context for the datagram */
         if (next_bytes == NULL) {
             ret = -1;
@@ -893,7 +920,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
                 size_t h_size;
                 uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-                    stream_ctx->next_object_id, stream_ctx->next_object_offset, 0);
+                    stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, 0);
                 if (h_byte == NULL) {
                     /* Not enough space in header buffer to encode the header. That should never happen */
                     quicrq_log_message(stream_ctx->cnx_ctx, "Error: datagram header longer than %zu", QUICRQ_DATAGRAM_HEADER_MAX);
@@ -937,7 +964,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 /* Push the header */
                                 if (is_last_fragment) {
                                     h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-                                        stream_ctx->next_object_id, stream_ctx->next_object_offset, 1);
+                                        stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, 1);
                                     if (h_byte != datagram_header + h_size) {
                                         /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
                                         quicrq_log_message(stream_ctx->cnx_ctx, "Error, cannot encode datagram header, expected = %zu", h_size);
@@ -959,7 +986,9 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 }
                                 /* Keep track in stream context */
                                 if (ret == 0) {
-                                    ret = quicrq_datagram_ack_init(stream_ctx, stream_ctx->next_object_id, stream_ctx->next_object_offset, data_length, is_last_fragment, NULL);
+                                    ret = quicrq_datagram_ack_init(stream_ctx, stream_ctx->next_object_id, stream_ctx->next_object_offset, 
+                                        ((uint8_t*)buffer) + h_size, data_length, 0,
+                                        is_last_fragment, NULL, current_time);
                                     if (ret != 0) {
                                         DBG_PRINTF("Datagram ack init returns %d", ret);
                                     }

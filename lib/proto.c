@@ -363,23 +363,25 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
 
 /* encoding of the datagram header */
 uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id,
-    uint64_t object_id, uint64_t object_offset, int is_last_fragment)
+    uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, int is_last_fragment)
 {
     uint64_t offset_and_fin = (object_offset << 1) | (unsigned int)(is_last_fragment & 1);
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_stream_id)) != NULL &&
-        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id)) != NULL) {
-        bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset_and_fin);
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset_and_fin)) != NULL) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, queue_delay);
     }
     return bytes;
 }
 
 const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * datagram_stream_id,
-    uint64_t* object_id, uint64_t* object_offset, int * is_last_fragment)
+    uint64_t* object_id, uint64_t* object_offset, uint64_t * queue_delay, int * is_last_fragment)
 {
     uint64_t offset_and_fin = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, object_id)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &offset_and_fin)) != NULL) {
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &offset_and_fin)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, queue_delay)) != NULL) {
         *object_offset = (offset_and_fin >> 1);
         *is_last_fragment = (int)(offset_and_fin & 1);
     }

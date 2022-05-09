@@ -122,14 +122,15 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
 
 /* Encode and decode the header of datagram packets. */
 #define QUICRQ_DATAGRAM_HEADER_MAX 16
-uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t object_id, uint64_t object_offset, int is_last_fragment);
+uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, int is_last_fragment);
 const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* datagram_stream_id, 
-    uint64_t* object_id, uint64_t* object_offset, int * is_last_fragment);
+    uint64_t* object_id, uint64_t* object_offset, uint64_t *queue_delay, int * is_last_fragment);
 /* Stream header is indentical to repair message */
 #define QUICRQ_STREAM_HEADER_MAX 2+1+8+4+2
 
 /* Initialize the tracking of a datagram after sending it in a stream context */
-int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset, size_t length, int is_last_fragment, void** p_created_state);
+int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id, uint64_t object_offset,
+    uint8_t* data, size_t length, uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time);
 
 /* Transmission of out of order datagrams is possible for relays.
  * We use a function pointer to isolate the relay code for the main code,
@@ -208,6 +209,7 @@ typedef struct st_quicrq_datagram_ack_state_t {
     picosplay_node_t datagram_ack_node;
     uint64_t object_id;
     uint64_t object_offset;
+    uint64_t queue_delay;
     int is_last_fragment;
     size_t length;
     int is_acked;
@@ -220,6 +222,9 @@ typedef struct st_quicrq_datagram_ack_state_t {
     struct st_quicrq_datagram_ack_state_t* extra_next;
     uint64_t extra_repeat_time;
     uint8_t* extra_data;
+    int is_extra_queued;
+    /* Start time is the time of the first transmission at this node */
+    uint64_t start_time;
     /* last sent time might help differentiating NACK of old vs. NACK of last */
     uint64_t last_sent_time;
 } quicrq_datagram_ack_state_t;
