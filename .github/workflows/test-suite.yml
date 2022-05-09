@@ -39,6 +39,7 @@ jobs:
 
       - name: Perform Unit tests
         run: |
+          cd build
           ulimit -c unlimited -S
           pwd
           ./quicrq_t -S .. -P ../../picoquic && QRQRESULT=$? 
