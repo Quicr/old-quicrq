@@ -548,6 +548,8 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id
     if (quicrq_datagram_check_horizon(stream_ctx, object_id, object_offset) < 0) {
         /* at or below horizon, not new. */
         stream_ctx->nb_horizon_events++;
+        DBG_PRINTF("ACK Init below horizon, object %" PRIu64 ", offset %" PRIu64,
+            object_id, object_offset);
     } else {
         /* Find whether the ack record is there. */
         quicrq_datagram_ack_state_t* found = quicrq_datagram_ack_find(stream_ctx, object_id, object_offset);
@@ -600,16 +602,24 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
 
     if (horizon_delta == 0) {
         if (object_offset + length < stream_ctx->horizon_offset) {
+            DBG_PRINTF("ACK below the horizon. Oject ID %" PRIu64 ", offset %" PRIu64 ", l %zu versus % " PRIu64,
+                object_id, object_offset, length, stream_ctx->horizon_offset);
             is_below_horizon = 1;
         }
         else if (object_offset < stream_ctx->horizon_offset) {
             /* update the ACK to only retain the part above the horizon */
             acked_offset = stream_ctx->horizon_offset;
             acked_length -= (stream_ctx->horizon_offset - object_offset);
+            should_check_horizon = 1;
         }
     }
     else if (horizon_delta < 0) {
         is_below_horizon = 1;
+        DBG_PRINTF("ACK below the horizon. Oject ID %" PRIu64 " versus %" PRIu64,
+            object_id, stream_ctx->horizon_object_id);
+    }
+    else if (horizon_delta == 1 && stream_ctx->horizon_is_last_fragment && object_offset == 0) {
+        should_check_horizon = 1;
     }
 
     if (!is_below_horizon) {
@@ -619,7 +629,6 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
         /* if there, mark as acknowledged */
         /* in some cases, e.g. spurious repeat, the ack of a previous transmission may have a larger acked length than the current record */
         while (found != NULL && acked_length > 0) {
-            should_check_horizon = 1;
             found->is_acked = 1;
             acked_length -= found->length;
             acked_offset += found->length;
@@ -635,36 +644,33 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
         }
     }
 
-    if (should_check_horizon){
-        /* Check if this is the oldest segment */
-        if (quicrq_datagram_check_horizon(stream_ctx, object_id, object_offset) <= 1) {
-            /* Progress the horizon */
-            picosplay_node_t* next_node = picosplay_first(&stream_ctx->datagram_ack_tree);
-            while (next_node != NULL) {
-                int just_after = 0;
-                quicrq_datagram_ack_state_t* das = (quicrq_datagram_ack_state_t*)quicrq_datagram_ack_node_value(next_node);
-                if (!das->is_acked) {
-                    break;
-                }
-                if (stream_ctx->horizon_is_last_fragment) {
-                    just_after = ((das->object_id - stream_ctx->horizon_object_id) == 1) && (das->object_offset == 0);
-                }
-                else {
-                    just_after = (das->object_id == stream_ctx->horizon_object_id) && (das->object_offset == stream_ctx->horizon_offset);
-                }
-                if (!just_after) {
-                    break;
-                }
-                else {
-                    /* collapse the horizon */
-                    picosplay_node_t* to_be_forgotten = next_node;
-                    stream_ctx->horizon_object_id = das->object_id;
-                    stream_ctx->horizon_offset = das->object_offset + das->length;
-                    stream_ctx->horizon_is_last_fragment = das->is_last_fragment;
+    if (should_check_horizon) {
+        /* Progress the horizon */
+        picosplay_node_t* next_node = picosplay_first(&stream_ctx->datagram_ack_tree);
+        while (next_node != NULL) {
+            int just_after = 0;
+            quicrq_datagram_ack_state_t* das = (quicrq_datagram_ack_state_t*)quicrq_datagram_ack_node_value(next_node);
+            if (!das->is_acked) {
+                break;
+            }
+            if (stream_ctx->horizon_is_last_fragment) {
+                just_after = ((das->object_id - stream_ctx->horizon_object_id) == 1) && (das->object_offset == 0);
+            }
+            else {
+                just_after = (das->object_id == stream_ctx->horizon_object_id) && (das->object_offset == stream_ctx->horizon_offset);
+            }
+            if (!just_after) {
+                break;
+            }
+            else {
+                /* collapse the horizon */
+                picosplay_node_t* to_be_forgotten = next_node;
+                stream_ctx->horizon_object_id = das->object_id;
+                stream_ctx->horizon_offset = das->object_offset + das->length;
+                stream_ctx->horizon_is_last_fragment = das->is_last_fragment;
 
-                    next_node = picosplay_next(next_node);
-                    picosplay_delete_hint(&stream_ctx->datagram_ack_tree, to_be_forgotten);
-                }
+                next_node = picosplay_next(next_node);
+                picosplay_delete_hint(&stream_ctx->datagram_ack_tree, to_be_forgotten);
             }
         }
     }
@@ -768,13 +774,18 @@ int quicrq_datagram_handle_lost(quicrq_stream_ctx_t* stream_ctx, uint64_t object
     /* if not there, assume acknowledged and hidden below the horizon */
     /* if found and is acked, do not repeat */
     /* If this is not the last transmission, do not repeat */
-    if (found != NULL && !found->is_acked && 
-        (!found->is_extra_queued || found->last_sent_time <= sent_time + 10000)) {
-        found->nack_received = 1;
-        stream_ctx->nb_fragment_lost++;
-        /* Update the datagram header, and queue as datagram */
-        ret = quicrq_datagram_handle_repeat(stream_ctx, found, bytes, length, 
-            stream_ctx->cnx_ctx->qr_ctx->extra_repeat_on_nack, current_time);
+    if (found != NULL && !found->is_acked){
+        if (!found->is_extra_queued || found->last_sent_time <= sent_time + 10000) {
+            found->nack_received = 1;
+            stream_ctx->nb_fragment_lost++;
+            /* Update the datagram header, and queue as datagram */
+            ret = quicrq_datagram_handle_repeat(stream_ctx, found, bytes, length,
+                stream_ctx->cnx_ctx->qr_ctx->extra_repeat_on_nack, current_time);
+        }
+        else {
+            DBG_PRINTF("Ignored NACK, object: %" PRIu64 ", offset: %" PRIu64 ", sent at %" PRIu64 ", last sent %" PRIu64,
+                object_id, object_offset, sent_time, found->last_sent_time);
+        }
     }
     return ret;
 }
