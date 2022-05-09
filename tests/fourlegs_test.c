@@ -279,7 +279,7 @@ int quicrq_fourlegs_test_one(int use_datagrams, uint64_t simulate_losses, int pu
             }
 
             if (all_closed) {
-                DBG_PRINTF("%s", "Exit loop after all client connections closed.");
+                DBG_PRINTF("Exit loop after all client connections closed, t=%" PRIu64, config->simulated_time);
                 break;
             }
             else if (!is_closed) {
