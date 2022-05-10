@@ -343,11 +343,6 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             }
         }
         else {
-#if 1
-            if (queue_delay > 0) {
-                DBG_PRINTF("Queue delay = %" PRIu64, queue_delay);
-            }
-#endif
             /* Pass data to the media context. */
             if (is_last_fragment) {
                 picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,

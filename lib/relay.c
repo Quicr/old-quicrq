@@ -455,11 +455,6 @@ int quicrq_relay_datagram_publisher_prepare(
                             *media_was_sent = 1;
                             *at_least_one_active = 1;
                             if (stream_ctx != NULL) {
-#if 1
-                                if (media_ctx->current_fragment->queue_delay) {
-                                    DBG_PRINTF("Retrieve queue delay= %" PRIu64, media_ctx->current_fragment->queue_delay);
-                                }
-#endif
                                 /* Keep track in stream context */
                                 ret = quicrq_datagram_ack_init(stream_ctx, media_ctx->current_fragment->object_id, offset, 
                                     ((uint8_t*)buffer) + h_size, copied,
