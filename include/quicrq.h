@@ -178,6 +178,7 @@ typedef int (*quicrq_media_consumer_fn)(
     const uint8_t* data,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     int is_last_fragment,
     size_t data_length);
 
@@ -203,9 +204,43 @@ int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
+
+/* Handling of extra repeats
+ *
+ * The "extra repeat" process attempts to limit the extra latency caused by
+ * packet losses and retransmissions. It is only applied for media streams
+ * sent as datagrams.
+ * 
+ * The extra repeat is done in two cases:
+ * - send an extra copy of a packet after an error correction, i.e., "on nack"
+ * - send an extra copy of a packet if it was delayed at a previous hop,
+ *   i.e., "after delayed"
+ * if desired, the code will schedule a second transmission of the fragment
+ * after an "extra delay".
+ * 
+ * The two modes of repeat can be controlled independently by a call
+ * to "quicrq_set_extra_repeat". 
+ * 
+ * The function "quicrq_set_extra_repeat_delay" lets the application
+ * specify that extra delay. The value "10,000 microseconds" is generally
+ * adequate. If the value is set to 0, the extra repeat process is disabled.
+ * (this is the default.)
+ * 
+ * When extra repeat is enabled, the application must call the function
+ * `quicrq_handle_extra_repeat` at regular intervals. In a multi threaded
+ * environment, this must be done inside the "picoquic" network thread,
+ * for example when processing the network loop time check callback
+ * `picoquic_packet_loop_time_check`. The function returns the time
+ * at will the next extra copy should be scheduled, or UINT64_MAX if no
+ * such copy is currently planned.
+ */
+
+void quicrq_set_extra_repeat(quicrq_ctx_t* qr, int on_nack, int after_delayed);
+void quicrq_set_extra_repeat_delay(quicrq_ctx_t* qr, uint64_t delay_in_microseconds);
+uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time);
+
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif /* QUICRQ_H */

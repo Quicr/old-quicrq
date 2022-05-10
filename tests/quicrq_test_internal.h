@@ -61,9 +61,8 @@ void quicrq_test_config_delete(quicrq_test_config_t* config);
 struct sockaddr* quicrq_test_find_send_addr(quicrq_test_config_t* config, int srce_node_id, int dest_node_id);
 /* Create a connection between two nodes */
 quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, int client_node, int server_node);
-int quicrq_test_loop_step_ex(quicrq_test_config_t* config, int* is_active, uint64_t app_wake_time);
 /* Execute one round of the network simulation loop */
-int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active);
+int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t app_wake_time);
 
 /* Location of default media source file */
 #ifdef _WINDOWS
@@ -141,6 +140,7 @@ int test_media_object_consumer_cb(
     const uint8_t* data,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     int is_last_fragment,
     size_t data_length);
 void* test_media_publisher_init(char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time, uint64_t start_time);

@@ -606,6 +606,7 @@ int test_media_object_consumer_cb(
     const uint8_t* data,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     int is_last_fragment,
     size_t data_length)
 {
@@ -834,7 +835,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
         } else {
             inactive = 0;
             ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                object_id, object_offset, is_last_fragment, data_length);
+                object_id, object_offset, 0, is_last_fragment, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Consumer, ret=%d", ret);
             }
@@ -855,7 +856,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
 
     if (ret == 0) {
         ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL,
-            object_id, 0, 0, 0);
+            object_id, 0, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
@@ -1014,7 +1015,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
         if (ret == 0) {
             if (is_media_finished || data_length > 0) {
                 ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    object_id, object_offset, is_last_fragment, data_length);
+                    object_id, object_offset, 0, is_last_fragment, data_length);
                 if (ret == 0) {
                     inactive = 0;
                 }
@@ -1041,7 +1042,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
 
     /* Close publisher by closing the connection context */
     if (ret == 0) {
-        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, object_id, 0, 0, 0);
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, object_id, 0, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
@@ -1204,7 +1205,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         else {
             /* Simulate arrival of packet */
             ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    object_id, object_offset, is_last_fragment, data_length);
+                    object_id, object_offset, 0, is_last_fragment, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Media consumer callback: ret = %d", ret);
                 break;
@@ -1226,7 +1227,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
 
     /* Indicate the final object_id, to simulate what datagrams would do */
     if (ret == 0) {
-        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, object_id, 0, 0, 0);
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, object_id, 0, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             consumer_properly_finished = 1;
             if (nb_losses > 0) {
@@ -1253,7 +1254,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
                 /* Simulate repair of a hole */
                 actual_dup++;
                 ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
-                    loss->object_id, loss->offset, loss->is_last_fragment, loss->length);
+                    loss->object_id, loss->offset, 0, loss->is_last_fragment, loss->length);
                 if (ret != 0) {
                     DBG_PRINTF("Media consumer callback: ret = %d", ret);
                 }
@@ -1271,7 +1272,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         while (loss != NULL && ret == 0) {
             /* Simulate repair of a hole */
             ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
-                loss->object_id, loss->offset, loss->is_last_fragment, loss->length);
+                loss->object_id, loss->offset, 0, loss->is_last_fragment, loss->length);
             if (ret == quicrq_consumer_finished) {
                 consumer_properly_finished = 1;
                 ret = 0;

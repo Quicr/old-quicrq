@@ -1,5 +1,5 @@
 ---
-name: "TestSuite"
+name: "TestSuiteClang"
 
 on:
   push:
@@ -11,8 +11,11 @@ on:
 
 jobs:
   analyze:
-    name: TestSuite
+    name: TestSuiteClang
     runs-on: ubuntu-latest
+    env:
+        CC: clang
+        CXX: clang++
 
     steps:
       - name: Checkout repository

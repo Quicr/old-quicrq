@@ -47,38 +47,27 @@
   * sustainable, some version of cache management will have to be added later.
   */
 
-#if 1
 typedef struct st_quicrq_relay_cached_fragment_t {
     picosplay_node_t fragment_node;
     uint64_t object_id;
     uint64_t offset;
+    uint64_t queue_delay;
     int is_last_fragment;
     struct st_quicrq_relay_cached_fragment_t* next_in_order;
     size_t data_length;
     uint8_t* data;
 } quicrq_relay_cached_fragment_t;
 
-#else
-typedef struct st_quicrq_relay_cached_object_t {
-    picosplay_node_t object_node;
-    uint64_t object_id;
-    uint8_t* data;
-    size_t data_length;
-} quicrq_relay_cached_object_t;
-#endif
+
 
 typedef struct st_quicrq_relay_cached_media_t {
     quicrq_media_source_ctx_t* srce_ctx;
     uint64_t final_object_id;
     uint64_t nb_object_received;
     uint64_t subscribe_stream_id;
-#if 1
     quicrq_relay_cached_fragment_t* first_fragment;
     quicrq_relay_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree;
-#else 
-    picosplay_tree_t object_tree;
-#endif
 } quicrq_relay_cached_media_t;
 
 typedef struct st_quicrq_relay_publisher_context_t {
@@ -88,21 +77,13 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int is_object_complete;
     int is_media_complete;
     int is_sending_object;
-#if 1
     quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
-#else
-    quicrq_sent_object_ranges_t ranges;
-#endif
 } quicrq_relay_publisher_context_t;
 
 typedef struct st_quicrq_relay_consumer_context_t {
     uint64_t last_object_id;
     quicrq_relay_cached_media_t* cached_ctx;
-#if 1
-#else
-    quicrq_reassembly_context_t reassembly_ctx;
-#endif
 } quicrq_relay_consumer_context_t;
 
 typedef struct st_quicrq_relay_context_t {
@@ -114,16 +95,17 @@ typedef struct st_quicrq_relay_context_t {
     int use_datagrams : 1;
 } quicrq_relay_context_t;
 
-#if 1
 int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     int is_last_fragment,
     size_t data_length);
 quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t object_id, uint64_t offset);
 
 int quicrq_relay_datagram_publisher_prepare(
+    quicrq_stream_ctx_t* stream_ctx,
     quicrq_relay_publisher_context_t* media_ctx,
     uint64_t datagram_stream_id,
     void* context,
@@ -149,15 +131,7 @@ int quicrq_relay_publisher_fn(
     int* is_media_finished,
     int* is_still_active,
     uint64_t current_time);
-#else
-int quicrq_relay_add_object_to_cache(quicrq_relay_cached_media_t* cached_ctx,
-    uint64_t object_id,
-    const uint8_t* data,
-    size_t data_length);
-int quicrq_relay_next_available_object_id(quicrq_sent_object_ranges_t* object_ranges, quicrq_relay_cached_media_t* cached_ctx, uint64_t* next_object_id, int* is_finished);
-int quicrq_relay_add_object_id_to_ranges(quicrq_sent_object_ranges_t* object_ranges, uint64_t object_id);
-void quick_relay_clear_ranges(quicrq_sent_object_ranges_t* object_ranges);
-#endif
+
 quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx();
 void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx);
 

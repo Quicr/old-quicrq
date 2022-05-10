@@ -140,7 +140,7 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         /* Run the simulation. Monitor the connection. Monitor the media. */
         int is_active = 0;
 
-        ret = quicrq_test_loop_step(config, &is_active);
+        ret = quicrq_test_loop_step(config, &is_active, UINT64_MAX);
         if (ret != 0) {
             DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
         }
@@ -168,7 +168,7 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 
             if (!is_closed && client_stream_closed && server_stream_closed) {
                 /* Client is done. Close connection without waiting for timer */
-                ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);
+                ret = picoquic_close(config->nodes[2]->first_cnx->cnx, 0);
                 is_closed = 1;
                 if (ret != 0) {
                     DBG_PRINTF("Cannot close client connection, ret = %d", ret);
@@ -397,7 +397,7 @@ int quicrq_relay_cache_fill_test_one(size_t fragment_max, size_t start_object, s
                     }
                     if (!should_skip) {
                         ret = quicrq_relay_propose_fragment_to_cache(cached_ctx, 
-                            relay_test_objects[f_id].data + offset, f_id, offset, is_last_fragment, data_length);
+                            relay_test_objects[f_id].data + offset, f_id, offset, 0, is_last_fragment, data_length);
                         if (ret != 0) {
                             DBG_PRINTF("Proposed segment fails, object %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
                         }
@@ -473,7 +473,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
             d_context.bytes_max = &data[0] + 1024;
             d_context.allowed_space = 1023;
             /* Call the prepare function */
-            ret = quicrq_relay_datagram_publisher_prepare(pub_ctx, 0, &d_context, d_context.allowed_space,
+            ret = quicrq_relay_datagram_publisher_prepare(NULL, pub_ctx, 0, &d_context, d_context.allowed_space,
                 &media_was_sent, &at_least_one_active, &not_ready);
             /* Decode the datagram header to find the coded_fragment */
             if (ret == 0 && d_context.after_data > d_context.bytes0) {
@@ -501,10 +501,11 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                     /* decode the datagram header */
                     uint64_t datagram_stream_id;
                     uint64_t object_offset;
+                    uint64_t queue_delay;
                     const uint8_t* datagram_max = bytes + datagram_length;
 
                     bytes = quicrq_datagram_header_decode(bytes, datagram_max, &datagram_stream_id,
-                        &object_id, &object_offset, &is_last_fragment);
+                        &object_id, &object_offset, &queue_delay, &is_last_fragment);
                     if (bytes == NULL) {
                         DBG_PRINTF("Cannot decode datagram header, length = %zu", datagram_length);
                         ret = -1;
@@ -555,7 +556,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
         if (ret == 0 && fragment_length > 0) {
             /* submit to the media cache */
             ret = quicrq_relay_propose_fragment_to_cache(cached_ctx_p,
-                fragment, object_id, fragment_offset, is_last_fragment, fragment_length);
+                fragment, object_id, fragment_offset, 0, is_last_fragment, fragment_length);
         }
     } while (ret == 0 && fragment_length > 0);
 
@@ -621,7 +622,7 @@ int quicrq_relay_cache_publish_test_one(int is_datagram)
                 }
                 if (!should_skip) {
                     ret = quicrq_relay_propose_fragment_to_cache(cached_ctx,
-                        relay_test_objects[f_id].data + offset, f_id, offset, is_last_fragment, data_length);
+                        relay_test_objects[f_id].data + offset, f_id, offset, 0, is_last_fragment, data_length);
                     if (ret != 0) {
                         DBG_PRINTF("Proposed segment fails, object %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
                     }
@@ -725,9 +726,6 @@ int quicrq_relay_cache_fill_test()
             DBG_PRINTF("Cached datagram relay test returns %d", ret);
         }
     }
-
-
-
 
     return ret;
 }
