@@ -1575,6 +1575,9 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
             quicrq_delete(qr_ctx);
             qr_ctx = NULL;
         }
+        else {
+            picoquic_set_default_congestion_algorithm(qr_ctx->quic, picoquic_bbr_algorithm);
+        }
     }
     return qr_ctx;
 }

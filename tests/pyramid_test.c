@@ -272,7 +272,7 @@ int quicrq_pyramid_datagram_test()
 
 int quicrq_pyramid_datagram_loss_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0x7080, 0, 0, 0);
+    int ret = quicrq_pyramid_testone(1, 1, 0x3080, 0, 0, 0);
 
     return ret;
 }
