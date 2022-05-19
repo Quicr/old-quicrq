@@ -256,6 +256,7 @@ struct st_quicrq_stream_ctx_t {
     uint64_t horizon_offset;
     int horizon_is_last_fragment;
     int nb_horizon_events;
+    int nb_horizon_acks;
     int nb_extra_sent;
     int nb_fragment_lost;
     picosplay_tree_t datagram_ack_tree;
