@@ -8,6 +8,9 @@
 extern "C" {
 #endif
 
+/* Version number */
+#define QUICRQ_VERSION "0.10"
+
 /* QUICR ALPN and QUICR port -- as defined in draft */
 #define QUICRQ_ALPN "quicr-h00"
 #define QUICRQ_PORT 853
