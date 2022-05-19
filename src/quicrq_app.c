@@ -518,7 +518,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
 
 void usage()
 {
-    fprintf(stderr, "Quicrq client, relay and server\n");
+    fprintf(stderr, "QUICRQ client, relay and server\n");
     fprintf(stderr, "Usage: quicrq_app <options> [mode] [server_name ['d'|'s'] port [scenario]] \n");
     fprintf(stderr, "  mode can be one of client, relay or server.\n");
     fprintf(stderr, "  For the client and relay mode, specify server_name and port,\n");
@@ -551,6 +551,8 @@ int main(int argc, char** argv)
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
+    fprintf(stdout, "QUICRQ Version %s\n", QUICRQ_VERSION);
+
     picoquic_config_init(&config);
     ret = picoquic_config_option_letters(option_string, sizeof(option_string), NULL);
 
