@@ -1,12 +1,13 @@
 #ifdef _WINDOWS
 #include "getopt.h"
 #endif
-#include "quicrq_tests.h"
-#include "picoquic_utils.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "quicrq_tests.h"
+#include "picoquic_utils.h"
+#include "quicrq.h"
 
 typedef struct st_quicrq_test_def_t {
     char const* test_name;
@@ -144,6 +145,8 @@ int main(int argc, char** argv)
     int opt;
     int disable_debug = 0;
     int retry_failed_test = 0;
+
+    fprintf(stdout, "Testing QUICRQ Version %s\n", QUICRQ_VERSION);
 
     if (test_status == NULL)
     {

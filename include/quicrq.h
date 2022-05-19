@@ -8,8 +8,21 @@
 extern "C" {
 #endif
 
-/* QUICR ALPN and QUICR port -- as defined in draft */
-#define QUICRQ_ALPN "quicr-h00"
+/* Version number
+ * The number is formated as <major>.<minor><letter>
+ * The major version will remain at 0 until we have a stable spec that can be standardized.
+ * The minor version is updated when the protocol changes
+ * Only the letter is updated if the code changes without changing the protocol
+ */
+#define QUICRQ_VERSION "0.10a"
+
+/* QUICR ALPN and QUICR port
+ * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
+ * the minor component of the version number. That means that binaries implementing
+ * different protocol versions will not be compatible, and connections attempts
+ * between such binaries will fail, forcing deployments of compatible versions.
+ */
+#define QUICRQ_ALPN "quicr-h10"
 #define QUICRQ_PORT 853
 
 /* QUICR error codes */
