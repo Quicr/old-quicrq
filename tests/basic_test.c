@@ -639,7 +639,7 @@ int quicrq_datagram_basic_test()
 /* Datagram test, with forced packet losses. */
 int quicrq_datagram_loss_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 0);
+    return quicrq_basic_test_one(1, 1, 0x3080, 0, 0, 0);
 }
 
 /* Datagram test, with forced packet losses and extra repeat */
