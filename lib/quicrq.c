@@ -718,7 +718,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
             /* Check how much data should be send in this fragment */
             header_length = bytes - datagram;
             datagram_length = header_length + data_length;
-            if (header_length + fragment_length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
+            if (datagram_length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
                 if (found->is_last_fragment) {
                     /* Erase the last segment mark in datagram header */
                     bytes = quicrq_datagram_header_encode(datagram, bytes_max, stream_ctx->datagram_stream_id,
