@@ -146,7 +146,7 @@ int main(int argc, char** argv)
     int disable_debug = 0;
     int retry_failed_test = 0;
 
-    fprintf(stdout, "Testing QUICRQ Version %s\n", QUICRQ_VERSION);
+    fprintf(stdout, "Testing QUICRQ Version %s, Picoquic version %s\n", QUICRQ_VERSION, PICOQUIC_VERSION);
 
     if (test_status == NULL)
     {

@@ -551,7 +551,7 @@ int main(int argc, char** argv)
     WSADATA wsaData = { 0 };
     (void)WSA_START(MAKEWORD(2, 2), &wsaData);
 #endif
-    fprintf(stdout, "QUICRQ Version %s\n", QUICRQ_VERSION);
+    fprintf(stdout, "QUICRQ Version %s, Picoquic Version %s\n", QUICRQ_VERSION, PICOQUIC_VERSION);
 
     picoquic_config_init(&config);
     ret = picoquic_config_option_letters(option_string, sizeof(option_string), NULL);
