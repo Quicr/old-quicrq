@@ -487,7 +487,8 @@ static void quicrq_datagram_ack_ctx_init(quicrq_stream_ctx_t* stream_ctx)
 
 static void quicrq_datagram_ack_ctx_release(quicrq_stream_ctx_t* stream_ctx)
 {
-    if (stream_ctx->datagram_ack_tree.size != 0 || stream_ctx->nb_extra_sent > 0) {
+    if (stream_ctx->datagram_ack_tree.size != 0 || stream_ctx->nb_extra_sent > 0 ||
+        stream_ctx->nb_horizon_acks > 0 || stream_ctx->nb_horizon_events > 0) {
         picosplay_node_t * next_node = picosplay_first(&stream_ctx->datagram_ack_tree);
         int nb_fragments_acked = 0;
         int nb_fragments_nacked = 0;
@@ -513,6 +514,8 @@ static void quicrq_datagram_ack_ctx_release(quicrq_stream_ctx_t* stream_ctx)
             stream_ctx->nb_extra_sent);
         DBG_PRINTF("Horizon Object ID: %" PRIu64 ", offset: %" PRIu64,
             stream_ctx->horizon_object_id, stream_ctx->horizon_offset);
+        DBG_PRINTF("ACKs below horizon: %" PRIu64 ", ACK Init below horizon: %" PRIu64,
+            stream_ctx->nb_horizon_acks, stream_ctx->nb_horizon_events);
     }
     picosplay_empty_tree(&stream_ctx->datagram_ack_tree);
 }
@@ -549,8 +552,6 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t object_id
     if (quicrq_datagram_check_horizon(stream_ctx, object_id, object_offset) < 0) {
         /* at or below horizon, not new. */
         stream_ctx->nb_horizon_events++;
-        DBG_PRINTF("ACK Init below horizon, object %" PRIu64 ", offset %" PRIu64,
-            object_id, object_offset);
     } else {
         /* Find whether the ack record is there. */
         quicrq_datagram_ack_state_t* found = quicrq_datagram_ack_find(stream_ctx, object_id, object_offset);
@@ -605,8 +606,7 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
 
     if (horizon_delta == 0) {
         if (object_offset + length < stream_ctx->horizon_offset) {
-            DBG_PRINTF("ACK below the horizon. Object ID %" PRIu64 ", offset %" PRIu64 ", l %zu versus % " PRIu64,
-                object_id, object_offset, length, stream_ctx->horizon_offset);
+            stream_ctx->nb_horizon_acks++;
             is_below_horizon = 1;
         }
         else if (object_offset < stream_ctx->horizon_offset) {
@@ -621,8 +621,7 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t object_
     }
     else if (horizon_delta < 0) {
         is_below_horizon = 1;
-        DBG_PRINTF("ACK below the horizon. Object ID %" PRIu64 " versus %" PRIu64,
-            object_id, stream_ctx->horizon_object_id);
+        stream_ctx->nb_horizon_acks++;
     }
     else if (horizon_delta == 1 && stream_ctx->horizon_is_last_fragment && object_offset == 0) {
         should_check_horizon = 1;
@@ -719,7 +718,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
             /* Check how much data should be send in this fragment */
             header_length = bytes - datagram;
             datagram_length = header_length + data_length;
-            if (header_length + fragment_length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
+            if (datagram_length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
                 if (found->is_last_fragment) {
                     /* Erase the last segment mark in datagram header */
                     bytes = quicrq_datagram_header_encode(datagram, bytes_max, stream_ctx->datagram_stream_id,
@@ -1574,6 +1573,9 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
             (token_store_file_name != NULL && picoquic_load_retry_tokens(qr_ctx->quic, token_store_file_name) != 0)) {
             quicrq_delete(qr_ctx);
             qr_ctx = NULL;
+        }
+        else {
+            picoquic_set_default_congestion_algorithm(qr_ctx->quic, picoquic_bbr_algorithm);
         }
     }
     return qr_ctx;
