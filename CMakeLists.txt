@@ -17,6 +17,7 @@ set(QUICRQ_LIBRARY_FILES
     lib/proto.c
     lib/reassembly.c
     lib/relay.c
+    lib/object_source.c
 )
 
 set(QUICRQ_TEST_LIBRARY_FILES
