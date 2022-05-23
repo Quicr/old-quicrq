@@ -56,7 +56,7 @@ void quicrq_object_source_list_init(quicrq_media_object_source_ctx_t* object_sou
 quicrq_object_source_item_t* quicrq_get_object_source_item(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t object_id)
 {
     quicrq_object_source_item_t key = { 0 };
-    key.object_length = object_id;
+    key.object_id = object_id;
     quicrq_object_source_item_t* found = (quicrq_object_source_item_t*)quicrq_object_source_node_value(
         picosplay_find(&object_source_ctx->object_source_tree, &key));
     return found;
@@ -130,7 +130,6 @@ int quicrq_media_object_publisher(
             if (data_max_size >= available) {
                 *is_last_fragment = 1;
                 copied = available;
-                /* TODO: manage FIN */
             }
             *data_length = copied;
             if (data != NULL) {
@@ -152,6 +151,12 @@ int quicrq_media_object_publisher(
 
 /* Object Source API functions.
  */
+
+static void quicrq_unlink_object_source_publisher(void* v_object_source_ctx)
+{
+    quicrq_media_object_source_ctx_t* object_source_ctx = (quicrq_media_object_source_ctx_t*)v_object_source_ctx;
+    object_source_ctx->media_source_ctx = NULL;
+}
 
 quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
     quicrq_media_object_source_properties_t* properties)
@@ -181,7 +186,7 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
         /* Call the publisher API */
         object_source_ctx->media_source_ctx = quicrq_publish_source(qr_ctx, url, url_length,
             (void*)object_source_ctx, quicrq_media_object_publisher_subscribe,
-            quicrq_media_object_publisher, quicrq_media_object_publisher_delete);
+            quicrq_media_object_publisher, quicrq_unlink_object_source_publisher);
         /* If the API fails, close the media object source */
         if (object_source_ctx->media_source_ctx == NULL) {
             DBG_PRINTF("%s", "Could not publish media source for media object source");
@@ -194,7 +199,7 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
 
 int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
-    uint8_t* object,
+    uint8_t* object_data,
     size_t object_length,
     quicrq_media_object_properties_t* properties)
 {
@@ -206,15 +211,18 @@ int quicrq_publish_object(
     }
     else {
         /* Add the object at the end of the cache. */
-        memset(object, 0, allocated);
+        memset(source_object, 0, allocated);
         source_object->object_id = object_source_ctx->next_object_id;
+        object_source_ctx->next_object_id++;
         source_object->object_length = object_length;
         source_object->object_time = picoquic_get_quic_time(object_source_ctx->qr_ctx->quic);
         source_object->object = ((uint8_t *)source_object) + sizeof(quicrq_object_source_item_t);
-        memcpy(source_object->object, object, object_length);
+        memcpy(source_object->object, object_data, object_length);
         (void)picosplay_insert(&object_source_ctx->object_source_tree, source_object);
         /* Signal to the quic context that the source is now active. */
-        quicrq_source_wakeup(object_source_ctx->media_source_ctx);
+        if (object_source_ctx->media_source_ctx != NULL) {
+            quicrq_source_wakeup(object_source_ctx->media_source_ctx);
+        }
     }
     return ret;
 }
@@ -226,6 +234,13 @@ void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_c
 
 void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source_ctx)
 {
+    /* Close the corresponding source context */
+    if (object_source_ctx->media_source_ctx != NULL) {
+        quicrq_media_source_ctx_t* media_ctx = object_source_ctx->media_source_ctx;
+        object_source_ctx->media_source_ctx = NULL;
+        quicrq_delete_source(media_ctx, object_source_ctx->qr_ctx);
+    }
+
     /* Unlink from Quicr context */
     if (object_source_ctx->qr_ctx->first_object_source == object_source_ctx) {
         object_source_ctx->qr_ctx->first_object_source = object_source_ctx->next_in_qr_ctx;
@@ -238,10 +253,6 @@ void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source
     }
     else if (object_source_ctx->next_in_qr_ctx != NULL) {
         object_source_ctx->next_in_qr_ctx->previous_in_qr_ctx = object_source_ctx->previous_in_qr_ctx;
-    }
-    /* Close the corresponding source context */
-    if (object_source_ctx->media_source_ctx != NULL) {
-        quicrq_delete_source(object_source_ctx->media_source_ctx, object_source_ctx->qr_ctx);
     }
     /* Free the resource */
     free(object_source_ctx);

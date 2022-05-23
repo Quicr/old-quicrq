@@ -180,6 +180,18 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
 void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx);
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
 
+int quicrq_media_object_publisher(
+    quicrq_media_source_action_enum action,
+    void* v_media_ctx,
+    uint8_t* data,
+    size_t data_max_size,
+    size_t* data_length,
+    int* is_last_fragment,
+    int* is_media_finished,
+    int* is_still_active,
+    uint64_t current_time);
+void* quicrq_media_object_publisher_subscribe(void* pub_ctx);
+
 /* Quicrq stream handling.
  * Media stream come in two variants.
  * - server to client stream, that must include the API for sending data from a stream.
