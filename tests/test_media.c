@@ -1193,7 +1193,7 @@ int quicrq_media_object_publish_test()
         ret = -1;
     }
     else {
-        object_source_ctx = quicrq_publish_object_source(qr_ctx, "example", 7, NULL);
+        object_source_ctx = quicrq_publish_object_source(qr_ctx, (const uint8_t *)"example", 7, NULL);
         if (object_source_ctx == NULL) {
             ret = -1;
         }
