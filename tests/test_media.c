@@ -1176,9 +1176,6 @@ int quicrq_media_object_publish_test()
 {
     int ret = 0;
     uint64_t simulated_time = 0;
-    uint64_t media_next_time = 0;
-    quicrq_cnx_ctx_t* cnx_ctx = NULL;
-    quicrq_stream_ctx_t* stream_ctx = NULL;
     quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
         NULL, NULL, NULL, NULL, NULL,
         NULL, 0, &simulated_time);
@@ -1291,7 +1288,6 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
     char media_source_path[512];
     char media_log_ref_path[512];
     uint8_t media_buffer[1024];
-    uint64_t current_time = 0;
     size_t data_length;
     void* cons_ctx = NULL;
     uint64_t object_id = 0;
@@ -1299,13 +1295,13 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
     int is_last_fragment = 0;
     int is_media_finished = 0;
     int is_still_active = 0;
-    uint64_t simulated_time = 0;
+    uint64_t current_time = 0;
     uint64_t media_next_time = 0;
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     quicrq_stream_ctx_t* stream_ctx = NULL;
     quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
         NULL, NULL, NULL, NULL, NULL,
-        NULL, 0, &simulated_time);
+        NULL, 0, &current_time);
     int inactive = 0;
     test_media_object_source_context_t* object_source_pub = NULL;
     void* media_ctx = NULL;
@@ -1317,7 +1313,7 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
     else {
         struct sockaddr_in addr_to = { 0 };
         picoquic_cnx_t* cnx = picoquic_create_cnx(quicrq_get_quic_ctx(qr_ctx), picoquic_null_connection_id, picoquic_null_connection_id,
-            (struct sockaddr*)&addr_to, simulated_time, 0, NULL, QUICRQ_ALPN, 1);
+            (struct sockaddr*)&addr_to, current_time, 0, NULL, QUICRQ_ALPN, 1);
         cnx_ctx = quicrq_create_cnx_context(qr_ctx, cnx);
         if (cnx_ctx == NULL) {
             ret = -1;
