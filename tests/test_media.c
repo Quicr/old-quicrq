@@ -387,6 +387,81 @@ quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* ur
     return srce_ctx;
 }
 
+/* Publish a test media as an object source:
+ * - Create a test source context, then call quicrq_publish_object_source.
+ * - Document the time for the next object
+ * - If the time has come, then read the object and publish it.
+ * - If reaching the end, call object fin.
+ * - Call delete object in the end.
+ */
+
+int test_media_object_source_iterate(
+    test_media_object_source_context_t* object_pub_ctx,
+    uint64_t current_time)
+{
+    int ret = 0;
+    test_media_publisher_context_t* pub_ctx = object_pub_ctx->pub_ctx;
+
+    if (pub_ctx->media_object_size <= pub_ctx->media_object_read && !pub_ctx->is_finished) {
+        /* Check whether more object data available. */
+        ret = test_media_publisher_check_object(pub_ctx);
+        object_pub_ctx->object_is_published = 0;
+
+        if (ret == 0 && pub_ctx->is_finished) {
+            quicrq_publish_object_fin(object_pub_ctx->object_source_ctx);
+        }
+    }
+    
+    if (pub_ctx->media_object_read < pub_ctx->media_object_size &&
+        !pub_ctx->is_finished && !object_pub_ctx->object_is_published &&
+        (!pub_ctx->is_real_time ||
+        current_time >= pub_ctx->start_time + pub_ctx->current_header.timestamp)){
+        ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, NULL);
+        object_pub_ctx->object_is_published = 1;
+    }
+
+    return ret;
+}
+
+uint64_t test_media_object_source_next_time(
+    test_media_object_source_context_t* object_pub_ctx,
+    uint64_t current_time)
+{
+    return test_media_publisher_next_time(object_pub_ctx->pub_ctx, current_time);
+}
+
+void test_media_object_source_delete(test_media_object_source_context_t* object_pub_ctx)
+{
+    if (object_pub_ctx != NULL) {
+        if (object_pub_ctx->object_source_ctx != NULL) {
+            quicrq_delete_object_source(object_pub_ctx->object_source_ctx);
+        }
+        if (object_pub_ctx->pub_ctx != NULL) {
+            test_media_publisher_close(object_pub_ctx->pub_ctx);
+        }
+        free(object_pub_ctx);
+    }
+}
+
+test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
+    char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
+    uint64_t* p_next_time, uint64_t start_time)
+{
+    test_media_object_source_context_t* object_pub_ctx = (test_media_object_source_context_t*)malloc(
+        sizeof(test_media_object_source_context_t));
+    if (object_pub_ctx != NULL) {
+        memset(object_pub_ctx, 0, sizeof(test_media_object_source_context_t));
+        object_pub_ctx->pub_ctx =
+            test_media_publisher_init(media_source_path, generation_model, is_real_time, start_time);
+        object_pub_ctx->object_source_ctx = quicrq_publish_object_source(qr_ctx, url, url_length, NULL);
+
+        if (object_pub_ctx->pub_ctx == NULL || object_pub_ctx->object_source_ctx == NULL) {
+            test_media_object_source_delete(object_pub_ctx);
+        }
+    }
+    return object_pub_ctx;
+}
+
 /* Media receiver definitions.
  * Manage a list of objects being reassembled. The list is organized as a splay,
  * indexed by the object id and object offset. When a new fragment is received
@@ -1094,6 +1169,300 @@ int quicrq_media_source_rt_test()
 
     return ret;
 }
+
+
+/* Verify that a media file can be read using the local object oriented publish API */
+int quicrq_media_object_publish_test()
+{
+    int ret = 0;
+    uint64_t simulated_time = 0;
+    quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
+        NULL, NULL, NULL, NULL, NULL,
+        NULL, 0, &simulated_time);
+    quicrq_media_object_source_ctx_t* object_source_ctx = NULL;
+    size_t targets[] = { 16000, 3000, 4000, 17000, 1000, 2000, 15000 };
+    size_t target_max = 17000;
+    size_t nb_targets = sizeof(targets) / sizeof(size_t);
+    uint8_t* object_frame = NULL;
+    int is_last_fragment = 0; 
+    int is_media_finished = 0;
+    int is_still_active = 0;
+    void* media_ctx = NULL;
+
+    if (qr_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        object_source_ctx = quicrq_publish_object_source(qr_ctx, (const uint8_t *)"example", 7, NULL);
+        if (object_source_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            object_frame = (uint8_t *)malloc(target_max);
+            if (object_frame == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* Create a media context for the simulated object consumer */
+    if (ret == 0) {
+        media_ctx = quicrq_media_object_publisher_subscribe(object_source_ctx);
+        if (media_ctx == NULL) {
+            ret = -1;
+        }
+    }
+
+    for (size_t i = 0; ret == 0 && i < nb_targets; i++) {
+        /* Publish a simulated object */
+        if (targets[i] > target_max) {
+            ret = -1;
+        }
+        memset(object_frame, (uint8_t)i, targets[i]);
+        ret = quicrq_publish_object(object_source_ctx, object_frame, targets[i], NULL);
+
+        if (ret == 0) {
+            /* Verify that the object can be read properly */
+            size_t offset = 0;
+            is_last_fragment = 0;
+            for (int j = 0; ret == 0 && offset < targets[i] && j < 30 && !is_last_fragment; j++) {
+                uint8_t media_buffer[1024];
+                size_t data_length = 0;
+                ret = quicrq_media_object_publisher(quicrq_media_source_get_data,
+                    media_ctx, media_buffer, sizeof(media_buffer),
+                    &data_length, &is_last_fragment, &is_media_finished, &is_still_active, simulated_time);
+
+                if (ret == 0) {
+                    for (int x = 0; x < data_length; x++) {
+                        if (media_buffer[x] != (uint8_t)i) {
+                            ret = -1;
+                            break;
+                        }
+                    }
+                }
+
+                if (ret == 0) {
+                    offset += data_length;
+                    if (offset > targets[i]) {
+                        ret = -1;
+                    }
+                }
+            }
+
+            if (ret == 0) {
+                if (!is_last_fragment || offset != targets[i]) {
+                    ret = -1;
+                }
+            }
+        }
+    }
+    /* Simulate now the end of media */
+    if (ret == 0) {
+        uint8_t media_buffer[1024];
+        size_t data_length = 0;
+        quicrq_publish_object_fin(object_source_ctx);
+
+        ret = quicrq_media_object_publisher(quicrq_media_source_get_data,
+            media_ctx, media_buffer, sizeof(media_buffer),
+            &data_length, &is_last_fragment, &is_media_finished, &is_still_active, simulated_time);
+
+        if (!is_media_finished) {
+            ret = -1;
+        }
+        else if (data_length > 0) {
+            ret = -1;
+        }
+    }
+    /* TODO: Free the resource */
+    if (qr_ctx != NULL) {
+        quicrq_delete(qr_ctx);
+    }
+    return ret;
+}
+
+
+int quicrq_media_object_source_test_one(char const* media_source_name, char const* media_log_reference,
+    char const* media_result_file, char const* media_result_log, const generation_parameters_t* generation_model, int is_real_time)
+{
+    int ret = 0;
+    char media_source_path[512];
+    char media_log_ref_path[512];
+    uint8_t media_buffer[1024];
+    size_t data_length;
+    void* cons_ctx = NULL;
+    uint64_t object_id = 0;
+    uint64_t object_offset = 0;
+    int is_last_fragment = 0;
+    int is_media_finished = 0;
+    int is_still_active = 0;
+    uint64_t current_time = 0;
+    uint64_t media_next_time = 0;
+    quicrq_cnx_ctx_t* cnx_ctx = NULL;
+    quicrq_stream_ctx_t* stream_ctx = NULL;
+    quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
+        NULL, NULL, NULL, NULL, NULL,
+        NULL, 0, &current_time);
+    int inactive = 0;
+    test_media_object_source_context_t* object_source_pub = NULL;
+    void* media_ctx = NULL;
+
+    /* Create empty contexts for qr object, connection, stream */
+    if (qr_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        struct sockaddr_in addr_to = { 0 };
+        picoquic_cnx_t* cnx = picoquic_create_cnx(quicrq_get_quic_ctx(qr_ctx), picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&addr_to, current_time, 0, NULL, QUICRQ_ALPN, 1);
+        cnx_ctx = quicrq_create_cnx_context(qr_ctx, cnx);
+        if (cnx_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            stream_ctx = quicrq_create_stream_context(cnx_ctx, 0);
+            if (stream_ctx == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* Locate the source and reference file */
+    if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
+        quicrq_test_solution_dir, media_source_name) != 0 ||
+        picoquic_get_input_path(media_log_ref_path, sizeof(media_log_ref_path),
+            quicrq_test_solution_dir, media_log_reference) != 0) {
+        ret = -1;
+    }
+
+    /* Publish a test file */
+    if (ret == 0) {
+        object_source_pub = test_media_object_source_publish(qr_ctx, (uint8_t*)media_source_name, strlen(media_source_name),
+            media_source_path, generation_model, is_real_time, &media_next_time, 0);
+        if (object_source_pub == NULL) {
+            ret = -1;
+        }
+        else {
+            /* Create a media context for the simulated object consumer */
+            media_ctx = quicrq_media_object_publisher_subscribe(object_source_pub->object_source_ctx->media_source_ctx);
+            if (media_ctx == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* Connect the stream context to the publisher */
+    if (ret == 0) {
+        ret = quicrq_subscribe_local_media(stream_ctx, (uint8_t*)media_source_name, strlen(media_source_name));
+        if (ret == 0) {
+            quicrq_wakeup_media_stream(stream_ctx);
+        }
+    }
+    /* Initialize a consumer context for testing */
+    if (ret == 0) {
+        cons_ctx = test_media_consumer_init(media_result_file, media_result_log);
+        if (cons_ctx == NULL) {
+            ret = -1;
+        }
+    }
+
+    /* Loop through publish and consume until finished */
+    while (ret == 0 && !is_media_finished && inactive < 32) {
+        /* Check whether the object oriented publisher has new data */
+        ret = test_media_object_source_iterate(object_source_pub, current_time);
+        if (ret == 0) {
+            /* Call the object oriented publisher function, to simulate publishing */
+            ret = quicrq_media_object_publisher(quicrq_media_source_get_data,
+                stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
+                &data_length, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+            object_source_pub->pub_ctx->media_object_read += data_length;
+        }
+
+        if (ret == 0) {
+            if (is_media_finished || data_length > 0) {
+                ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
+                    object_id, object_offset, 0, is_last_fragment, data_length);
+                if (ret == 0) {
+                    inactive = 0;
+                }
+                else {
+                    DBG_PRINTF("object consumer callback, ret: %d", ret);
+                }
+            }
+            else {
+                current_time = test_media_object_source_next_time(object_source_pub, current_time);
+                inactive++;
+            }
+            if (is_last_fragment) {
+                object_id++;
+                object_offset = 0;
+            }
+            else {
+                object_offset += data_length;
+            }
+        }
+        else {
+            DBG_PRINTF("object publisher callback, ret: %d", ret);
+        }
+    }
+
+    /* Close publisher by closing the connection context */
+    if (ret == 0) {
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, object_id, 0, 0, 0, 0);
+        if (ret == quicrq_consumer_finished) {
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Consumer not finished after final object id! ret = %d", ret);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        quicrq_delete_cnx_context(cnx_ctx);
+    }
+    /* Close consumer */
+    if (cons_ctx != NULL) {
+        int close_ret = test_media_consumer_close(cons_ctx);
+        if (ret == 0) {
+            ret = close_ret;
+        }
+    }
+
+    /* Compare media result to media source */
+    if (ret == 0) {
+        ret = quicrq_compare_log_file(media_result_log, media_log_ref_path);
+    }
+
+    if (ret == 0) {
+        ret = quicrq_compare_media_file(media_result_file, media_source_path);
+    }
+
+    /* CLear */
+    if (qr_ctx != NULL) {
+        quicrq_delete(qr_ctx);
+    }
+
+    return ret;
+}
+
+int quicrq_media_object_source_test()
+{
+    int ret = quicrq_media_object_source_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_LOGREF, QUICRQ_TEST_VIDEO1_RESULT, QUICRQ_TEST_VIDEO1_LOG,
+        &video_1mps, 0);
+
+    return ret;
+}
+
+int quicrq_media_object_source_rt_test()
+{
+    int ret = quicrq_media_object_source_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_RT_LOGREF, QUICRQ_TEST_VIDEO1_RT_RESULT, QUICRQ_TEST_VIDEO1_RT_LOG,
+        &video_1mps, 1);
+
+    return ret;
+}
+
+
+
+
 
 /* Media datagram test. Check the datagram API.
  */

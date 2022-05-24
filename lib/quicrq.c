@@ -1513,8 +1513,10 @@ void quicrq_delete(quicrq_ctx_t* qr_ctx)
 {
     struct st_quicrq_cnx_ctx_t* cnx_ctx = qr_ctx->first_cnx;
     struct st_quicrq_cnx_ctx_t* next = NULL;
-    struct st_quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
+    struct st_quicrq_media_source_ctx_t* srce_ctx = NULL;
     struct st_quicrq_media_source_ctx_t* srce_next = NULL;
+    struct st_quicrq_media_object_source_ctx_t* object_source_ctx = qr_ctx->first_object_source;
+    struct st_quicrq_media_object_source_ctx_t* object_source_next = NULL;
 
     while (cnx_ctx != NULL) {
         next = cnx_ctx->next_cnx;
@@ -1522,6 +1524,16 @@ void quicrq_delete(quicrq_ctx_t* qr_ctx)
         cnx_ctx = next;
     }
 
+    /* Media object sources are deleted first, because this will
+     * trigger closure of old-style media sources.
+     */
+
+    while (object_source_ctx != NULL) {
+        object_source_next = object_source_ctx->next_in_qr_ctx;
+        quicrq_delete_object_source(object_source_ctx);
+        object_source_ctx = object_source_next;
+    }
+    srce_ctx = qr_ctx->first_source;
     while (srce_ctx != NULL) {
         srce_next = srce_ctx->next_source;
         quicrq_delete_source(srce_ctx, qr_ctx);

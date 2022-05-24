@@ -19,8 +19,8 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef quicrq_client_internal_H
-#define quicrq_client_internal_H
+#ifndef quicrq_internal_H
+#define quicrq_internal_H
 
 #include "picoquic.h"
 #include "picosplay.h"
@@ -144,8 +144,23 @@ typedef int (*quicrq_datagram_publisher_fn)(
     int* media_was_sent,
     int* at_least_one_active);
 
- /* Quicrq per media source context.
+ /* Quicrq per media object source context.
   */
+
+struct st_quicrq_media_object_source_ctx_t {
+    quicrq_ctx_t* qr_ctx;
+    struct st_quicrq_media_object_source_ctx_t* previous_in_qr_ctx;
+    struct st_quicrq_media_object_source_ctx_t* next_in_qr_ctx;
+    quicrq_media_source_ctx_t* media_source_ctx;
+    quicrq_media_object_source_properties_t properties;
+    uint64_t next_object_id;
+    picosplay_tree_t object_source_tree;
+    int is_finished;
+};
+
+/* Quicrq per media source context.
+ */
+
 struct st_quicrq_media_source_ctx_t {
     struct st_quicrq_media_source_ctx_t* next_source;
     struct st_quicrq_media_source_ctx_t* previous_source;
@@ -164,6 +179,18 @@ quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx);
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
+
+int quicrq_media_object_publisher(
+    quicrq_media_source_action_enum action,
+    void* v_media_ctx,
+    uint8_t* data,
+    size_t data_max_size,
+    size_t* data_length,
+    int* is_last_fragment,
+    int* is_media_finished,
+    int* is_still_active,
+    uint64_t current_time);
+void* quicrq_media_object_publisher_subscribe(void* pub_ctx);
 
 /* Quicrq stream handling.
  * Media stream come in two variants.
@@ -317,6 +344,9 @@ struct st_quicrq_ctx_t {
     /* Local media sources */
     quicrq_media_source_ctx_t* first_source;
     quicrq_media_source_ctx_t* last_source;
+    /* local media object sources */
+    struct st_quicrq_media_object_source_ctx_t* first_object_source;
+    struct st_quicrq_media_object_source_ctx_t* last_object_source;
     /* Relay context, if is acting as relay or origin */
     struct st_quicrq_relay_context_t* relay_ctx;
     /* Default publisher function, used for example by relays */
@@ -369,4 +399,4 @@ void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...);
 }
 #endif
 
-#endif /* quicrq_client_internal_H */
+#endif /* quicrq_internal_H */

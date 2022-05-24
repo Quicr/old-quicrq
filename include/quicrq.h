@@ -80,6 +80,54 @@ typedef struct st_quicrq_media_object_header_t {
     size_t length; /* number of content bytes */
 } quicrq_media_object_header_t;
 
+/* Media object publisher.
+ * The media object publisher is a simpler, object based version of the 
+ * media object API described below. It is push based, while the media
+ * API is pull based.
+ * 
+ * The API has three components:
+ * - Publish media object source: declare the URL of the source, and 
+ *   other characteristics.
+ * - Publish media object: a media object is defined as an array of
+ *   bytes, identified by an object ID, and decorated with properties
+ *   such as priority, use as synchronization point, or being marked
+ *   as discardable.
+ * - Delete a media object source: free the resource associated with that
+ *   source.
+ * 
+ * The application is expected to publish a series of media objects
+ * over time. The objects are added to a cache, and then sent to peers
+ * after they subscribe to the media source, or if the media source
+ * is posted. The cache management policy is specified upon opening
+ * the object.
+ * 
+ * The API is implemented using the "media publisher" API. It defines
+ * generic media_publisher_subscribe_fn and media_publisher_fn.
+ */
+
+typedef struct st_quicrq_media_object_source_properties_t {
+    int tbd;
+} quicrq_media_object_source_properties_t;
+
+typedef struct st_quicrq_media_object_properties_t {
+    int tbd;
+} quicrq_media_object_properties_t;
+
+typedef struct st_quicrq_media_object_source_ctx_t quicrq_media_object_source_ctx_t;
+
+quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
+    quicrq_media_object_source_properties_t * properties);
+
+int quicrq_publish_object(
+    quicrq_media_object_source_ctx_t* object_source_ctx,
+    uint8_t* object,
+    size_t object_length,
+    quicrq_media_object_properties_t * properties);
+
+void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_ctx);
+
+void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source_ctx);
+
 /* Media publisher API.
  * 
  * Publisher connect a source to a local context by calling `quicrq_publish_source`.
@@ -149,8 +197,6 @@ typedef struct st_quicrq_media_source_ctx_t quicrq_media_source_ctx_t;
 quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
     void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, 
     quicrq_media_publisher_fn getdata_fn, quicrq_media_publisher_delete_fn delete_fn);
-int quicrq_close_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length, 
-    void* pub_ctx);
 void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_ctx);
 
 /* Management of default sources, used for example by proxies or relays.

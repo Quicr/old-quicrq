@@ -50,6 +50,28 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(object_publish)
+		{
+			int ret = quicrq_media_object_publish_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(object_source)
+		{
+			int ret = quicrq_media_object_source_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(object_source_rt)
+		{
+			int ret = quicrq_media_object_source_rt_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(media_object_noloss)
 		{
 			int ret = quicrq_media_object_noloss();
