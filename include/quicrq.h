@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.10b"
+#define QUICRQ_VERSION "0.10c"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
@@ -210,6 +210,40 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
 typedef int (*quicrq_default_source_fn)(void * default_source_ctx, quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn default_source_fn, void * default_source_ctx);
 
+/* Quic media object consumer.
+ * The application sets a "media object consumer function" and a "media object consumer context" for
+ * the media stream. On the client side, this is done by a call to "quicrq_subscribe_object_stream"
+ * which will trigger the connection to the desired server and the opening of the object stream
+ * through the protocol.
+ */
+
+#define quicrq_consumer_finished 1
+#define quicrq_consumer_continue 0
+#define quicrq_consumer_error -1
+
+typedef enum {
+    quicrq_media_datagram_ready = 0,
+    quicrq_media_final_object_id,
+    quicrq_media_close
+} quicrq_media_consumer_enum;
+
+typedef struct st_quicrq_media_object_consumer_properties_t {
+    int tbd;
+} quicrq_media_object_consumer_properties_t;
+
+typedef int (*quicrq_media_object_consumer_fn)(
+    quicrq_media_consumer_enum action,
+    void* object_consumer_ctx,
+    uint64_t current_time,
+    uint64_t object_id,
+    const uint8_t* data,
+    size_t data_length,
+    quicrq_media_object_consumer_properties_t* properties);
+
+int quicrq_subscribe_object_stream(quicrq_ctx_t* qr_ctx,
+    quicrq_cnx_ctx_t* cnx_ctx,
+    const uint8_t* url, size_t url_length, int use_datagrams,
+    quicrq_media_object_consumer_fn media_object_consumer_fn, void* media_object_ctx);
 
  /* Quic media consumer.
   * The application sets a "media consumer function" and a "media consumer context" for
@@ -220,15 +254,6 @@ void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn de
   * to start the media stream. The server will receive an initial command
   * containing the media URL, and use 
   */
-typedef enum {
-    quicrq_media_datagram_ready = 0,
-    quicrq_media_final_object_id,
-    quicrq_media_close
-} quicrq_media_consumer_enum;
-
-#define quicrq_consumer_finished 1
-#define quicrq_consumer_continue 0
-#define quicrq_consumer_error -1
 
 typedef int (*quicrq_media_consumer_fn)(
     quicrq_media_consumer_enum action,
@@ -262,6 +287,8 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
+
+
 
 
 /* Handling of extra repeats
