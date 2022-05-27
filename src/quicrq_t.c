@@ -33,6 +33,8 @@ static const quicrq_test_def_t test_table[] =
     { "object_publish", quicrq_media_object_publish_test },
     { "object_source", quicrq_media_object_source_test },
     { "object_source_rt", quicrq_media_object_source_rt_test },
+    { "object_stream", quicrq_object_stream_test },
+    { "object_stream_rt", quicrq_object_stream_rt_test },
     { "datagram_basic", quicrq_datagram_basic_test },
     { "datagram_loss", quicrq_datagram_loss_test },
     { "datagram_extra", quicrq_datagram_extra_test },

@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\lib\object_consumer.c" />
     <ClCompile Include="..\lib\object_source.c" />
     <ClCompile Include="..\lib\proto.c" />
     <ClCompile Include="..\lib\quicrq.c" />

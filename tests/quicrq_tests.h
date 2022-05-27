@@ -18,6 +18,8 @@ extern "C" {
     int quicrq_media_object_publish_test();
     int quicrq_media_object_source_test();
     int quicrq_media_object_source_rt_test();
+    int quicrq_object_stream_test();
+    int quicrq_object_stream_rt_test();
     int quicrq_basic_rt_test();
     int quicrq_datagram_basic_test();
     int quicrq_datagram_loss_test();
