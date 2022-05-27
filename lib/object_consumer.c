@@ -110,7 +110,7 @@ quicrq_object_consumer_bridge_ctx_t* quicrq_subscribe_object_stream(quicrq_cnx_c
         bridge_ctx->object_stream_consumer_ctx = object_stream_consumer_ctx;
         quicrq_reassembly_init(&bridge_ctx->reassembly_ctx);
         /* Create a media context for the stream */
-        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams,
+        ret = quicrq_cnx_subscribe_media_ex(cnx_ctx, url, url_length, use_datagrams,
             quicrq_media_object_bridge_fn, bridge_ctx, &bridge_ctx->stream_ctx);
         if (ret != 0) {
             free(bridge_ctx);
