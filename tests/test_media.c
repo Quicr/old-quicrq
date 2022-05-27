@@ -757,7 +757,6 @@ void test_object_stream_consumer_release(test_object_stream_ctx_t* cons_ctx)
 void test_object_stream_consumer_close(void* v_cons_ctx)
 {
     /* Close result file and log file */
-    int ret = 0;
     test_object_stream_ctx_t* cons_ctx = (test_object_stream_ctx_t*)v_cons_ctx;
 
     test_object_stream_consumer_release(cons_ctx);
