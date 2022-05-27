@@ -390,6 +390,18 @@ void quicrq_cnx_abandon_stream_id(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id)
 
 void quicrq_cnx_abandon_stream(quicrq_stream_ctx_t* stream_ctx);
 
+/* Media bridge defintions, useful for tests */
+int quicrq_media_object_bridge_fn(
+    quicrq_media_consumer_enum action,
+    void* media_ctx,
+    uint64_t current_time,
+    const uint8_t* data,
+    uint64_t object_id,
+    uint64_t offset,
+    uint64_t queue_delay,
+    int is_last_fragment,
+    size_t data_length);
+
 /* For logging.. */
 const char* quicrq_uint8_t_to_text(const uint8_t* u, size_t length, char* buffer, size_t buffer_length);
 void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...);

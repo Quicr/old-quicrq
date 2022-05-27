@@ -474,8 +474,6 @@ typedef struct st_test_media_consumer_context_t {
     FILE* Log;
     uint8_t header_bytes[QUIRRQ_MEDIA_TEST_HEADER_SIZE];
     quicrq_media_object_header_t current_header;
-    size_t media_object_received;
-    size_t target_size;
 
     quicrq_reassembly_context_t reassembly_ctx;
 
@@ -728,6 +726,131 @@ int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_len
     return ret;
 }
 
+/* Object stream consumer
+ */
+
+typedef struct st_test_object_stream_ctx_t {
+    FILE* Res;
+    FILE* Log;
+    uint8_t header_bytes[QUIRRQ_MEDIA_TEST_HEADER_SIZE];
+    quicrq_media_object_header_t current_header;
+    size_t media_object_received;
+    size_t target_size;
+    void* media_ctx;
+    int is_closed;
+} test_object_stream_ctx_t;
+
+void test_object_stream_consumer_release(test_object_stream_ctx_t* cons_ctx)
+{
+    /* Close result file and log file */
+    cons_ctx->is_closed = 1;
+    if (cons_ctx->Res != NULL) {
+        picoquic_file_close(cons_ctx->Res);
+        cons_ctx->Res = NULL;
+    }
+    if (cons_ctx->Log != NULL) {
+        picoquic_file_close(cons_ctx->Log);
+        cons_ctx->Log = NULL;
+    }
+}
+
+void test_object_stream_consumer_close(void* v_cons_ctx)
+{
+    /* Close result file and log file */
+    int ret = 0;
+    test_object_stream_ctx_t* cons_ctx = (test_object_stream_ctx_t*)v_cons_ctx;
+
+    test_object_stream_consumer_release(cons_ctx);
+
+    free(cons_ctx);
+}
+
+int test_object_stream_consumer_cb(
+    quicrq_media_consumer_enum action,
+    void* object_consumer_ctx,
+    uint64_t current_time,
+    uint64_t object_id,
+    const uint8_t* data,
+    size_t data_length,
+    quicrq_object_stream_consumer_properties_t* properties)
+{
+    int ret = 0;
+    test_object_stream_ctx_t* cons_ctx = (test_object_stream_ctx_t*)object_consumer_ctx;
+
+    switch (action) {
+    case quicrq_media_datagram_ready:
+        /* Find the object header */
+        if (data_length < QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
+            /* Malformed object */
+            ret = -1;
+        }
+        else {
+            quicrq_media_object_header_t current_header;
+            const uint8_t* fh = quicr_decode_object_header(data,
+                data + QUIRRQ_MEDIA_TEST_HEADER_SIZE, &current_header);
+            if (fh == NULL) {
+                ret = -1;
+            }
+            if (ret == 0) {
+                /* in sequence, document the delivery in the log */
+                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu\n",
+                    current_time, current_header.timestamp, current_header.number, current_header.length) <= 0) {
+                    ret = -1;
+                }
+            }
+            if (ret == 0) {
+                /* in sequence, write the data to the file. */
+                if (fwrite(data, 1, data_length, cons_ctx->Res) != data_length) {
+                    ret = -1;
+                }
+            }
+        }
+        break;
+    case quicrq_media_close:
+        /* Remove the reference to the media context, as the caller will free it. */
+        cons_ctx->media_ctx = NULL;
+        /* Close streams and other resource */
+        test_object_stream_consumer_release(cons_ctx);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+    return ret;
+}
+
+test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log)
+{
+    int ret = 0;
+    /* Open and initialize result file and log file */
+    test_object_stream_ctx_t* cons_ctx = (test_object_stream_ctx_t*)malloc(sizeof(test_object_stream_ctx_t));
+    if (cons_ctx != NULL) {
+        int last_err;
+        memset(cons_ctx, 0, sizeof(test_object_stream_ctx_t));
+
+        if ((cons_ctx->Res = picoquic_file_open_ex(media_result_file, "wb", &last_err)) == NULL) {
+            DBG_PRINTF("Cannot open %s, error: %d (0x%x)", media_result_file, last_err, last_err);
+        }
+        if ((cons_ctx->Log = picoquic_file_open_ex(media_result_log, "w", &last_err)) == NULL) {
+            DBG_PRINTF("Cannot open %s, error: %d (0x%x)", media_result_log, last_err, last_err);
+        }
+        if (cons_ctx->Res == NULL || cons_ctx->Log == NULL) {
+            ret = -1;
+        }
+        else {
+            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, use_datagrams, test_object_stream_consumer_cb, cons_ctx);
+            if (cons_ctx->media_ctx == NULL) {
+                ret = -1;
+            }
+        }
+        if (ret != 0){
+            test_object_stream_consumer_close(cons_ctx);
+            cons_ctx = NULL;
+        }
+    }
+
+    return cons_ctx;
+}
 
 
 /* Compare media file.
@@ -1281,6 +1404,9 @@ int quicrq_media_object_publish_test()
 }
 
 
+/* use a local loop to verify that the object publisher works.
+ */
+
 int quicrq_media_object_source_test_one(char const* media_source_name, char const* media_log_reference,
     char const* media_result_file, char const* media_result_log, const generation_parameters_t* generation_model, int is_real_time)
 {
@@ -1460,9 +1586,172 @@ int quicrq_media_object_source_rt_test()
     return ret;
 }
 
+/* use a local loop to verify that the object publisher works
+ * in conjunction with the object consumer
+ */
+int quicrq_object_stream_test_one(char const* media_source_name, char const* media_log_reference,
+    char const* media_result_file, char const* media_result_log, const generation_parameters_t* generation_model, int is_real_time)
+{
+    int ret = 0;
+    char media_source_path[512];
+    char media_log_ref_path[512];
+    uint8_t media_buffer[1024];
+    uint64_t current_time = 0;
+    size_t data_length;
+    uint64_t object_id = 0;
+    uint64_t object_offset = 0;
+    int is_last_fragment = 0;
+    int is_media_finished = 0;
+    int is_still_active = 0;
+    uint64_t simulated_time = 0;
+    uint64_t media_next_time = 0;
+    quicrq_cnx_ctx_t* cnx_ctx = NULL;
+    quicrq_stream_ctx_t* stream_ctx = NULL;
+    quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
+        NULL, NULL, NULL, NULL, NULL,
+        NULL, 0, &simulated_time);
+    int inactive = 0;
+    test_object_stream_ctx_t* object_stream_ctx = NULL;
+
+    /* Create empty contexts for qr object, connection, stream */
+    if (qr_ctx == NULL) {
+        ret = -1;
+    }
+    else {
+        struct sockaddr_in addr_to = { 0 };
+        picoquic_cnx_t* cnx = picoquic_create_cnx(quicrq_get_quic_ctx(qr_ctx), picoquic_null_connection_id, picoquic_null_connection_id,
+            (struct sockaddr*)&addr_to, simulated_time, 0, NULL, QUICRQ_ALPN, 1);
+        cnx_ctx = quicrq_create_cnx_context(qr_ctx, cnx);
+        if (cnx_ctx == NULL) {
+            ret = -1;
+        }
+        else {
+            stream_ctx = quicrq_create_stream_context(cnx_ctx, 0);
+            if (stream_ctx == NULL) {
+                ret = -1;
+            }
+        }
+    }
+
+    /* Locate the source and reference file */
+    if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
+        quicrq_test_solution_dir, media_source_name) != 0 ||
+        picoquic_get_input_path(media_log_ref_path, sizeof(media_log_ref_path),
+            quicrq_test_solution_dir, media_log_reference) != 0) {
+        ret = -1;
+    }
 
 
+    /* Publish a test file */
+    if (ret == 0) {
+        if (test_media_publish(qr_ctx, (uint8_t*)media_source_name, strlen(media_source_name),
+            media_source_path, generation_model, is_real_time, &media_next_time, 0) == NULL) {
+            ret = -1;
+        }
+    }
 
+    /* Connect the stream context to the publisher */
+    if (ret == 0) {
+        ret = quicrq_subscribe_local_media(stream_ctx, (uint8_t*)media_source_name, strlen(media_source_name));
+        if (ret == 0) {
+            quicrq_wakeup_media_stream(stream_ctx);
+        }
+    }
+
+    /* Create an object stream consumer context */
+    if (ret == 0) {
+        object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (uint8_t*)media_source_name, strlen(media_source_name), 1, media_result_file, media_result_log);
+        if (object_stream_ctx == NULL) {
+            ret = -1;
+        } else {
+            quicrq_wakeup_media_stream(stream_ctx);
+        }
+    }
+
+    /* Loop through publish and consume until finished */
+    while (ret == 0 && !is_media_finished && inactive < 32) {
+        ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
+            stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
+            &data_length, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+        if (ret == 0) {
+            if (is_media_finished || data_length > 0) {
+                ret = quicrq_media_object_bridge_fn(quicrq_media_datagram_ready, object_stream_ctx->media_ctx, current_time, media_buffer,
+                    object_id, object_offset, 0, is_last_fragment, data_length);
+                if (ret == 0) {
+                    inactive = 0;
+                }
+                else {
+                    DBG_PRINTF("object consumer callback, ret: %d", ret);
+                }
+            }
+            else {
+                current_time = test_media_publisher_next_time(stream_ctx->media_ctx, current_time);
+                inactive++;
+            }
+            if (is_last_fragment) {
+                object_id++;
+                object_offset = 0;
+            }
+            else {
+                object_offset += data_length;
+            }
+        }
+        else {
+            DBG_PRINTF("object publisher callback, ret: %d", ret);
+        }
+    }
+
+    /* Close publisher by closing the connection context */
+    if (ret == 0) {
+        ret = quicrq_media_object_bridge_fn(quicrq_media_final_object_id, object_stream_ctx->media_ctx, current_time, NULL, object_id, 0, 0, 0, 0);
+        if (ret == quicrq_consumer_finished) {
+            ret = 0;
+        }
+        else {
+            DBG_PRINTF("Consumer not finished after final object id! ret = %d", ret);
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        quicrq_delete_cnx_context(cnx_ctx);
+    }
+    /* Close consumer */
+    if (object_stream_ctx != NULL) {
+        test_object_stream_consumer_close(object_stream_ctx);
+    }
+
+    /* Compare media result to media source */
+    if (ret == 0) {
+        ret = quicrq_compare_log_file(media_result_log, media_log_ref_path);
+    }
+
+    if (ret == 0) {
+        ret = quicrq_compare_media_file(media_result_file, media_source_path);
+    }
+
+    /* CLear */
+    if (qr_ctx != NULL) {
+        quicrq_delete(qr_ctx);
+    }
+
+    return ret;
+}
+
+int quicrq_object_stream_test()
+{
+    int ret = quicrq_object_stream_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_LOGREF, QUICRQ_TEST_VIDEO1_RESULT, QUICRQ_TEST_VIDEO1_LOG,
+        &video_1mps, 0);
+
+    return ret;
+}
+
+int quicrq_object_stream_rt_test()
+{
+    int ret = quicrq_object_stream_test_one(QUICRQ_TEST_VIDEO1_SOURCE, QUICRQ_TEST_VIDEO1_RT_LOGREF, QUICRQ_TEST_VIDEO1_RT_RESULT, QUICRQ_TEST_VIDEO1_RT_LOG,
+        &video_1mps, 1);
+
+    return ret;
+}
 
 /* Media datagram test. Check the datagram API.
  */

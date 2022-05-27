@@ -9,15 +9,18 @@
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <picoquic.h>
+#include "quicrq.h"
 #include "quicrq_internal.h"
 #include "quicrq_reassembly.h"
 #include "picoquic_utils.h"
 
 typedef struct st_quicrq_object_consumer_bridge_ctx_t {
     quicrq_ctx_t* qr_ctx;
+    quicrq_stream_ctx_t* stream_ctx;
     quicrq_reassembly_context_t reassembly_ctx;
-    quicrq_media_object_consumer_fn object_consumer_fn;
-    void* media_object_ctx;
+    quicrq_object_stream_consumer_fn object_stream_consumer_fn;
+    void * object_stream_consumer_ctx;
 } quicrq_object_consumer_bridge_ctx_t;
 
 
@@ -33,26 +36,18 @@ int quicrq_media_object_bridge_ready(
     int ret = 0;
     quicrq_object_consumer_bridge_ctx_t* bridge_ctx = (quicrq_object_consumer_bridge_ctx_t*)media_ctx;
 
-    /* Find the object header */
-    if (data_length < QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
-        /* Malformed object */
-        ret = -1;
+    /* TODO: for some streams, we may be able to "jump ahead" and
+        * use the latest object without waiting for the full sequence */
+    /* if in sequence, deliver the object to the application. */
+    if (object_mode != quicrq_reassembly_object_peek) {
+        /* Deliver to the application */
+        ret = bridge_ctx->object_stream_consumer_fn(
+            quicrq_media_datagram_ready,
+            bridge_ctx->object_stream_consumer_ctx,
+            current_time, object_id,
+            data, data_length,  NULL);
     }
-    else {
-        if (ret == 0) {
-            /* TODO: for some streams, we may be able to "jump ahead" and
-             * use the latest object without waiting for the full sequence */
-            /* if in sequence, deliver the object to the application. */
-            if (object_mode != quicrq_reassembly_object_peek) {
-                /* Deliver to the application */
-                ret = bridge_ctx->object_consumer_fn)(
-                    quicrq_media_datagram_ready,
-                    bridge_ctx->object_consumer_ctx,
-                    current_time, object_id,
-                    data data_length,  NULL);
-            }
-        }
-    }
+       
     return ret;
 }
 
@@ -74,17 +69,22 @@ int quicrq_media_object_bridge_fn(
     case quicrq_media_datagram_ready:
         ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, object_id, offset, is_last_fragment, data_length,
             quicrq_media_object_bridge_ready, bridge_ctx);
-        if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
+        if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
         break;
     case quicrq_media_final_object_id:
-        ret = quicrq_reassembly_learn_final_object_id(&bridge_ctx->reassembly_ctx, final_object_id);
+        ret = quicrq_reassembly_learn_final_object_id(&bridge_ctx->reassembly_ctx, object_id);
         if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
         break;
     case quicrq_media_close:
+        ret = bridge_ctx->object_stream_consumer_fn(
+            quicrq_media_close,
+            bridge_ctx->object_stream_consumer_ctx,
+            current_time, object_id,
+            NULL, 0, NULL);
         quicrq_reassembly_release(&bridge_ctx->reassembly_ctx);
         free(media_ctx);
         break;
@@ -95,25 +95,35 @@ int quicrq_media_object_bridge_fn(
     return ret;
 }
 
-
 /* Subscribe object stream. */
-int quicrq_subscribe_object_stream(quicrq_ctx_t* qr_ctx, quicrq_cnx_ctx_t* cnx_ctx,
+quicrq_object_consumer_bridge_ctx_t* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
     const uint8_t* url, size_t url_length, int use_datagrams,
-    quicrq_media_consumer_fn media_object_consumer_fn, void* media_object_ctx)
+    quicrq_object_stream_consumer_fn object_stream_consumer_fn, void* object_stream_consumer_ctx)
 {
-     quicrq_object_consumer_bridge_ctx_t* bridge_ctx = (quicrq_object_consumer_bridge_ctx_t*)malloc(sizeof(quicrq_object_consumer_bridge_ctx_t));
-     if (bridge_ctx != NULL) {
-         memset(bridge_ctx, 0, sizeof(quicrq_object_consumer_bridge_ctx_t));
-         bridge_ctx->qr_ctx = qr_ctx;
-         quicrq_reassembly_init(&cons_ctx->reassembly_ctx);
-         /* Create a media context for the stream */
-         ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams,
-             quicrq_media_object_bridge_fn, bridge_ctx);
-         if (ret != 0) {
-             free(bridge_ctx);
-             bridge_ctx = NULL;
-         }
-     }
+    quicrq_object_consumer_bridge_ctx_t* bridge_ctx = (quicrq_object_consumer_bridge_ctx_t*)malloc(sizeof(quicrq_object_consumer_bridge_ctx_t));
+    if (bridge_ctx != NULL) {
+        int ret;
+
+        memset(bridge_ctx, 0, sizeof(quicrq_object_consumer_bridge_ctx_t));
+        bridge_ctx->qr_ctx = cnx_ctx->qr_ctx;
+        bridge_ctx->object_stream_consumer_fn = object_stream_consumer_fn;
+        bridge_ctx->object_stream_consumer_ctx = object_stream_consumer_ctx;
+        quicrq_reassembly_init(&bridge_ctx->reassembly_ctx);
+        /* Create a media context for the stream */
+        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams,
+            quicrq_media_object_bridge_fn, bridge_ctx, &bridge_ctx->stream_ctx);
+        if (ret != 0) {
+            free(bridge_ctx);
+            bridge_ctx = NULL;
+        }
+    }
 
      return bridge_ctx;
+}
+
+void quicrq_unsubscribe_object_stream(quicrq_object_consumer_bridge_ctx_t* bridge_ctx)
+{
+    bridge_ctx->object_stream_consumer_fn = NULL;
+    bridge_ctx->object_stream_consumer_ctx = NULL;
+    quicrq_delete_stream_ctx(bridge_ctx->stream_ctx->cnx_ctx, bridge_ctx->stream_ctx);
 }

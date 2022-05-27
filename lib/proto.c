@@ -609,13 +609,11 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
     }
 };
 
-
 /* Request media in connection.
  * Send a media request to the server.
- * TODO: mention datagram stream.
  */
-int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx)
+int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
+    int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx, quicrq_stream_ctx_t** p_stream_ctx)
 {
     /* Create a stream for the media */
     int ret = 0;
@@ -648,6 +646,9 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
                 stream_ctx->media_ctx = media_ctx;
                 stream_ctx->send_state = quicrq_sending_initial;
                 stream_ctx->receive_state = quicrq_receive_repair;
+                if (p_stream_ctx != NULL) {
+                    *p_stream_ctx = stream_ctx;
+                }
                 picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
                 quicrq_log_message(cnx_ctx, "Posting subscribe to URL: %s on stream %" PRIu64,
                     quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
@@ -655,6 +656,13 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
         }
     }
     return ret;
+}
+
+int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
+    int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx)
+{
+    return quicrq_cnx_subscribe_media_ex(cnx_ctx, url, url_length,
+        use_datagrams, media_consumer_fn, media_ctx, NULL);
 }
 
 /* Process an incoming subscribe command */

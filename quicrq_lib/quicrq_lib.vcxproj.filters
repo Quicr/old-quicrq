@@ -30,6 +30,9 @@
     <ClCompile Include="..\lib\object_source.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\lib\object_consumer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\lib\quicrq_relay_internal.h">
