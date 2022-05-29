@@ -26,7 +26,6 @@ quicrq_test_config_t* quicrq_test_relay_config_create(uint64_t simulate_loss)
         config->nodes[2] = quicrq_create(QUICRQ_ALPN,
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
             NULL, 0, &config->simulated_time);
-        config->sources[0].srce_ctx = NULL;
         if (config->nodes[0] == NULL || config->nodes[1] == NULL || config->nodes[1] == NULL) {
             quicrq_test_config_delete(config);
             config = NULL;
@@ -93,11 +92,10 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         /* Add a test source to the configuration, and to the either the client or the server */
         int publish_node = (is_from_client) ? 2 : 0;
 
-        config->sources[0].srce_ctx = test_media_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-            media_source_path, NULL, is_real_time, &config->sources[0].next_source_time, 0);
-        if (config->sources[0].srce_ctx == NULL) {
+        config->object_sources[0] = test_media_object_source_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+            strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time);
+        if (config->object_sources[0] == NULL) {
             ret = -1;
-            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
     }
 

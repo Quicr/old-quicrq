@@ -52,7 +52,6 @@ quicrq_test_config_t* quicrq_test_fourlegs_config_create(uint64_t simulate_loss)
         config->nodes[6] = quicrq_create(QUICRQ_ALPN,
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
             NULL, 0, &config->simulated_time);
-        config->sources[0].srce_ctx = NULL;
         for (int i = 0; i < 7; i++) {
             if (config->nodes[i] == NULL) {
                 quicrq_test_config_delete(config);
@@ -181,11 +180,10 @@ int quicrq_fourlegs_test_one(int use_datagrams, uint64_t simulate_losses, int pu
         /* test source is always client # 4 (node #6) */
         int publish_node = 6;
 
-        config->sources[0].srce_ctx = test_media_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-            media_source_path, NULL, 1, &config->sources[0].next_source_time, 0);
-        if (config->sources[0].srce_ctx == NULL) {
+        config->object_sources[0] = test_media_object_source_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+            strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, 1, config->simulated_time);
+        if (config->object_sources[0] == NULL) {
             ret = -1;
-            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
     }
 

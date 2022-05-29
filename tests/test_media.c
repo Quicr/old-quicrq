@@ -395,31 +395,61 @@ quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t * qr_ctx, uint8_t* ur
  * - Call delete object in the end.
  */
 
+static int test_media_object_source_check(test_media_object_source_context_t* object_pub_ctx)
+{
+    int ret = 0;
+    test_media_publisher_context_t* pub_ctx = object_pub_ctx->pub_ctx;
+    /* if this is the first call, or if the previous call was published,
+     * read the next data from file. */
+    if (!pub_ctx->is_finished) {
+        if (!object_pub_ctx->object_is_ready || object_pub_ctx->object_is_published) {
+            if (pub_ctx->F != NULL) {
+                /* Read the next object from the file */
+                ret = test_media_read_object_from_file(pub_ctx);
+            }
+            else {
+                /* Generate a object */
+                ret = test_media_generate_object(pub_ctx);
+            }
+            if (ret == 0) {
+                object_pub_ctx->object_is_ready = 1;
+                object_pub_ctx->object_is_published = 0;
+                if (pub_ctx->is_finished) {
+                    object_pub_ctx->source_is_finished = 1;
+                }
+            }
+        }
+    }
+    return ret;
+}
+
 int test_media_object_source_iterate(
     test_media_object_source_context_t* object_pub_ctx,
-    uint64_t current_time)
+    uint64_t current_time, int * is_active)
 {
     int ret = 0;
     test_media_publisher_context_t* pub_ctx = object_pub_ctx->pub_ctx;
 
-    if (pub_ctx->media_object_size <= pub_ctx->media_object_read && !pub_ctx->is_finished) {
-        /* Check whether more object data available. */
-        ret = test_media_publisher_check_object(pub_ctx);
-        object_pub_ctx->object_is_published = 0;
+    ret = test_media_object_source_check(object_pub_ctx);
 
-        if (ret == 0 && pub_ctx->is_finished) {
-            quicrq_publish_object_fin(object_pub_ctx->object_source_ctx);
+    if (ret == 0) {
+        if (object_pub_ctx->object_is_ready && !object_pub_ctx->object_is_published) {
+            if (object_pub_ctx->source_is_finished) {
+                /* if this the file is finished but the fin is not, publish the fin
+                 */
+                quicrq_publish_object_fin(object_pub_ctx->object_source_ctx);
+                object_pub_ctx->object_is_published = 1;
+                *is_active |= 1;
+            }
+            else if (!pub_ctx->is_real_time ||
+                current_time >= pub_ctx->start_time + pub_ctx->current_header.timestamp) {
+                /* else if the data is not published, publish it */
+                ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, NULL);
+                object_pub_ctx->object_is_published = 1;
+                *is_active |= 1;
+            }
         }
     }
-    
-    if (pub_ctx->media_object_read < pub_ctx->media_object_size &&
-        !pub_ctx->is_finished && !object_pub_ctx->object_is_published &&
-        (!pub_ctx->is_real_time ||
-        current_time >= pub_ctx->start_time + pub_ctx->current_header.timestamp)){
-        ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, NULL);
-        object_pub_ctx->object_is_published = 1;
-    }
-
     return ret;
 }
 
@@ -427,7 +457,31 @@ uint64_t test_media_object_source_next_time(
     test_media_object_source_context_t* object_pub_ctx,
     uint64_t current_time)
 {
-    return test_media_publisher_next_time(object_pub_ctx->pub_ctx, current_time);
+    int ret = 0;
+    uint64_t next_time = UINT64_MAX;
+    test_media_publisher_context_t* pub_ctx = object_pub_ctx->pub_ctx;
+
+    ret = test_media_object_source_check(object_pub_ctx);
+
+    if (ret == 0) {
+        if (object_pub_ctx->object_is_ready && !object_pub_ctx->object_is_published) {
+            if (object_pub_ctx->source_is_finished) {
+                /* if this the file is finished but the fin is not, publish the fin now
+                 */
+                next_time = current_time;
+            }
+            else if (pub_ctx->is_real_time) {
+                next_time = pub_ctx->start_time + pub_ctx->current_header.timestamp;
+            }
+            else {
+                next_time = current_time;
+            }
+        }
+    }
+    else {
+        next_time = current_time;
+    }
+    return next_time;
 }
 
 void test_media_object_source_delete(test_media_object_source_context_t* object_pub_ctx)
@@ -445,7 +499,7 @@ void test_media_object_source_delete(test_media_object_source_context_t* object_
 
 test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
-    uint64_t* p_next_time, uint64_t start_time)
+    uint64_t start_time)
 {
     test_media_object_source_context_t* object_pub_ctx = (test_media_object_source_context_t*)malloc(
         sizeof(test_media_object_source_context_t));
@@ -1421,7 +1475,6 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
     int is_media_finished = 0;
     int is_still_active = 0;
     uint64_t current_time = 0;
-    uint64_t media_next_time = 0;
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     quicrq_stream_ctx_t* stream_ctx = NULL;
     quicrq_ctx_t* qr_ctx = quicrq_create(NULL,
@@ -1462,7 +1515,7 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
     /* Publish a test file */
     if (ret == 0) {
         object_source_pub = test_media_object_source_publish(qr_ctx, (uint8_t*)media_source_name, strlen(media_source_name),
-            media_source_path, generation_model, is_real_time, &media_next_time, 0);
+            media_source_path, generation_model, is_real_time, 0);
         if (object_source_pub == NULL) {
             ret = -1;
         }
@@ -1492,8 +1545,12 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
 
     /* Loop through publish and consume until finished */
     while (ret == 0 && !is_media_finished && inactive < 32) {
+        int is_active = 0;
         /* Check whether the object oriented publisher has new data */
-        ret = test_media_object_source_iterate(object_source_pub, current_time);
+        ret = test_media_object_source_iterate(object_source_pub, current_time, &is_active);
+        if (is_active) {
+            inactive = 0;
+        }
         if (ret == 0) {
             /* Call the object oriented publisher function, to simulate publishing */
             ret = quicrq_media_object_publisher(quicrq_media_source_get_data,
