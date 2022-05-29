@@ -461,11 +461,8 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
 quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss, uint64_t extra_delay)
 {
     /* Create a configuration with just two nodes, two links, one source and two attachment points.*/
-#if 1
     quicrq_test_config_t* config = quicrq_test_config_create(2, 2, 2, 0, 1);
-#else
-    quicrq_test_config_t* config = quicrq_test_config_create(2, 2, 2, 1, 0);
-#endif
+
     if (config != NULL) {
         /* Create the contexts for the origin and the client */
         config->nodes[0] = quicrq_create(QUICRQ_ALPN,
@@ -629,12 +626,6 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             if (nb_inactive >= max_inactive) {
                 DBG_PRINTF("Exit loop after too many inactive: %d", nb_inactive);
             }
-
-#if 1
-            if (nb_inactive == 64) {
-                DBG_PRINTF("%s", "CHECK");
-            }
-#endif
         }
         /* if the media is received, exit the loop */
         if (config->nodes[1]->first_cnx == NULL) {

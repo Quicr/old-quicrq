@@ -16,7 +16,7 @@
 quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss, uint64_t extra_delay)
 {
     /* Create a configuration with three nodes, four links, one source and 8 attachment points.*/
-    quicrq_test_config_t* config = quicrq_test_config_create(3, 4, 4, 1, 0);
+    quicrq_test_config_t* config = quicrq_test_config_create(3, 4, 4, 0, 1);
     if (config != NULL) {
         /* Create the contexts for the origin (0),  client-1 (1) and client-2 (2) */
         config->nodes[0] = quicrq_create(QUICRQ_ALPN,
@@ -29,7 +29,6 @@ quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss,
         config->nodes[2] = quicrq_create(QUICRQ_ALPN,
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
             NULL, 0, &config->simulated_time);
-        config->sources[0].srce_ctx = NULL;
         if (config->nodes[0] == NULL || config->nodes[1] == NULL || config->nodes[1] == NULL) {
             quicrq_test_config_delete(config);
             config = NULL;
@@ -118,13 +117,20 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     if (ret == 0) {
         /* Add a test source to the configuration on client #1 (publisher) */
         int publish_node = 1;
-
+#if 1
+        config->object_sources[0] = test_media_object_source_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+            strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time);
+        if (config->object_sources[0] == NULL) {
+            ret = -1;
+        }
+#else
         config->sources[0].srce_ctx = test_media_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
             media_source_path, NULL, is_real_time, &config->sources[0].next_source_time, 0);
         if (config->sources[0].srce_ctx == NULL) {
             ret = -1;
             DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
+#endif
     }
 
     if (ret == 0) {
