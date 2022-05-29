@@ -185,15 +185,6 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
         uint64_t next_source_time = test_media_object_source_next_time(config->object_sources[i], config->simulated_time);
         if (next_source_time < next_time) {
             next_time = next_source_time;
-            next_step_type = 4;
-            next_step_index = i;
-        }
-    }
-
-    /* Check which source has the lowest time */
-    for (int i = 0; i < config->nb_sources; i++) {
-        if (config->sources[i].next_source_time < next_time) {
-            next_time = config->sources[i].next_source_time;
             next_step_type = 1;
             next_step_index = i;
         }
@@ -235,9 +226,9 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
             config->simulated_time = next_time;
         }
         switch (next_step_type) {
-        case 1: /* Media ready on source #next_step_index */
-            quicrq_source_wakeup(config->sources[next_step_index].srce_ctx);
-            config->sources[next_step_index].next_source_time = UINT64_MAX;
+        case 1:
+            /* Simulate arrival of data for an object source */
+            ret = test_media_object_source_iterate(config->object_sources[next_step_index], next_time, is_active);
             break;
         case 2: /* Quicrq context #next_step_index is ready to send data */
             ret = quicrq_test_packet_departure(config, next_step_index, is_active);
@@ -245,10 +236,6 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
         case 3:
             /* If arrival, take next packet, find destination by address, and submit to end-of-link context */
             ret = quicrq_test_packet_arrival(config, next_step_index, is_active);
-            break;
-        case 4:
-            /* Simulate arrival of data for an object source */
-            ret = test_media_object_source_iterate(config->object_sources[next_step_index], next_time, is_active);
             break;
         default:
             /* This should never happen! */
@@ -333,10 +320,6 @@ void quicrq_test_config_delete(quicrq_test_config_t* config)
         free(config->attachments);
     }
 
-    if (config->sources != NULL) {
-        free(config->sources);
-    }
-
     if (config->object_sources != NULL) {
         free(config->object_sources);
     }
@@ -345,7 +328,7 @@ void quicrq_test_config_delete(quicrq_test_config_t* config)
 }
 
 /* Create a configuration */
-quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int nb_attachments, int nb_sources, int nb_object_sources)
+quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int nb_attachments, int nb_object_sources)
 {
     quicrq_test_config_t* config = (quicrq_test_config_t*)malloc(sizeof(quicrq_test_config_t));
 
@@ -421,22 +404,8 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
             }
         }
 
-
-
         if (success) {
-            if (nb_object_sources <= 0) {
-                if (nb_sources <= 0 || nb_sources > 0xffff) {
-                    success = 0;
-                }
-                else {
-                    config->sources = (quicrq_test_source_t*)malloc(nb_sources * sizeof(quicrq_test_source_t));
-                    success &= (config->sources != NULL);
-                    memset(config->sources, 0, nb_sources * sizeof(quicrq_test_source_t));
-                    config->nb_sources = nb_sources;
-                }
-            }
-            else {
-                /* TODO: create the object sources */
+            if (nb_object_sources > 0) {
                 config->object_sources = (test_media_object_source_context_t**)
                     malloc(sizeof(test_media_object_source_context_t*) * nb_object_sources);
                 if (config->object_sources == NULL) {
@@ -461,7 +430,7 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
 quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss, uint64_t extra_delay)
 {
     /* Create a configuration with just two nodes, two links, one source and two attachment points.*/
-    quicrq_test_config_t* config = quicrq_test_config_create(2, 2, 2, 0, 1);
+    quicrq_test_config_t* config = quicrq_test_config_create(2, 2, 2, 1);
 
     if (config != NULL) {
         /* Create the contexts for the origin and the client */
@@ -472,9 +441,6 @@ quicrq_test_config_t* quicrq_test_basic_config_create(uint64_t simulate_loss, ui
         config->nodes[1] = quicrq_create(QUICRQ_ALPN,
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
             NULL, 0, &config->simulated_time);
-#if 0
-        config->sources[0].srce_ctx = NULL;
-#endif
         if (config->nodes[0] == NULL || config->nodes[1] == NULL) {
             quicrq_test_config_delete(config);
             config = NULL;

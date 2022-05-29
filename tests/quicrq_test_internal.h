@@ -98,8 +98,6 @@ typedef struct st_quicrq_test_config_t {
     int* return_links;
     int nb_attachments;
     quicrq_test_attach_t* attachments;
-    int nb_sources;
-    quicrq_test_source_t* sources;
     int nb_object_sources;
     test_media_object_source_context_t** object_sources;
     uint64_t cnx_error_client;
@@ -107,7 +105,7 @@ typedef struct st_quicrq_test_config_t {
 } quicrq_test_config_t;
 
 /* Create a test network configuration */
-quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int nb_attachments, int nb_sources, int nb_object_sources);
+quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int nb_attachments, int nb_object_sources);
 /* Delete a test network configuration */
 void quicrq_test_config_delete(quicrq_test_config_t* config);
 /* Find the address used by a test source to reach a destination */

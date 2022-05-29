@@ -16,7 +16,7 @@
 quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss, uint64_t extra_delay)
 {
     /* Create a configuration with three nodes, four links, one source and 8 attachment points.*/
-    quicrq_test_config_t* config = quicrq_test_config_create(3, 4, 4, 0, 1);
+    quicrq_test_config_t* config = quicrq_test_config_create(3, 4, 4, 1);
     if (config != NULL) {
         /* Create the contexts for the origin (0),  client-1 (1) and client-2 (2) */
         config->nodes[0] = quicrq_create(QUICRQ_ALPN,
