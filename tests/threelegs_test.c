@@ -193,8 +193,14 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
                         }
                         else {
                             /* Create a subscription to the test source on other client*/
-                            ret = test_media_subscribe(cnx_ctx[i], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-                                use_datagrams, result_file_name[i - 1], result_log_name[i - 1]);
+                            if (ret == 0) {
+                                test_object_stream_ctx_t* object_stream_ctx = NULL;
+                                object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+                                    strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name[i-1], result_log_name[i-1]);
+                                if (object_stream_ctx == NULL) {
+                                    ret = -1;
+                                }
+                            }
                             if (ret != 0) {
                                 DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
                             }

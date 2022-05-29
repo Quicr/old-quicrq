@@ -783,17 +783,6 @@ int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_len
 /* Object stream consumer
  */
 
-typedef struct st_test_object_stream_ctx_t {
-    FILE* Res;
-    FILE* Log;
-    uint8_t header_bytes[QUIRRQ_MEDIA_TEST_HEADER_SIZE];
-    quicrq_media_object_header_t current_header;
-    size_t media_object_received;
-    size_t target_size;
-    void* media_ctx;
-    int is_closed;
-} test_object_stream_ctx_t;
-
 void test_object_stream_consumer_release(test_object_stream_ctx_t* cons_ctx)
 {
     /* Close result file and log file */

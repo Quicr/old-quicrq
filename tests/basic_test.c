@@ -551,9 +551,13 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
         else {
             /* Create a subscription to the test source on client */
-            ret = test_media_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
-            if (ret != 0) {
-                DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
+            if (ret == 0) {
+                test_object_stream_ctx_t* object_stream_ctx = NULL;
+                object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, 
+                    strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+                if (object_stream_ctx == NULL) {
+                    ret = -1;
+                }
             }
         }
     }
