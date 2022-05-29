@@ -147,20 +147,11 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
     if (ret == 0) {
         /* test source is always client # 1 (node #2) */
         int publish_node = 2;
-#if 1
         config->object_sources[0] = test_media_object_source_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
             strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, 1, config->simulated_time);
         if (config->object_sources[0] == NULL) {
             ret = -1;
         }
-#else
-        config->sources[0].srce_ctx = test_media_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-            media_source_path, NULL, 1, &config->sources[0].next_source_time, 0);
-        if (config->sources[0].srce_ctx == NULL) {
-            ret = -1;
-            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
-        }
-#endif
     }
 
     if (ret == 0) {

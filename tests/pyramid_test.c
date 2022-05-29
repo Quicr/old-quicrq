@@ -108,20 +108,12 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
 
     if (ret == 0) {
         /* Add a test source to the configuration, and to the either the first client (behind relay) or the second (direct to origin) */
-#if 1
+
         config->object_sources[0] = test_media_object_source_publish(config->nodes[publish_node_id], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
             strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time);
         if (config->object_sources[0] == NULL) {
             ret = -1;
         }
-#else
-        config->sources[0].srce_ctx = test_media_publish(config->nodes[publish_node_id], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-            media_source_path, NULL, is_real_time, &config->sources[0].next_source_time, 0);
-        if (config->sources[0].srce_ctx == NULL) {
-            ret = -1;
-            DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
-        }
-#endif
     }
 
     if (ret == 0) {

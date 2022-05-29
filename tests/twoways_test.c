@@ -118,20 +118,11 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
         /* Add a test source to the configuration on both clients */
         for (int publish_node = 1; publish_node < 3; publish_node++) {
             int source_id = publish_node - 1;
-#if 1
             config->object_sources[source_id] = test_media_object_source_publish(config->nodes[publish_node], (uint8_t*)url[source_id],
                 strlen(url[source_id]), media_source_path, NULL, is_real_time, config->simulated_time);
             if (config->object_sources[0] == NULL) {
                 ret = -1;
             }
-#else
-            config->sources[source_id].srce_ctx = test_media_publish(config->nodes[publish_node], (uint8_t*)url[source_id], strlen(url[source_id]),
-                media_source_path, NULL, is_real_time, &config->sources[source_id].next_source_time, 0);
-            if (config->sources[source_id].srce_ctx == NULL) {
-                ret = -1;
-                DBG_PRINTF("Cannot publish test media %s, ret = %d", url[source_id], ret);
-            }
-#endif
         }
     }
 

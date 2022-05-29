@@ -430,7 +430,6 @@ int test_media_object_source_iterate(
     int ret = 0;
     test_media_publisher_context_t* pub_ctx = object_pub_ctx->pub_ctx;
 
-#if 1
     ret = test_media_object_source_check(object_pub_ctx);
 
     if (ret == 0) {
@@ -451,26 +450,6 @@ int test_media_object_source_iterate(
             }
         }
     }
-#else
-    if (pub_ctx->media_object_size <= pub_ctx->media_object_read && !pub_ctx->is_finished) {
-        /* Check whether more object data available. */
-        ret = test_media_publisher_check_object(pub_ctx);
-        object_pub_ctx->object_is_published = 0;
-
-        if (ret == 0 && pub_ctx->is_finished) {
-            quicrq_publish_object_fin(object_pub_ctx->object_source_ctx);
-            object_pub_ctx->object_is_published = 1;
-        }
-    }
-    
-    if (pub_ctx->media_object_read < pub_ctx->media_object_size &&
-        !pub_ctx->is_finished && !object_pub_ctx->object_is_published &&
-        (!pub_ctx->is_real_time ||
-        current_time >= pub_ctx->start_time + pub_ctx->current_header.timestamp)){
-        ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, NULL);
-        object_pub_ctx->object_is_published = 1;
-    }
-#endif
     return ret;
 }
 
@@ -481,7 +460,7 @@ uint64_t test_media_object_source_next_time(
     int ret = 0;
     uint64_t next_time = UINT64_MAX;
     test_media_publisher_context_t* pub_ctx = object_pub_ctx->pub_ctx;
-#if 1
+
     ret = test_media_object_source_check(object_pub_ctx);
 
     if (ret == 0) {
@@ -502,25 +481,6 @@ uint64_t test_media_object_source_next_time(
     else {
         next_time = current_time;
     }
-#else
-    if (pub_ctx->media_object_size <= pub_ctx->media_object_read && !pub_ctx->is_finished) {
-        /* Check whether more object data available. */
-        ret = test_media_publisher_check_object(pub_ctx);
-        object_pub_ctx->object_is_published = 0;
-    }
-
-    if (ret != 0) {
-        next_time = current_time;
-    }
-    else if (!object_pub_ctx->object_is_published) {
-        if (object_pub_ctx->pub_ctx->is_finished) {
-            next_time = current_time;
-        }
-        else {
-            next_time = test_media_publisher_next_time(object_pub_ctx->pub_ctx, current_time);
-        }
-    }
-#endif
     return next_time;
 }
 
