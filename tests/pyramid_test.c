@@ -160,7 +160,14 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
         if (!is_client_started && config->simulated_time >= client_start_time) {
             /* Create a subscription to the test source on client */
             quicrq_cnx_ctx_t* cnx_ctx_get = (is_from_relay_client) ? cnx_ctx_server : cnx_ctx_relay;
-            ret = test_media_subscribe(cnx_ctx_get, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+            if (ret == 0) {
+                test_object_stream_ctx_t* object_stream_ctx = NULL;
+                object_stream_ctx = test_object_stream_subscribe(cnx_ctx_get, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+                    strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+                if (object_stream_ctx == NULL) {
+                    ret = -1;
+                }
+            }
             if (ret != 0) {
                 DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
             }

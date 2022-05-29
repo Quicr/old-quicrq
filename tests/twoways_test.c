@@ -155,8 +155,14 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
 
                     if (ret == 0) {
                         /* Create a subscription to the test source on other client*/
-                        ret = test_media_subscribe(cnx_ctx[i], (uint8_t*)target[i]->url, 
-                            target[i]->url_length, use_datagrams, target[i]->target_bin, target[i]->target_csv);
+                        if (ret == 0) {
+                            test_object_stream_ctx_t* object_stream_ctx = NULL;
+                            object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (uint8_t*)target[i]->url,
+                                target[i]->url_length, use_datagrams, target[i]->target_bin, target[i]->target_csv);
+                            if (object_stream_ctx == NULL) {
+                                ret = -1;
+                            }
+                        }
                         if (ret != 0) {
                             DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", target[i]->url, ret);
                         }

@@ -355,7 +355,13 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
                 if (log_path[0] == 0) {
                     picoquic_sprintf(log_path, sizeof(log_path), NULL, "%s.csv", path);
                 }
-                ret = test_media_subscribe(cnx_ctx, (uint8_t*)url, url_length, use_datagrams, path, log_path);
+                if (ret == 0) {
+                    test_object_stream_ctx_t* object_stream_ctx = NULL;
+                    object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (uint8_t*)url, url_length, use_datagrams, path, log_path);
+                    if (object_stream_ctx == NULL) {
+                        ret = -1;
+                    }
+                }
                 if (ret != 0) {
                     fprintf(stderr, "Cannot subscribe to test media %s, ret = %d", path, ret);
                 }
