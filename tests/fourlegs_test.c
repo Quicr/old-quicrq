@@ -24,7 +24,7 @@
 quicrq_test_config_t* quicrq_test_fourlegs_config_create(uint64_t simulate_loss)
 {
     /* Create a configuration with seven nodes, twelve links, one source and 12 attachment points.*/
-    quicrq_test_config_t* config = quicrq_test_config_create(7, 12, 12, 1);
+    quicrq_test_config_t* config = quicrq_test_config_create(7, 12, 12, 1, 0);
     if (config != NULL) {
         /* Create the contexts for the origin (0),  relay (1), relay(2), and client-1 (3),
          * client-2 (4), client-3 (5) and client-3(4) */

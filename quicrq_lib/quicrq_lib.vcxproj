@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -27,6 +27,9 @@
     <ClCompile Include="..\lib\relay.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\include\quicrq.h" />
+    <ClInclude Include="..\include\quicrq_reassembly.h" />
+    <ClInclude Include="..\include\quicrq_relay.h" />
     <ClInclude Include="..\lib\quicrq_internal.h" />
     <ClInclude Include="..\lib\quicrq_relay_internal.h" />
   </ItemGroup>

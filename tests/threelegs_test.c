@@ -23,7 +23,7 @@
 quicrq_test_config_t* quicrq_test_threelegs_config_create(uint64_t simulate_loss)
 {
     /* Create a configuration with five nodes, eight links, one source and 5 attachment points.*/
-    quicrq_test_config_t* config = quicrq_test_config_create(5, 8, 8, 1);
+    quicrq_test_config_t* config = quicrq_test_config_create(5, 8, 8, 1, 0);
     if (config != NULL) {
         /* Create the contexts for the origin (0),  relay (1) and client-1 (2), client=2 (3) and client-3(4) */
         config->nodes[0] = quicrq_create(QUICRQ_ALPN,
