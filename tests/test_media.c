@@ -880,7 +880,7 @@ test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx
             ret = -1;
         }
         else {
-            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, use_datagrams, test_object_stream_consumer_cb, cons_ctx);
+            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, use_datagrams, 1, test_object_stream_consumer_cb, cons_ctx);
             if (cons_ctx->media_ctx == NULL) {
                 ret = -1;
             }
