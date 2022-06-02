@@ -246,13 +246,13 @@ typedef int (*quicrq_object_stream_consumer_fn)(
     size_t data_length,
     quicrq_object_stream_consumer_properties_t* properties);
 
-typedef struct st_quicrq_object_consumer_bridge_ctx_t quicrq_object_consumer_bridge_ctx_t;
+typedef struct st_quicrq_object_stream_consumer_ctx quicrq_object_stream_consumer_ctx;
 
-quicrq_object_consumer_bridge_ctx_t* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
-    const uint8_t* url, size_t url_length, int use_datagrams,
+quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
+    const uint8_t* url, size_t url_length, int use_datagrams, int in_order_required,
     quicrq_object_stream_consumer_fn media_object_consumer_fn, void* media_object_ctx);
 
-void quicrq_unsubscribe_object_stream(quicrq_object_consumer_bridge_ctx_t* subscribe_ctx);
+void quicrq_unsubscribe_object_stream(quicrq_object_stream_consumer_ctx* subscribe_ctx);
 
  /* Quic media consumer.
   * The application sets a "media consumer function" and a "media consumer context" for
