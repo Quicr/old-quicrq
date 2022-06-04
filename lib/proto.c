@@ -196,6 +196,34 @@ const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* byt
     return bytes;
 }
 
+size_t quicrq_start_msg_reserve(uint64_t message_type, uint64_t start_group, uint64_t start_object)
+{
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(message_type);
+    UNREFERENCED_PARAMETER(start_group);
+    UNREFERENCED_PARAMETER(start_object);
+#endif
+    return 17;
+}
+
+uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, start_group)) != NULL) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, start_object);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_start_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_group)) != NULL){
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_object);
+    }
+    return bytes;
+}
+
 /* Media POST message.  
  *     message_type(i),
  *     url_length(i),
@@ -320,6 +348,9 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
         case QUICRQ_ACTION_ACCEPT:
             bytes = quicrq_accept_msg_decode(bytes, bytes_max, &msg->message_type, &msg->use_datagram, &msg->datagram_stream_id);
             break;
+        case QUICRQ_ACTION_START_POINT:
+            bytes = quicrq_start_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
+            break;
         default:
             /* Unexpected message type */
             bytes = NULL;
@@ -351,6 +382,9 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         break;
     case QUICRQ_ACTION_ACCEPT:
         bytes = quicrq_accept_msg_encode(bytes, bytes_max, msg->message_type, msg->use_datagram, msg->datagram_stream_id);
+        break;
+    case QUICRQ_ACTION_START_POINT:
+        bytes = quicrq_start_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
         break;
     default:
         /* Unexpected message type */

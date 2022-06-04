@@ -1260,6 +1260,10 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 quicrq_wakeup_media_stream(stream_ctx);
                             }
                             stream_ctx->is_sender = 1;
+                            /* TODO:
+                               If the media is ready, schedule a reply, indicating status, as well as first object?
+                               Change state machine appropriately.
+                             */
                             if (incoming.message_type == QUICRQ_ACTION_OPEN_STREAM) {
                                 stream_ctx->send_state = quicrq_sending_stream;
                                 stream_ctx->receive_state = quicrq_receive_done;
@@ -1275,6 +1279,9 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         if (stream_ctx->receive_state != quicrq_receive_initial) {
                             quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", unexpected publish message is stream receive state %d",
                                 stream_ctx->stream_id, stream_ctx->receive_state);
+                            /* TODO:
+                               Post should indicate status, as well as first object?
+                             */
                             ret = -1;
                         }
                         else {

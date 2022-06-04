@@ -27,6 +27,7 @@ static quicrq_message_t stream_rq = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -46,6 +47,7 @@ static quicrq_message_t datagram_rq = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -61,6 +63,7 @@ static quicrq_message_t fin_msg = {
     QUICRQ_ACTION_FIN_DATAGRAM,
     0,
     NULL,
+    0,
     0,
     123456,
     0,
@@ -82,6 +85,7 @@ static quicrq_message_t repair_request_msg = {
     0,
     NULL,
     0,
+    0,
     123456,
     1234,
     1,
@@ -101,6 +105,7 @@ static quicrq_message_t repair_msg = {
     QUICRQ_ACTION_REPAIR,
     0,
     NULL,
+    0,
     0,
     123456,
     1234,
@@ -127,6 +132,7 @@ static quicrq_message_t post_msg = {
     0,
     0,
     0,
+    0,
     NULL,
     3
 };
@@ -143,6 +149,7 @@ static quicrq_message_t accept_dg = {
     0,
     NULL,
     17,
+    0,
     0,
     0,
     0,
@@ -167,6 +174,7 @@ static quicrq_message_t accept_st = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -174,6 +182,27 @@ static quicrq_message_t accept_st = {
 static uint8_t accept_st_bytes[] = {
     QUICRQ_ACTION_ACCEPT,
     0
+};
+
+
+static quicrq_message_t start_msg = {
+    QUICRQ_ACTION_START_POINT,
+    0,
+    NULL,
+    0,
+    2469,
+    123456,
+    0,
+    0,
+    0,
+    NULL,
+    0
+};
+
+static uint8_t start_msg_bytes[] = {
+    QUICRQ_ACTION_START_POINT,
+    0x49, 0xa5,
+    0x80, 0x01, 0xe2, 0x40
 };
 
 typedef struct st_proto_test_case_t {
@@ -191,7 +220,8 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(repair_msg, repair_msg_bytes),
     PROTO_TEST_ITEM(post_msg, post_msg_bytes),
     PROTO_TEST_ITEM(accept_dg, accept_dg_bytes),
-    PROTO_TEST_ITEM(accept_st, accept_st_bytes)
+    PROTO_TEST_ITEM(accept_st, accept_st_bytes),
+    PROTO_TEST_ITEM(start_msg, start_msg_bytes)
 };
 
 static uint8_t bad_bytes1[] = {
@@ -278,6 +308,11 @@ static uint8_t bad_bytes13[] = {
     1
 };
 
+static uint8_t bad_bytes14[] = {
+    QUICRQ_ACTION_START_POINT,
+    0xFF, 0xa5,
+    0x80, 0x01, 0xe2, 0x40
+};
 
 typedef struct st_proto_test_bad_case_t {
     uint8_t* const data;
@@ -301,7 +336,8 @@ static proto_test_bad_case_t proto_bad_cases[] = {
     PROTO_TEST_BAD_ITEM(bad_bytes10),
     PROTO_TEST_BAD_ITEM(bad_bytes11),
     PROTO_TEST_BAD_ITEM(bad_bytes12),
-    PROTO_TEST_BAD_ITEM(bad_bytes13)
+    PROTO_TEST_BAD_ITEM(bad_bytes13),
+    PROTO_TEST_BAD_ITEM(bad_bytes14)
 };
 
 int proto_msg_test()
@@ -332,6 +368,9 @@ int proto_msg_test()
             ret = -1;
         }
         else if (result.url_length != 0 && memcmp(result.url, proto_cases[i].result->url, result.url_length) != 0) {
+            ret = -1;
+        }
+        else if (result.group_id != proto_cases[i].result->group_id) {
             ret = -1;
         }
         else if (result.object_id != proto_cases[i].result->object_id) {

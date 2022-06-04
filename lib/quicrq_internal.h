@@ -70,6 +70,7 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_REPAIR 5
 #define QUICRQ_ACTION_POST 6
 #define QUICRQ_ACTION_ACCEPT 7
+#define QUICRQ_ACTION_START_POINT 8
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -79,6 +80,7 @@ typedef struct st_quicrq_message_t {
     size_t url_length;
     const uint8_t* url;
     uint64_t datagram_stream_id;
+    uint64_t group_id;
     uint64_t object_id;
     uint64_t offset;
     int is_last_fragment;
@@ -117,6 +119,9 @@ const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t*
 size_t quicrq_repair_msg_reserve(uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t* repair_data);
 const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length, const uint8_t** repair_data);
+size_t quicrq_start_msg_reserve(uint64_t message_type, uint64_t start_group, uint64_t start_object);
+uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object);
+const uint8_t* quicrq_start_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);
 uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg);
 const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t * msg);
 
