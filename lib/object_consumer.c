@@ -81,6 +81,13 @@ int quicrq_media_object_bridge_fn(
             ret = quicrq_consumer_finished;
         }
         break;
+    case quicrq_media_start_point:
+        ret = quicrq_reassembly_learn_start_point(&bridge_ctx->reassembly_ctx, object_id, current_time,
+            quicrq_media_object_bridge_ready, bridge_ctx);
+        if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {
+            ret = quicrq_consumer_finished;
+        }
+        break;
     case quicrq_media_close:
         ret = bridge_ctx->object_stream_consumer_fn(
             quicrq_media_close,

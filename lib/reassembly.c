@@ -315,6 +315,34 @@ static int quicrq_reassembly_object_reassemble(quicrq_reassembly_object_t* objec
     return ret;
 }
 
+int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassembly_ctx,
+    uint64_t current_time,
+    quicrq_reassembly_object_ready_fn ready_fn,
+    void* app_media_ctx)
+{
+    /* After the next object ID has been updated, deliver the objects that are
+     * now "in order" */
+    int ret = 0;
+    quicrq_reassembly_object_t* object = NULL;
+
+    /* TODO: delete all objects that might be located before the "next id" */
+
+    while (ret == 0 && (object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_object_id)) != NULL && object->reassembled != NULL) {
+        /* Submit the object in order */
+        ret = ready_fn(app_media_ctx, current_time, object->object_id, object->reassembled,
+            (size_t)object->final_offset, quicrq_reassembly_object_repair);
+        /* delete the object that was just repaired. */
+        quicrq_reassembly_object_delete(reassembly_ctx, object);
+        /* update the next_object id */
+        reassembly_ctx->next_object_id++;
+    }
+    /* Mark finished if everything was received */
+    if (reassembly_ctx->final_object_id > 0 && reassembly_ctx->next_object_id >= reassembly_ctx->final_object_id) {
+        reassembly_ctx->is_finished = 1;
+    }
+    return ret;
+}
+
 int quicrq_reassembly_input(
     quicrq_reassembly_context_t* reassembly_ctx,
     uint64_t current_time,
@@ -373,25 +401,33 @@ int quicrq_reassembly_input(
                         /* update the next_object id */
                         reassembly_ctx->next_object_id++;
                         /* try processing all objects that might now be ready */
-                        while (ret == 0 && (object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_object_id)) != NULL && object->reassembled != NULL) {
-                            /* Submit the object in order */
-                            ret = ready_fn(app_media_ctx, current_time, object->object_id, object->reassembled,
-                                (size_t)object->final_offset, quicrq_reassembly_object_repair);
-                            /* delete the object that was just repaired. */
-                            quicrq_reassembly_object_delete(reassembly_ctx, object);
-                            /* update the next_object id */
-                            reassembly_ctx->next_object_id++;
-                        }
-                        /* Mark finished if everything was received */
-                        if (reassembly_ctx->final_object_id > 0 && reassembly_ctx->next_object_id >= reassembly_ctx->final_object_id) {
-                            reassembly_ctx->is_finished = 1;
-                        }
+                        ret = quicrq_reassembly_update_next_object_id(reassembly_ctx, current_time, ready_fn, app_media_ctx);
                     }
                 }
             }
         }
     }
 
+    return ret;
+}
+
+int quicrq_reassembly_learn_start_point(
+    quicrq_reassembly_context_t* reassembly_ctx,
+    uint64_t start_object_id,
+    uint64_t current_time,
+    quicrq_reassembly_object_ready_fn ready_fn,
+    void* app_media_ctx)
+{
+    int ret = 0;
+    if (start_object_id <= reassembly_ctx->next_object_id) {
+        /* No need for this object. */
+    }
+    else {
+        /* TODO: more complex if stream can be "repaired" from alternative source */
+        /* If packets have been received after that point, they may be considered repaired */
+        reassembly_ctx->next_object_id = start_object_id;
+        ret = quicrq_reassembly_update_next_object_id(reassembly_ctx, current_time, ready_fn, app_media_ctx);
+    }
     return ret;
 }
 

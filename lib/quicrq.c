@@ -1334,6 +1334,8 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
                         break;
+                    case QUICRQ_ACTION_START_POINT:
+                        break;
                     default:
                         /* Some unknown message, maybe not implemented yet */
                         ret = -1;

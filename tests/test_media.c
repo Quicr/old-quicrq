@@ -697,35 +697,6 @@ int test_media_consumer_object_ready(
     return ret;
 }
 
-int test_media_datagram_input(
-    void* media_ctx,
-    uint64_t current_time,
-    const uint8_t* data,
-    uint64_t object_id,
-    uint64_t offset,
-    int is_last_fragment,
-    size_t data_length)
-{
-    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-    int ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, object_id, offset, is_last_fragment, data_length, 
-        test_media_consumer_object_ready, media_ctx);
-
-    return ret;
-}
-
-int test_media_consumer_learn_final_object_id(
-    void* media_ctx,
-    uint64_t final_object_id)
-{
-    int ret = 0;
-    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-
-    ret = quicrq_reassembly_learn_final_object_id(&cons_ctx->reassembly_ctx, final_object_id);
-
-    return ret;
-}
-
-
 int test_media_object_consumer_cb(
     quicrq_media_consumer_enum action,
     void* media_ctx,
@@ -742,15 +713,21 @@ int test_media_object_consumer_cb(
 
     switch (action) {
     case quicrq_media_datagram_ready:
-        ret = test_media_datagram_input(media_ctx, current_time, data, object_id, (size_t)offset, is_last_fragment, data_length);
-
+        ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, object_id, offset, is_last_fragment, data_length,
+            test_media_consumer_object_ready, cons_ctx);
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
         break;
     case quicrq_media_final_object_id:
-        test_media_consumer_learn_final_object_id(media_ctx, object_id);
-
+        ret = quicrq_reassembly_learn_final_object_id(&cons_ctx->reassembly_ctx, object_id);
+        if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
+            ret = quicrq_consumer_finished;
+        }
+        break;
+    case quicrq_media_start_point:
+        ret = quicrq_reassembly_learn_start_point(&cons_ctx->reassembly_ctx, object_id, current_time,
+            test_media_consumer_object_ready, cons_ctx);
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }

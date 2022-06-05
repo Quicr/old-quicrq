@@ -229,6 +229,7 @@ void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn de
 
 typedef enum {
     quicrq_media_datagram_ready = 0,
+    quicrq_media_start_point,
     quicrq_media_final_object_id,
     quicrq_media_close
 } quicrq_media_consumer_enum;
