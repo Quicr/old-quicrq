@@ -337,7 +337,10 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
         stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 0);
         if (stream_ctx == NULL) {
             if (datagram_stream_id >= cnx_ctx->next_abandon_datagram_id) {
+#if 1
+#else
                 ret = -1;
+#endif
                 picoquic_log_app_message(cnx_ctx->cnx, "Unexpected datagram on stream %" PRIu64,
                     datagram_stream_id);
             }
@@ -1352,7 +1355,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the final offset to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_final_object_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
-                                stream_ctx->final_object_id, 0, 0, 0, 0);
+                                incoming.object_id, 0, 0, 0, 0);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 1, 0, ret);
                         }
                         break;
