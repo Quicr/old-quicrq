@@ -178,8 +178,6 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
     int next_step_index = 0;
     uint64_t next_time = UINT64_MAX;
 
-
-
     /* Check which object source has the lowest time */
     for (int i = 0; i < config->nb_object_sources; i++) {
         uint64_t next_source_time = test_media_object_source_next_time(config->object_sources[i], config->simulated_time);

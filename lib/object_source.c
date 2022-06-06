@@ -231,6 +231,7 @@ int quicrq_publish_object(
 void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_ctx)
 {
     object_source_ctx->is_finished = 1;
+    quicrq_source_wakeup(object_source_ctx->media_source_ctx);
 }
 
 void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source_ctx)
