@@ -55,41 +55,40 @@ typedef struct st_quicrq_app_loop_cb_t {
     quicrq_ctx_t* qr_ctx;
     size_t nb_test_sources;
     size_t allocated_test_sources;
-    quicrq_test_source_t** test_source_ctx;
+    test_media_object_source_context_t** test_source_ctx;
 } quicrq_app_loop_cb_t;
 
-int quicrq_app_add_test_source(quicrq_app_loop_cb_t* cb_ctx, uint64_t current_time)
-{
-    return -1;
-}
-
-void quicrq_app_wake_up_sources(quicrq_app_loop_cb_t* cb_ctx, uint64_t current_time)
-{
-    for (int i = 0; i < cb_ctx->nb_test_sources; i++) {
-        if (current_time <= cb_ctx->test_source_ctx[i]->next_source_time) {
-            quicrq_source_wakeup(cb_ctx->test_source_ctx[i]->srce_ctx);
-            cb_ctx->test_source_ctx[i]->next_source_time = UINT64_MAX;
-        }
-    }
-}
-
-void quicrq_app_check_source_time(quicrq_app_loop_cb_t* cb_ctx,
+int quicrq_app_check_source_time(quicrq_app_loop_cb_t* cb_ctx,
     packet_loop_time_check_arg_t* time_check_arg)
 {
+    int ret = 0;
     uint64_t next_time = time_check_arg->current_time + time_check_arg->delta_t;
 
-    for (int i = 0; i < cb_ctx->nb_test_sources; i++) {
-        if (cb_ctx->test_source_ctx[i]->next_source_time < next_time) {
-            next_time = cb_ctx->test_source_ctx[i]->next_source_time;
+    for (int i = 0; ret== 0 && i < cb_ctx->nb_test_sources; i++) {
+        /* Find the time at which the next object will be ready. */
+        uint64_t next_source_time = test_media_object_source_next_time(
+            cb_ctx->test_source_ctx[i], time_check_arg->current_time);
+        if (next_source_time < next_time) {
+            next_time = next_source_time;
             if (next_time > time_check_arg->current_time) {
+                /* Wait until the next event for the most urgent source */
                 time_check_arg->delta_t = next_time - time_check_arg->current_time;
             }
             else {
+                /* If time has arrived, push the next packet, or packets.
+                 * Mark the wait time as zero, since there is certainly something to send.
+                 */
+                int is_active = 0;
+
                 next_time = time_check_arg->current_time;
                 time_check_arg->delta_t = 0;
+                ret = test_media_object_source_iterate(cb_ctx->test_source_ctx[i],
+                    time_check_arg->current_time, &is_active);
             }
         }
     }
+
+    return ret;
 }
 
 int quicrq_app_loop_cb_check_fin(quicrq_app_loop_cb_t* cb_ctx)
@@ -133,8 +132,10 @@ int quicrq_app_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mo
             }
             break;
         case picoquic_packet_loop_after_send:
+#if 0
             /* Post send callback. Check whether sources need to be awakaned */
             quicrq_app_wake_up_sources(cb_ctx, picoquic_get_quic_time(quic));
+#endif
             /* if a client, exit the loop if connection is gone. */
             if (cb_ctx->mode == quicrq_app_mode_client) {
                 /* if a client, exit the loop if connection is gone. */
@@ -144,8 +145,8 @@ int quicrq_app_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mo
         case picoquic_packet_loop_port_update:
             break;
         case picoquic_packet_loop_time_check:
-            /* check local test sources */
-            quicrq_app_check_source_time(cb_ctx, (packet_loop_time_check_arg_t*)callback_arg);
+            /* check local test sources, push data if ready  */
+            ret = quicrq_app_check_source_time(cb_ctx, (packet_loop_time_check_arg_t*)callback_arg);
             break;
         default:
             ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
@@ -246,14 +247,14 @@ int quicrq_app_add_source(quicrq_app_loop_cb_t* cb_ctx, uint8_t* url, size_t url
     int ret = 0;
     if (cb_ctx->nb_test_sources >= cb_ctx->allocated_test_sources) {
         size_t new_nb = (cb_ctx->allocated_test_sources == 0) ? 8 : 2 * cb_ctx->allocated_test_sources;
-        quicrq_test_source_t** new_test_source_ctx =
-            (quicrq_test_source_t**)malloc(new_nb * sizeof(quicrq_test_source_t*));
+        test_media_object_source_context_t** new_test_source_ctx =
+            (test_media_object_source_context_t**)malloc(new_nb * sizeof(test_media_object_source_context_t*));
         if (new_test_source_ctx == NULL) {
             fprintf(stderr, "Out of memory\n");
             ret = -1;
         }
         else {
-            memset(new_test_source_ctx, 0, new_nb * sizeof(quicrq_test_source_t*));
+            memset(new_test_source_ctx, 0, new_nb * sizeof(test_media_object_source_context_t*));
             if (cb_ctx->test_source_ctx != NULL) {
                 if (cb_ctx->nb_test_sources > 0) {
                     memcpy(new_test_source_ctx, cb_ctx->test_source_ctx, cb_ctx->nb_test_sources * sizeof(quicrq_test_source_t*));
@@ -266,29 +267,14 @@ int quicrq_app_add_source(quicrq_app_loop_cb_t* cb_ctx, uint8_t* url, size_t url
     }
 
     if (ret == 0) {
-        quicrq_test_source_t* source =
-            (quicrq_test_source_t*)malloc(sizeof(quicrq_test_source_t));
-        if (source == NULL) {
+        cb_ctx->test_source_ctx[cb_ctx->nb_test_sources] = test_media_object_source_publish(cb_ctx->qr_ctx, (uint8_t*)url, url_length,
+            media_source_path, NULL, 1, current_time);
+        if (cb_ctx->test_source_ctx[cb_ctx->nb_test_sources] == NULL) {
             fprintf(stderr, "Cannot allocate source number %zu\n", cb_ctx->nb_test_sources + 1);
             ret = -1;
         }
         else {
-            memset(source, 0, sizeof(quicrq_test_source_t));
-            source->srce_ctx =
-                test_media_publish(cb_ctx->qr_ctx, (uint8_t*)url, url_length,
-                    media_source_path, NULL, 1,
-                    &source->next_source_time,
-                    current_time);
-            if (source->srce_ctx == NULL) {
-                free(source);
-                source = NULL;
-                fprintf(stderr, "Cannot create source for path %s\n", media_source_path);
-                ret = -1;
-            }
-            else {
-                cb_ctx->test_source_ctx[cb_ctx->nb_test_sources] = source;
-                cb_ctx->nb_test_sources++;
-            }
+            cb_ctx->nb_test_sources++;
         }
     }
 
@@ -298,14 +284,6 @@ int quicrq_app_add_source(quicrq_app_loop_cb_t* cb_ctx, uint8_t* url, size_t url
 void quicrq_app_free_sources(quicrq_app_loop_cb_t* cb_ctx)
 {
     if (cb_ctx->test_source_ctx != NULL) {
-        for (size_t i = 0; i < cb_ctx->nb_test_sources; i++) {
-            quicrq_test_source_t* source = cb_ctx->test_source_ctx[i];
-            if (source != NULL) {
-                quicrq_delete_source(source->srce_ctx, cb_ctx->qr_ctx);
-                free(source);
-                cb_ctx->test_source_ctx[i] = NULL;
-            }
-        }
         free(cb_ctx->test_source_ctx);
         cb_ctx->test_source_ctx = NULL;
     }
