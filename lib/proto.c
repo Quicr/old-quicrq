@@ -196,10 +196,9 @@ const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* byt
     return bytes;
 }
 
-size_t quicrq_start_msg_reserve(uint64_t message_type, uint64_t start_group, uint64_t start_object)
+size_t quicrq_start_msg_reserve(uint64_t start_group, uint64_t start_object)
 {
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(message_type);
     UNREFERENCED_PARAMETER(start_group);
     UNREFERENCED_PARAMETER(start_object);
 #endif

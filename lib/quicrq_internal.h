@@ -119,7 +119,7 @@ const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t*
 size_t quicrq_repair_msg_reserve(uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t* repair_data);
 const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length, const uint8_t** repair_data);
-size_t quicrq_start_msg_reserve(uint64_t message_type, uint64_t start_group, uint64_t start_object);
+size_t quicrq_start_msg_reserve(uint64_t start_group, uint64_t start_object);
 uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object);
 const uint8_t* quicrq_start_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);
 uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg);
@@ -214,6 +214,7 @@ typedef enum {
     quicrq_sending_initial,
     quicrq_sending_repair,
     quicrq_sending_offset,
+    quicrq_sending_start_point,
     quicrq_sending_fin,
     quicrq_sending_no_more
 } quicrq_stream_sending_state_enum;
@@ -279,6 +280,7 @@ struct st_quicrq_stream_ctx_t {
     uint64_t datagram_stream_id;
     uint64_t next_object_id;
     uint64_t next_object_offset;
+    uint64_t start_object_id;
     uint64_t final_object_id;
     /* Control of datagrams sent for that media
      * We only keep track of fragments that are above the horizon.
@@ -308,6 +310,7 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_receive_complete: 1;
     unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
+    unsigned int is_start_object_id_sent : 1;
     unsigned int is_final_object_id_sent : 1;
 
     size_t bytes_sent;

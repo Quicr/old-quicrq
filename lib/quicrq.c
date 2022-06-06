@@ -1122,6 +1122,27 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
+            else if (stream_ctx->start_object_id > 0 && !stream_ctx->is_start_object_id_sent) {
+                quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", sending start object id: %" PRIu64,
+                    stream_ctx->stream_id, stream_ctx->start_object_id);
+                /* TODO: encode the group ID */
+                if (quicrq_msg_buffer_alloc(message, quicrq_start_msg_reserve(0, stream_ctx->start_object_id), 0) != 0) {
+                    ret = -1;
+                }
+                else {
+                    /* TODO: handle the group-id */
+                    uint8_t* message_next = quicrq_start_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_START_POINT,
+                        0, stream_ctx->start_object_id);
+                    if (message_next == NULL) {
+                        ret = -1;
+                    }
+                    else {
+                        /* Queue the media request message to that stream */
+                        message->message_size = message_next - message->buffer;
+                        stream_ctx->send_state = quicrq_sending_start_point;
+                    }
+                }
+            }
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
                 quicrq_log_message(stream_ctx->cnx_ctx, "Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64,
@@ -1172,6 +1193,11 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             if (stream_ctx->send_state == quicrq_sending_ready){
                 stream_ctx->is_final_object_id_sent = 1;
             }
+            break;
+        case quicrq_sending_start_point:
+            (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+            stream_ctx->is_start_object_id_sent = 1;
+            stream_ctx->send_state = quicrq_sending_ready;
             break;
         case quicrq_sending_fin:
             (void) picoquic_provide_stream_data_buffer(context, 0, 1, 0);
@@ -1302,6 +1328,22 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             stream_ctx->stream_id, (incoming.use_datagram) ? "datagram" : "stream");
                         ret = quicrq_cnx_post_accepted(stream_ctx, incoming.use_datagram, incoming.datagram_stream_id);
                         break;
+                    case QUICRQ_ACTION_START_POINT:
+                        if (stream_ctx->receive_state != quicrq_receive_repair || stream_ctx->start_object_id != 0) {
+                            /* Protocol error */
+                            ret = -1;
+                        }
+                        else {
+                            /* Pass the start point to the media consumer. */
+                            quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", start point notified: %" PRIu64,
+                                stream_ctx->stream_id, stream_ctx->final_object_id);
+                            stream_ctx->start_object_id = incoming.object_id;
+                            ret = stream_ctx->consumer_fn(quicrq_media_start_point, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
+                                NULL, incoming.object_id, 0, 0, 0, 0);
+
+                            ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
+                        }
+                        break;
                     case QUICRQ_ACTION_FIN_DATAGRAM:
                         if (stream_ctx->receive_state != quicrq_receive_repair || stream_ctx->final_object_id != 0) {
                             /* Protocol error */
@@ -1309,9 +1351,6 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         }
                         else {
                             /* Pass the final offset to the media consumer. */
-                            quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", final object notified: %" PRIu64,
-                                stream_ctx->stream_id, stream_ctx->final_object_id);
-                            stream_ctx->final_object_id = incoming.object_id;
                             ret = stream_ctx->consumer_fn(quicrq_media_final_object_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
                                 stream_ctx->final_object_id, 0, 0, 0, 0);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 1, 0, ret);
@@ -1333,8 +1372,6 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 incoming.is_last_fragment, incoming.length);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
-                        break;
-                    case QUICRQ_ACTION_START_POINT:
                         break;
                     default:
                         /* Some unknown message, maybe not implemented yet */

@@ -144,6 +144,11 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     quicrq_relay_cached_fragment_t * first_fragment_state = NULL;
     quicrq_relay_cached_fragment_t key = { 0 };
 
+    if (object_id < cached_ctx->first_object_id) {
+        /* This fragment is too old to be considered. */
+        return 0;
+    }
+
     key.object_id = object_id;
     key.offset = UINT64_MAX;
     picosplay_node_t* last_fragment_node = picosplay_find_previous(&cached_ctx->fragment_tree, &key);
@@ -217,6 +222,27 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     return ret;
 }
 
+int quicrq_relay_learn_start_point(quicrq_relay_cached_media_t* cached_ctx,
+    uint64_t start_object_id)
+{
+    int ret = 0;
+    /* Find all cache fragments that might be before the start point,
+     * and delete them */
+    picosplay_node_t* first_fragment_node = NULL;
+    while ((first_fragment_node = picosplay_first(&cached_ctx->fragment_tree)) != NULL) {
+        quicrq_relay_cached_fragment_t* first_fragment_state = 
+            (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(first_fragment_node);
+        if (first_fragment_state == NULL || first_fragment_state->object_id >= start_object_id) {
+            break;
+        }
+        else {
+            picosplay_delete_hint(&cached_ctx->fragment_tree, first_fragment_node);
+        }
+    }
+    /* TODO: if the end is known, something special? */
+    return ret;
+}
+
 int quicrq_relay_consumer_cb(
     quicrq_media_consumer_enum action,
     void* media_ctx,
@@ -256,6 +282,15 @@ int quicrq_relay_consumer_cb(
         }
         if (ret == 0) {
             /* wake up the clients waiting for data on this media */
+            quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
+        }
+        break;
+    case quicrq_media_start_point:
+        /* Document the start point, and clean the cache of data before that point */
+        ret = quicrq_relay_learn_start_point(cons_ctx->cached_ctx, object_id);
+        if (ret == 0) {
+            /* wake up the clients waiting for data on this media,
+             * so the start point can be relayed */
             quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
         }
         break;

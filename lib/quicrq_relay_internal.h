@@ -65,6 +65,7 @@ typedef struct st_quicrq_relay_cached_media_t {
     uint64_t final_object_id;
     uint64_t nb_object_received;
     uint64_t subscribe_stream_id;
+    uint64_t first_object_id;
     quicrq_relay_cached_fragment_t* first_fragment;
     quicrq_relay_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree;
@@ -77,6 +78,7 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int is_object_complete;
     int is_media_complete;
     int is_sending_object;
+    int is_start_point_sent;
     quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
 } quicrq_relay_publisher_context_t;
