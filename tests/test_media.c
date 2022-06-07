@@ -1158,6 +1158,42 @@ int quicrq_media_video1_rt_test()
     return ret;
 }
 
+#ifdef _WINDOWS
+#define QUICRQ_TEST_AUDIO1_SOURCE "tests\\audio1_source.bin"
+#define QUICRQ_TEST_AUDIO1_LOGREF "tests\\audio1_logref.csv"
+#define QUICRQ_TEST_AUDIO1_RT_LOGREF "tests\\audio1_rt_logref.csv"
+#else
+#define QUICRQ_TEST_AUDIO1_SOURCE "tests/audio1_source.bin"
+#define QUICRQ_TEST_AUDIO1_LOGREF "tests/audio1_logref.csv"
+#define QUICRQ_TEST_AUDIO1_RT_LOGREF "tests/audio1_rt_logref.csv"
+#endif
+#define QUICRQ_TEST_AUDIO1_RESULT "audio1_result.bin"
+#define QUICRQ_TEST_AUDIO1_LOG    "audio1_log.csv"
+#define QUICRQ_TEST_AUDIO1_RT_RESULT "audio1_rt_result.bin"
+#define QUICRQ_TEST_AUDIO1_RT_LOG    "audio1_rt_log.csv"
+#define QUICRQ_TEST_AUDIO1_LOSS_RESULT "audio1_loss_result.bin"
+#define QUICRQ_TEST_AUDIO1_LOSS_LOG    "audio1_loss_log.csv"
+
+int target_duration;
+int objects_per_second;
+int nb_p_in_i;
+int objects_in_epoch;
+size_t target_p_min;
+size_t target_p_max;
+int nb_objects_elapsed;
+int nb_objects_sent;
+
+const generation_parameters_t audio_18kbps = {
+    10000000, 100, 1, 1, 22, 22, 0, 0 };
+
+int quicrq_media_audio1_test()
+{
+    int ret = quicrq_media_api_test_one(QUICRQ_TEST_AUDIO1_SOURCE, QUICRQ_TEST_AUDIO1_RT_LOGREF,
+        QUICRQ_TEST_AUDIO1_RT_RESULT, QUICRQ_TEST_AUDIO1_RT_LOG,
+        &audio_18kbps, 1);
+
+    return ret;
+}
 
 /* Verify that a media file can be obtained through the local publish API
  */

@@ -116,11 +116,13 @@ quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, in
 /* Execute one round of the network simulation loop */
 int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t app_wake_time);
 
-/* Location of default media source file */
+/* Location of default media source files */
 #ifdef _WINDOWS
 #define QUICRQ_TEST_BASIC_SOURCE "tests\\video1_source.bin"
+#define QUICRQ_TEST_AUDIO_SOURCE "tests\\audio1_source.bin"
 #else
 #define QUICRQ_TEST_BASIC_SOURCE "tests/video1_source.bin"
+#define QUICRQ_TEST_AUDIO_SOURCE "tests/audio1_source.bin"
 #endif
 extern char const* quicrq_test_picoquic_solution_dir;
 extern char const* quicrq_test_solution_dir;

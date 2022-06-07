@@ -330,18 +330,20 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
 
     next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &object_id, &object_offset, &queue_delay, &is_last_fragment);
     if (next_bytes == NULL) {
+        DBG_PRINTF("%s", "Error decoding datagram header");
         ret = -1;
     }
     else {
         /* Find the stream context by datagram ID */
         stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 0);
         if (stream_ctx == NULL) {
-            if (datagram_stream_id >= cnx_ctx->next_abandon_datagram_id) {
-#if 1
-#else
+            DBG_PRINTF("Unexpected datagram on stream %" PRIu64 ", object id %" PRIu64 ", max: % " PRIu64, 
+                datagram_stream_id, object_id, cnx_ctx->next_datagram_stream_id);
+            picoquic_log_app_message(cnx_ctx->cnx, "Unexpected datagram on stream %" PRIu64 ", object id %" PRIu64 ", max: % " PRIu64,
+                datagram_stream_id, object_id, cnx_ctx->next_datagram_stream_id);
+            if (datagram_stream_id >= cnx_ctx->next_datagram_stream_id) {
                 ret = -1;
-#endif
-                picoquic_log_app_message(cnx_ctx->cnx, "Unexpected datagram on stream %" PRIu64,
+                picoquic_log_app_message(cnx_ctx->cnx, "Error, unexpected datagram stream %" PRIu64,
                     datagram_stream_id);
             }
         }
@@ -353,7 +355,12 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             }
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, object_id, object_offset, 
                 queue_delay, is_last_fragment, bytes_max - next_bytes);
-            ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
+            if (ret == quicrq_consumer_finished) {
+                ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
+            }
+            if (ret != 0) {
+                DBG_PRINTF("Error found on dg stream id %" PRIu64 ", object id %" PRIu64, datagram_stream_id, object_id);
+            }
         }
     }
 
@@ -1301,6 +1308,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             else {
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
+                                stream_ctx->datagram_stream_id = incoming.datagram_stream_id;
                             }
                         }
                         break;
