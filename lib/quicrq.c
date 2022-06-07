@@ -1268,6 +1268,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             else {
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
+                                stream_ctx->datagram_stream_id = incoming.datagram_stream_id;
                             }
                         }
                         break;

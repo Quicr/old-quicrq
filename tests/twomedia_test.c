@@ -51,10 +51,8 @@ quicrq_test_config_t* quicrq_test_two_media_config_create(uint64_t simulate_loss
     return config;
 }
 
-#if 0
-/* TODO: test two media. */
-/* Basic connection test */
-int quicrq_two_media_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client, int min_packet_size, uint64_t extra_delay)
+/* two test */
+int quicrq_twomedia_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client, size_t min_packet_size, uint64_t extra_delay)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -62,19 +60,25 @@ int quicrq_two_media_test_one(int is_real_time, int use_datagrams, uint64_t simu
     int is_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
-    quicrq_test_config_t* config = quicrq_test_basic_config_create(simulate_losses, extra_delay);
+    quicrq_test_config_t* config = quicrq_test_two_media_config_create(simulate_losses, extra_delay);
     quicrq_cnx_ctx_t* cnx_ctx = NULL;
     char media_source_path[512];
     char result_file_name[512];
     char result_log_name[512];
+    char audio_source_path[512];
+    char audio_file_name[512];
+    char audio_log_name[512];
     char text_log_name[512];
     size_t nb_log_chars = 0;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%llx-%zx-%llu.txt", is_real_time, use_datagrams, is_from_client,
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "twomedia_textlog-%d-%d-%d-%llx-%zx-%llu.txt", is_real_time, use_datagrams, is_from_client,
         (unsigned long long)simulate_losses, min_packet_size, (unsigned long long)extra_delay);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, is_from_client,
         result_file_name, result_log_name, sizeof(result_file_name));
+    ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_AUDIO_SOURCE, strlen(QUICRQ_TEST_AUDIO_SOURCE),
+        use_datagrams, is_real_time, is_from_client,
+        audio_file_name, audio_log_name, sizeof(audio_file_name));
 
     if (config == NULL) {
         ret = -1;
@@ -83,6 +87,10 @@ int quicrq_two_media_test_one(int is_real_time, int use_datagrams, uint64_t simu
     /* Locate the source and reference file */
     if (picoquic_get_input_path(media_source_path, sizeof(media_source_path),
         quicrq_test_solution_dir, QUICRQ_TEST_BASIC_SOURCE) != 0) {
+        ret = -1;
+    }
+    else if (picoquic_get_input_path(audio_source_path, sizeof(media_source_path),
+        quicrq_test_solution_dir, QUICRQ_TEST_AUDIO_SOURCE) != 0) {
         ret = -1;
     }
 
@@ -103,6 +111,17 @@ int quicrq_two_media_test_one(int is_real_time, int use_datagrams, uint64_t simu
     }
 
     if (ret == 0) {
+        /* Add a test source to the configuration, and to the either the client or the server */
+        int publish_node = (is_from_client) ? 1 : 0;
+
+        config->object_sources[1] = test_media_object_source_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_AUDIO_SOURCE,
+            strlen(QUICRQ_TEST_AUDIO_SOURCE), audio_source_path, NULL, is_real_time, config->simulated_time);
+        if (config->object_sources[1] == NULL) {
+            ret = -1;
+        }
+    }
+
+    if (ret == 0) {
         /* Create a quirq connection context on client */
         cnx_ctx = quicrq_test_create_client_cnx(config, 1, 0);
         if (cnx_ctx == NULL) {
@@ -117,6 +136,9 @@ int quicrq_two_media_test_one(int is_real_time, int use_datagrams, uint64_t simu
             quicrq_set_media_init_callback(config->nodes[0], test_media_consumer_init_callback);
             /* Start pushing from the client */
             ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
+            if (ret == 0) {
+                ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)QUICRQ_TEST_AUDIO_SOURCE, strlen(QUICRQ_TEST_AUDIO_SOURCE), use_datagrams);
+            }
         }
         else {
             /* Create a subscription to the test source on client */
@@ -124,6 +146,14 @@ int quicrq_two_media_test_one(int is_real_time, int use_datagrams, uint64_t simu
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
                     strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+                if (object_stream_ctx == NULL) {
+                    ret = -1;
+                }
+            }
+            if (ret == 0) {
+                test_object_stream_ctx_t* object_stream_ctx = NULL;
+                object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_AUDIO_SOURCE,
+                    strlen(QUICRQ_TEST_AUDIO_SOURCE), use_datagrams, audio_file_name, audio_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;
                 }
@@ -183,6 +213,9 @@ int quicrq_two_media_test_one(int is_real_time, int use_datagrams, uint64_t simu
     /* Verify that media file was received correctly */
     if (ret == 0) {
         ret = quicrq_compare_media_file(result_file_name, media_source_path);
+        if (ret == 0) {
+            ret = quicrq_compare_media_file(audio_file_name, audio_source_path);
+        }
     }
     else {
         DBG_PRINTF("Test failed before getting results, ret = %d", ret);
@@ -190,4 +223,21 @@ int quicrq_two_media_test_one(int is_real_time, int use_datagrams, uint64_t simu
 
     return ret;
 }
-#endif
+
+/* Basic connection test, using streams, real time. */
+int quicrq_twomedia_test()
+{
+    return quicrq_twomedia_test_one(1, 0, 0, 0, 0, 0);
+}
+
+/* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
+int quicrq_twomedia_datagram_test()
+{
+    return quicrq_twomedia_test_one(1, 1, 0, 0, 0, 0);
+}
+
+/* Datagram test, with forced packet losses. */
+int quicrq_twomedia_datagram_loss_test()
+{
+    return quicrq_twomedia_test_one(1, 1, 0x7080, 0, 0, 0);
+}

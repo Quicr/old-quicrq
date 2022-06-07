@@ -646,6 +646,7 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
                 stream_ctx->media_ctx = media_ctx;
                 stream_ctx->send_state = quicrq_sending_initial;
                 stream_ctx->receive_state = quicrq_receive_repair;
+                stream_ctx->cnx_ctx->next_datagram_stream_id += 1;
                 if (p_stream_ctx != NULL) {
                     *p_stream_ctx = stream_ctx;
                 }
