@@ -38,6 +38,13 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(media_audio1)
+		{
+			int ret = quicrq_media_audio1_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(media_source)
 		{
 			int ret = quicrq_media_source_test();

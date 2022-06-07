@@ -42,6 +42,9 @@
     <ClCompile Include="..\tests\fourlegs_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\tests\twomedia_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\tests\quicrq_test_internal.h">

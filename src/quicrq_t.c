@@ -28,6 +28,7 @@ static const quicrq_test_def_t test_table[] =
     { "basic_rt", quicrq_basic_rt_test },
     { "media_video1", quicrq_media_video1_test },
     { "media_video1_rt", quicrq_media_video1_rt_test },
+    { "media_audio1", quicrq_media_audio1_test },
     { "media_source", quicrq_media_source_test },
     { "media_source_rt", quicrq_media_source_rt_test },
     { "object_publish", quicrq_media_object_publish_test },
