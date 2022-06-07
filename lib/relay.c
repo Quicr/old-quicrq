@@ -552,7 +552,7 @@ int quicrq_relay_datagram_publisher_fn(
     return ret;
 }
 
-void* quicrq_relay_publisher_subscribe(void* v_srce_ctx)
+void* quicrq_relay_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t * stream_ctx)
 {
     quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)v_srce_ctx;
     quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)
@@ -560,6 +560,9 @@ void* quicrq_relay_publisher_subscribe(void* v_srce_ctx)
     if (media_ctx != NULL) {
         memset(media_ctx, 0, sizeof(quicrq_relay_publisher_context_t));
         media_ctx->cache_ctx = cache_ctx;
+        if (stream_ctx != NULL) {
+            stream_ctx->start_object_id = cache_ctx->first_object_id;
+        }
     }
     return media_ctx;
 }

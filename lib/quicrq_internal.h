@@ -158,6 +158,8 @@ struct st_quicrq_media_object_source_ctx_t {
     struct st_quicrq_media_object_source_ctx_t* next_in_qr_ctx;
     quicrq_media_source_ctx_t* media_source_ctx;
     quicrq_media_object_source_properties_t properties;
+    uint64_t start_group_id;
+    uint64_t start_object_id;
     uint64_t next_object_id;
     picosplay_tree_t object_source_tree;
     int is_finished;
@@ -195,7 +197,7 @@ int quicrq_media_object_publisher(
     int* is_media_finished,
     int* is_still_active,
     uint64_t current_time);
-void* quicrq_media_object_publisher_subscribe(void* pub_ctx);
+void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t* stream_ctx);
 
 /* Quicrq stream handling.
  * Media stream come in two variants.

@@ -65,6 +65,7 @@ typedef struct st_quicrq_relay_cached_media_t {
     uint64_t final_object_id;
     uint64_t nb_object_received;
     uint64_t subscribe_stream_id;
+    uint64_t first_group_id;
     uint64_t first_object_id;
     quicrq_relay_cached_fragment_t* first_fragment;
     quicrq_relay_cached_fragment_t* last_fragment;

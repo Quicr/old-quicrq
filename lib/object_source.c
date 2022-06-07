@@ -72,7 +72,7 @@ typedef struct st_quicrq_object_source_publisher_ctx_t {
     int next_was_sent;
 } quicrq_object_source_publisher_ctx_t;
 
-void* quicrq_media_object_publisher_subscribe(void* pub_ctx)
+void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t * stream_ctx)
 {
     quicrq_media_object_source_ctx_t* object_srce_ctx = (quicrq_media_object_source_ctx_t*)pub_ctx;
     quicrq_object_source_publisher_ctx_t* media_ctx = (quicrq_object_source_publisher_ctx_t*)
@@ -80,6 +80,9 @@ void* quicrq_media_object_publisher_subscribe(void* pub_ctx)
     if (media_ctx != NULL) {
         memset(media_ctx, 0, sizeof(quicrq_object_source_publisher_ctx_t));
         media_ctx->object_source_ctx = object_srce_ctx;
+        if (stream_ctx != NULL) {
+            stream_ctx->start_object_id = object_srce_ctx->start_object_id;
+        }
         /* TODO: additional properties */
     }
     return media_ctx;
@@ -196,6 +199,21 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
         }
     }
     return(object_source_ctx);
+}
+
+int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id)
+{
+    int ret = 0;
+
+    if (object_source_ctx->start_group_id == 0 && object_source_ctx->start_object_id == 0 && object_source_ctx->next_object_id == 0) {
+        object_source_ctx->start_group_id = start_group_id;
+        object_source_ctx->start_object_id = start_object_id;
+        object_source_ctx->next_object_id = start_object_id;
+    }
+    else {
+        ret = -1;
+    }
+    return 0;
 }
 
 int quicrq_publish_object(
