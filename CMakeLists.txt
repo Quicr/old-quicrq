@@ -30,6 +30,7 @@ set(QUICRQ_TEST_LIBRARY_FILES
     tests/test_media.c
     tests/threelegs_test.c
     tests/triangle_test.c
+    tests/twomedia_test.c
     tests/twoways_test.c
 )
 

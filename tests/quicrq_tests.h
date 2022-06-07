@@ -13,6 +13,7 @@ extern "C" {
     int proto_msg_test();
     int quicrq_media_video1_test();
     int quicrq_media_video1_rt_test();
+    int quicrq_media_audio1_test();
     int quicrq_media_source_test();
     int quicrq_media_source_rt_test();
     int quicrq_media_object_publish_test();
@@ -27,6 +28,12 @@ extern "C" {
     int quicrq_basic_client_test();
     int quicrq_datagram_client_test();
     int quicrq_datagram_limit_test();
+    int quicrq_twomedia_test();
+    int quicrq_twomedia_datagram_test();
+    int quicrq_twomedia_datagram_loss_test();
+    int quicrq_twomedia_client_test();
+    int quicrq_twomedia_datagram_client_test();
+    int quicrq_twomedia_datagram_client_loss_test();
     int quicrq_media_object_noloss();
     int quicrq_media_object_loss();
     int quicrq_relay_basic_test();

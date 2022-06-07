@@ -646,6 +646,7 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
                 stream_ctx->media_ctx = media_ctx;
                 stream_ctx->send_state = quicrq_sending_initial;
                 stream_ctx->receive_state = quicrq_receive_repair;
+                stream_ctx->cnx_ctx->next_datagram_stream_id += 1;
                 if (p_stream_ctx != NULL) {
                     *p_stream_ctx = stream_ctx;
                 }
@@ -726,6 +727,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
                     message->message_size = message_next - message->buffer;
                     stream_ctx->send_state = quicrq_sending_initial;
                     stream_ctx->receive_state = quicrq_receive_confirmation;
+                    stream_ctx->datagram_stream_id = UINT64_MAX;
                     picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
                 }
             }
@@ -755,7 +757,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
 {
     int ret = 0;
     quicrq_message_buffer_t* message = &stream_ctx->message_sent;
-    uint64_t datagram_stream_id = (use_datagrams)?0:stream_ctx->cnx_ctx->next_datagram_stream_id;
+    uint64_t datagram_stream_id = (use_datagrams)?stream_ctx->cnx_ctx->next_datagram_stream_id:0;
 
     if (quicrq_msg_buffer_alloc(message, quicrq_accept_msg_reserve(QUICRQ_ACTION_ACCEPT, use_datagrams, datagram_stream_id), 0) != 0) {
         ret = -1;
@@ -775,6 +777,10 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             message->message_size = message_next - message->buffer;
             stream_ctx->send_state = quicrq_sending_initial;
             stream_ctx->receive_state = quicrq_receive_repair;
+            if (use_datagrams) {
+                stream_ctx->datagram_stream_id = datagram_stream_id;
+                stream_ctx->cnx_ctx->next_datagram_stream_id += 1;
+            }
             /* Connect to the local listener */
             ret = stream_ctx->cnx_ctx->qr_ctx->consumer_media_init_fn(stream_ctx, url, url_length);
             /* Activate the receiver */
@@ -796,6 +802,7 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
     stream_ctx->is_sender = 1;
     if (use_datagrams) {
         stream_ctx->is_datagram = 1;
+        stream_ctx->datagram_stream_id = datagram_stream_id;
         stream_ctx->send_state = quicrq_sending_ready;
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
@@ -816,7 +823,7 @@ int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_
     if (ret == quicrq_consumer_finished) {
         quicrq_log_message(stream_ctx->cnx_ctx, "Stream %"PRIu64" finished after %s, ret=%d",
             stream_ctx->stream_id, (is_final) ? "final offset" : ((is_datagram) ? "datagram" : "repair"), ret);
-        DBG_PRINTF("Finished after %s, ret=%d", (is_final)?"final offset":((is_datagram)?"datagram":"repair"), ret);
+        DBG_PRINTF("Stream %"PRIu64" finished after %s, ret=%d", stream_ctx->stream_id, (is_final)?"final offset":((is_datagram)?"datagram":"repair"), ret);
         stream_ctx->is_receive_complete = 1;
         stream_ctx->send_state = quicrq_sending_fin;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
