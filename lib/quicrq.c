@@ -330,12 +330,14 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
 
     next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &object_id, &object_offset, &queue_delay, &is_last_fragment);
     if (next_bytes == NULL) {
+        DBG_PRINTF("%s", "Error decoding datagram header");
         ret = -1;
     }
     else {
         /* Find the stream context by datagram ID */
         stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 0);
         if (stream_ctx == NULL) {
+            DBG_PRINTF("Unexpected datagram on stream %" PRIu64 ", abandoned: %" PRIu64, datagram_stream_id, cnx_ctx->next_abandon_datagram_id);
             if (datagram_stream_id >= cnx_ctx->next_abandon_datagram_id) {
                 ret = -1;
                 picoquic_log_app_message(cnx_ctx->cnx, "Unexpected datagram on stream %" PRIu64,
