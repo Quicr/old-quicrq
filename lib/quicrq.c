@@ -350,7 +350,12 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             }
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, object_id, object_offset, 
                 queue_delay, is_last_fragment, bytes_max - next_bytes);
-            ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
+            if (ret == quicrq_consumer_finished) {
+                ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
+            }
+            if (ret != 0) {
+                DBG_PRINTF("Error found on dg stream id %" PRIu64 ", object id %" PRIu64, datagram_stream_id, object_id);
+            }
         }
     }
 
