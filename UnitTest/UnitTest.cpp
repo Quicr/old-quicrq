@@ -164,6 +164,26 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(twomedia_client)
+		{
+			int ret = quicrq_twomedia_client_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(twomedia_datagram_client)
+		{
+			int ret = quicrq_twomedia_datagram_client_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(twomedia_datagram_client_loss)
+		{
+			int ret = quicrq_twomedia_datagram_client_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 		TEST_METHOD(proto_msg) {
 			int ret = proto_msg_test();
 

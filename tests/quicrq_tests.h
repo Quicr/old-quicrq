@@ -31,6 +31,9 @@ extern "C" {
     int quicrq_twomedia_test();
     int quicrq_twomedia_datagram_test();
     int quicrq_twomedia_datagram_loss_test();
+    int quicrq_twomedia_client_test();
+    int quicrq_twomedia_datagram_client_test();
+    int quicrq_twomedia_datagram_client_loss_test();
     int quicrq_media_object_noloss();
     int quicrq_media_object_loss();
     int quicrq_relay_basic_test();

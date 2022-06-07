@@ -224,13 +224,13 @@ int quicrq_twomedia_test_one(int is_real_time, int use_datagrams, uint64_t simul
     return ret;
 }
 
-/* Basic connection test, using streams, real time. */
+/* Two medias connection test, using streams, real time. */
 int quicrq_twomedia_test()
 {
     return quicrq_twomedia_test_one(1, 0, 0, 0, 0, 0);
 }
 
-/* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
+/* Two medias  datagram test. Same as the basic test, but using datagrams instead of streams. */
 int quicrq_twomedia_datagram_test()
 {
     return quicrq_twomedia_test_one(1, 1, 0, 0, 0, 0);
@@ -240,4 +240,22 @@ int quicrq_twomedia_datagram_test()
 int quicrq_twomedia_datagram_loss_test()
 {
     return quicrq_twomedia_test_one(1, 1, 0x7080, 0, 0, 0);
+}
+
+/* Two medias client posting data test, using streams, real time. */
+int quicrq_twomedia_client_test()
+{
+    return quicrq_twomedia_test_one(1, 0, 0, 1, 0, 0);
+}
+
+/* Two medias client posting data test, using datagrams, real time. */
+int quicrq_twomedia_datagram_client_test()
+{
+    return quicrq_twomedia_test_one(1, 1, 0, 1, 0, 0);
+}
+
+/* Two medias client posting data test, using datagrams, real time, with loss. */
+int quicrq_twomedia_datagram_client_loss_test()
+{
+    return quicrq_twomedia_test_one(1, 1, 0xf080, 1, 0, 0);
 }
