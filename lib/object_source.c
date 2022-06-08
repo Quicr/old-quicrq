@@ -215,7 +215,7 @@ int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_sour
     else {
         ret = -1;
     }
-    return 0;
+    return ret;
 }
 
 int quicrq_publish_object(
