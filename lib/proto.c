@@ -572,7 +572,7 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         stream_ctx->publisher_fn = srce_ctx->getdata_fn;
         stream_ctx->get_datagram_fn = srce_ctx->get_datagram_fn;
         /* Create a subscribe media context */
-        stream_ctx->media_ctx = srce_ctx->subscribe_fn(/*url, url_length, */ srce_ctx->pub_ctx, NULL);
+        stream_ctx->media_ctx = srce_ctx->subscribe_fn(/*url, url_length, */ srce_ctx->pub_ctx, stream_ctx);
         if (stream_ctx->media_ctx == NULL) {
             ret = -1;
             quicrq_log_message(stream_ctx->cnx_ctx, "No media available for URL: %s",

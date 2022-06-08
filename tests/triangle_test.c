@@ -84,8 +84,8 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     int partial_closure = 0;
     uint64_t client2_close_time = UINT64_MAX;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx-%llu.txt", is_real_time, use_datagrams,
-        (unsigned long long)simulate_losses, (unsigned long long) extra_delay);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx-%llu-%llu.txt", is_real_time, use_datagrams,
+        (unsigned long long)simulate_losses, (unsigned long long) extra_delay, (unsigned long long) start_point);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, 1,

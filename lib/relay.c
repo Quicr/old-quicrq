@@ -229,6 +229,8 @@ int quicrq_relay_learn_start_point(quicrq_relay_cached_media_t* cached_ctx,
     /* Find all cache fragments that might be before the start point,
      * and delete them */
     picosplay_node_t* first_fragment_node = NULL;
+    cached_ctx->first_group_id = 0;
+    cached_ctx->first_object_id = start_object_id;
     while ((first_fragment_node = picosplay_first(&cached_ctx->fragment_tree)) != NULL) {
         quicrq_relay_cached_fragment_t* first_fragment_state = 
             (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(first_fragment_node);
@@ -289,9 +291,18 @@ int quicrq_relay_consumer_cb(
         /* Document the start point, and clean the cache of data before that point */
         ret = quicrq_relay_learn_start_point(cons_ctx->cached_ctx, object_id);
         if (ret == 0) {
-            /* wake up the clients waiting for data on this media,
-             * so the start point can be relayed */
-            quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
+            /* Set the start point for the dependent streams. */
+            quicrq_stream_ctx_t* stream_ctx = cons_ctx->cached_ctx->srce_ctx->first_stream;
+            while (stream_ctx != NULL) {
+                /* for each client waiting for data on this media,
+                 * update the start point and then wakeup the stream 
+                 * so the start point can be releayed. */
+                stream_ctx->start_object_id = object_id;
+                if (stream_ctx->cnx_ctx->cnx != NULL) {
+                    picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+                }
+                stream_ctx = stream_ctx->next_stream_for_source;
+            }
         }
         break;
     case quicrq_media_close:

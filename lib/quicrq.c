@@ -1205,7 +1205,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             }
             break;
         case quicrq_sending_start_point:
-            (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+            ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             stream_ctx->is_start_object_id_sent = 1;
             stream_ctx->send_state = quicrq_sending_ready;
             break;

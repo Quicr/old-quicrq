@@ -80,8 +80,10 @@ void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t
     if (media_ctx != NULL) {
         memset(media_ctx, 0, sizeof(quicrq_object_source_publisher_ctx_t));
         media_ctx->object_source_ctx = object_srce_ctx;
+        media_ctx->next_object_id = object_srce_ctx->start_object_id;
         if (stream_ctx != NULL) {
             stream_ctx->start_object_id = object_srce_ctx->start_object_id;
+            stream_ctx->next_object_id = object_srce_ctx->start_object_id;
         }
         /* TODO: additional properties */
     }
