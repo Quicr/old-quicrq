@@ -355,8 +355,8 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
                 picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
                     object_id, datagram_stream_id, stream_ctx->stream_id);
             }
-            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, object_id, object_offset, 
-                queue_delay, is_last_fragment, bytes_max - next_bytes);
+            ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, group_id, object_id, object_offset, 
+                queue_delay, flags, is_last_fragment, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
                 ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
             }
@@ -723,6 +723,11 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
             if (current_time > found->start_time) {
                 queue_delay_delta = (current_time - found->start_time + 500) / 1000;
             }
+#if 1
+                if (found->group_id != 0) {
+                    DBG_PRINTF("%s", "Bug");
+                }
+#endif
             /* Encode the header */
             found->last_sent_time = picoquic_get_quic_time(picoquic_get_quic_ctx(stream_ctx->cnx_ctx->cnx));
             bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->datagram_stream_id,
@@ -1275,7 +1280,11 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                     /* Decode the incoming message */
                     quicrq_message_t incoming = { 0 };
                     const uint8_t* r_bytes = quicrq_msg_decode(stream_ctx->message_receive.buffer, stream_ctx->message_receive.buffer + stream_ctx->message_receive.message_size, &incoming);
-
+#if 1
+                    if (incoming.group_id != 0) {
+                        DBG_PRINTF("%s", "Bug");
+                    }
+#endif
                     if (r_bytes == NULL) {
                         /* Message was incorrect */
                         ret = -1;
@@ -1355,7 +1364,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->stream_id, stream_ctx->final_object_id);
                             stream_ctx->start_object_id = incoming.object_id;
                             ret = stream_ctx->consumer_fn(quicrq_media_start_point, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
-                                NULL, incoming.object_id, 0, 0, 0, 0);
+                                NULL, incoming.group_id, incoming.object_id, 0, 0, incoming.flags, 0, 0);
 
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
@@ -1368,7 +1377,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the final offset to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_final_object_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
-                                incoming.object_id, 0, 0, 0, 0);
+                                incoming.group_id, incoming.object_id, 0, 0, 0, 0, 0);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 1, 0, ret);
                         }
                         break;
@@ -1384,7 +1393,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
-                                incoming.data, incoming.object_id, incoming.offset, 0,
+                                incoming.data, incoming.group_id, incoming.object_id, incoming.offset, 0, incoming.flags,
                                 incoming.is_last_fragment, incoming.length);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
@@ -1811,7 +1820,7 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
         }
         else {
             if (stream_ctx->consumer_fn != NULL) {
-                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 0, 0, 0);
+                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 0, 0, 0, 0, 0);
             }
         }
     }

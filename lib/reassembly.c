@@ -32,8 +32,10 @@ typedef struct st_quicrq_reassembly_object_t {
     picosplay_node_t object_node;
     struct st_quicrq_reassembly_packet_t* first_packet;
     struct st_quicrq_reassembly_packet_t* last_packet;
+    uint64_t group_id;
     uint64_t object_id;
     uint64_t final_offset;
+    uint8_t flags;
     uint64_t data_received;
     uint64_t last_update_time;
     uint8_t* reassembled;
@@ -329,7 +331,7 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
 
     while (ret == 0 && (object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_object_id)) != NULL && object->reassembled != NULL) {
         /* Submit the object in order */
-        ret = ready_fn(app_media_ctx, current_time, object->object_id, object->reassembled,
+        ret = ready_fn(app_media_ctx, current_time, object->group_id, object->object_id, object->flags, object->reassembled,
             (size_t)object->final_offset, quicrq_reassembly_object_repair);
         /* delete the object that was just repaired. */
         quicrq_reassembly_object_delete(reassembly_ctx, object);
@@ -347,14 +349,21 @@ int quicrq_reassembly_input(
     quicrq_reassembly_context_t* reassembly_ctx,
     uint64_t current_time,
     const uint8_t* data,
+    uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
+    uint8_t flags,
     int is_last_fragment,
     size_t data_length,
     quicrq_reassembly_object_ready_fn ready_fn,
     void* app_media_ctx)
 {
     int ret = 0;
+#if 1
+    if (group_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
     if (object_id < reassembly_ctx->next_object_id) {
         /* No need for this object. */
     }
@@ -393,7 +402,7 @@ int quicrq_reassembly_input(
                     ret = quicrq_reassembly_object_reassemble(object);
                     if (ret == 0) {
                         /* If the object is fully received, pass it to the application, indicating sequence or not. */
-                        ret = ready_fn(app_media_ctx, current_time, object_id, object->reassembled, (size_t)object->final_offset, object_mode);
+                        ret = ready_fn(app_media_ctx, current_time, group_id, object_id, flags, object->reassembled, (size_t)object->final_offset, object_mode);
                     }
                     if (ret == 0 && object_mode == quicrq_reassembly_object_in_sequence) {
                         /* delete the object that was just reassembled. */

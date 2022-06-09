@@ -33,7 +33,9 @@ typedef enum {
 typedef int (*quicrq_reassembly_object_ready_fn)(
     void* media_ctx,
     uint64_t current_time,
+    uint64_t group_id,
     uint64_t object_id,
+    uint8_t flags,
     const uint8_t* data,
     size_t data_length,
     quicrq_reassembly_object_mode_enum object_mode);
@@ -45,8 +47,10 @@ int quicrq_reassembly_input(
     quicrq_reassembly_context_t* reassembly_ctx,
     uint64_t current_time,
     const uint8_t* data,
+    uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
+    uint8_t flags,
     int is_last_fragment,
     size_t data_length,
     quicrq_reassembly_object_ready_fn ready_fn,

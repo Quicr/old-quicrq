@@ -28,6 +28,7 @@ static quicrq_message_t stream_rq = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -43,6 +44,7 @@ static quicrq_message_t datagram_rq = {
     sizeof(url1),
     url1,
     1234,
+    0,
     0,
     0,
     0,
@@ -69,6 +71,7 @@ static quicrq_message_t fin_msg = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -88,6 +91,7 @@ static quicrq_message_t repair_request_msg = {
     0,
     123456,
     1234,
+    0,
     1,
     sizeof(repair_bytes),
     NULL,
@@ -109,6 +113,7 @@ static quicrq_message_t repair_msg = {
     0,
     123456,
     1234,
+    0,
     1,
     sizeof(repair_bytes),
     repair_bytes,
@@ -127,6 +132,7 @@ static quicrq_message_t post_msg = {
     QUICRQ_ACTION_POST,
     sizeof(url1),
     url1,
+    0,
     0,
     0,
     0,
@@ -154,6 +160,7 @@ static quicrq_message_t accept_dg = {
     0,
     0,
     0,
+    0,
     NULL,
     1
 };
@@ -169,6 +176,7 @@ static quicrq_message_t accept_st = {
     QUICRQ_ACTION_ACCEPT,
     0,
     NULL,
+    0,
     0,
     0,
     0,
@@ -192,6 +200,7 @@ static quicrq_message_t start_msg = {
     0,
     2469,
     123456,
+    0,
     0,
     0,
     0,
@@ -368,6 +377,9 @@ int proto_msg_test()
             ret = -1;
         }
         else if (result.url_length != 0 && memcmp(result.url, proto_cases[i].result->url, result.url_length) != 0) {
+            ret = -1;
+        }
+        else if (result.datagram_stream_id != proto_cases[i].result->datagram_stream_id) {
             ret = -1;
         }
         else if (result.group_id != proto_cases[i].result->group_id) {

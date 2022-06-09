@@ -112,7 +112,8 @@ typedef struct st_quicrq_media_object_source_properties_t {
 } quicrq_media_object_source_properties_t;
 
 typedef struct st_quicrq_media_object_properties_t {
-    int tbd;
+    uint8_t flags;
+    int is_new_group;
 } quicrq_media_object_properties_t;
 
 typedef struct st_quicrq_media_object_source_ctx_t quicrq_media_object_source_ctx_t;
@@ -239,13 +240,14 @@ typedef enum {
 } quicrq_media_consumer_enum;
 
 typedef struct st_quicrq_object_stream_consumer_properties_t {
-    int tbd;
+    uint8_t flags;
 } quicrq_object_stream_consumer_properties_t;
 
 typedef int (*quicrq_object_stream_consumer_fn)(
     quicrq_media_consumer_enum action,
     void* object_consumer_ctx,
     uint64_t current_time,
+    uint64_t group_id,
     uint64_t object_id,
     const uint8_t* data,
     size_t data_length,
@@ -274,9 +276,11 @@ typedef int (*quicrq_media_consumer_fn)(
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
+    uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
     uint64_t queue_delay,
+    uint8_t flags,
     int is_last_fragment,
     size_t data_length);
 

@@ -162,9 +162,11 @@ int test_media_object_consumer_cb(
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
+    uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
     uint64_t queue_delay,
+    uint8_t flags,
     int is_last_fragment,
     size_t data_length);
 void* test_media_publisher_init(char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time, uint64_t start_time);
