@@ -276,6 +276,10 @@ int quicrq_relay_learn_start_point(quicrq_relay_cached_media_t* cached_ctx,
  *  - only delete objects if all fragments are old enough.
  * If the connection feeding the cache is closed, we will not get any new fragment,
  * so there is no point waiting for them to arrive.
+ * 
+ * Deleting cached entries updates the "first_object_id" visible in the cache.
+ * If a client subscribes to the cached media after a cache update, that
+ * client will see the object ID numbers from that new start point on.
  */
 
 void quicrq_relay_cache_media_purge(
@@ -286,7 +290,6 @@ void quicrq_relay_cache_media_purge(
 {
     uint64_t cache_time_min = current_time - cache_duration_max;
     picosplay_node_t* fragment_node;
-    uint64_t non_deleted_object_id = cached_media->first_object_id;
 
     while ((fragment_node = picosplay_first(&cached_media->fragment_tree)) != NULL) {
         /* Locate the first fragment in object order */
@@ -935,8 +938,6 @@ void quicrq_disable_relay(quicrq_ctx_t* qr_ctx)
  */
 void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
 {
-    int ret = 0;
-
     if (qr_ctx->relay_ctx != NULL && qr_ctx->cache_duration_max > 0) {
         quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
 

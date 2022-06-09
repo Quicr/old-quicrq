@@ -63,6 +63,7 @@ int quicrq_app_check_source_time(quicrq_app_loop_cb_t* cb_ctx,
 {
     int ret = 0;
     uint64_t next_time = time_check_arg->current_time + time_check_arg->delta_t;
+    uint64_t cache_next_time;
 
     for (int i = 0; ret== 0 && i < cb_ctx->nb_test_sources; i++) {
         /* Find the time at which the next object will be ready. */
@@ -85,6 +86,16 @@ int quicrq_app_check_source_time(quicrq_app_loop_cb_t* cb_ctx,
                 ret = test_media_object_source_iterate(cb_ctx->test_source_ctx[i],
                     time_check_arg->current_time, &is_active);
             }
+        }
+    }
+    cache_next_time = quicrq_time_check(cb_ctx->qr_ctx, time_check_arg->current_time);
+    if (cache_next_time < next_time) {
+        if (cache_next_time > time_check_arg->current_time) {
+            /* Wait until the next event for the most urgent source */
+            time_check_arg->delta_t = cache_next_time - time_check_arg->current_time;
+        }
+        else {
+            time_check_arg->delta_t = 0;
         }
     }
 
