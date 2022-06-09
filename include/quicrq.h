@@ -61,6 +61,8 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
 void quicrq_delete(quicrq_ctx_t* ctx);
 picoquic_quic_t* quicrq_get_quic_ctx(quicrq_ctx_t* ctx);
 void quicrq_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
+void quicrq_set_cache_duration(quicrq_ctx_t* qr_ctx, uint64_t cache_duration_max);
+uint64_t quicrq_time_check(quicrq_ctx_t* qr_ctx, uint64_t current_time);
 
 quicrq_cnx_ctx_t* quicrq_create_cnx_context(quicrq_ctx_t* qr_ctx, picoquic_cnx_t* cnx);
 quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,

@@ -1559,6 +1559,26 @@ void quicrq_init_transport_parameters(picoquic_tp_t* tp, int client_mode)
     tp->max_datagram_frame_size = PICOQUIC_MAX_PACKET_SIZE;
 }
 
+void quicrq_set_cache_duration(quicrq_ctx_t* qr_ctx, uint64_t cache_duration_max)
+{
+    qr_ctx->cache_duration_max = cache_duration_max;
+}
+
+uint64_t quicrq_time_check(quicrq_ctx_t* qr_ctx, uint64_t current_time)
+{
+    uint64_t next_time = UINT64_MAX;
+    if (qr_ctx->cache_duration_max > 0) {
+        if (current_time >= qr_ctx->cache_check_next_time) {
+            qr_ctx->cache_check_next_time = current_time + qr_ctx->cache_duration_max / 2;
+            if (qr_ctx->manage_relay_cache_fn != NULL) {
+                qr_ctx->manage_relay_cache_fn(qr_ctx, current_time);
+            }
+        }
+        next_time = qr_ctx->cache_check_next_time;
+    }
+    return next_time;
+}
+
 /* get the quic context from quicqr context */
 picoquic_quic_t* quicrq_get_quic_ctx(quicrq_ctx_t* qr_ctx)
 {

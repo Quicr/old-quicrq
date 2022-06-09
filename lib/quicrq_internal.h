@@ -348,6 +348,14 @@ struct st_quicrq_cnx_ctx_t {
     struct st_quicrq_stream_ctx_t* last_stream;
 };
 
+/* Prototype function for managing the cache of relays.
+ * Using a function pointer allows pure clients to operate without loading
+ * the relay functionality.
+ */
+ /* Management of the relay cache
+  */
+typedef void (*quicrq_manage_relay_cache_fn)(quicrq_ctx_t* qr_ctx, uint64_t current_time);
+
 /* Quicrq context */
 struct st_quicrq_ctx_t {
     picoquic_quic_t* quic; /* The quic context for the Quicrq service */
@@ -367,6 +375,16 @@ struct st_quicrq_ctx_t {
     /* List of connections */
     struct st_quicrq_cnx_ctx_t* first_cnx; /* First in double linked list of open connections in this context */
     struct st_quicrq_cnx_ctx_t* last_cnx; /* last in list of open connections in this context */
+    /* Cache management:
+     * cache_duration_max in micros seconds, or zero if no cache management required
+     * cache will be checked at once every cache_duration_max/2, as controlled
+     * by cache_check_next_time.
+     * When checking cache, the function manage_relay_cache_fn is called if the
+     * relay function is enabled.
+     */
+    uint64_t cache_duration_max;
+    uint64_t cache_check_next_time;
+    quicrq_manage_relay_cache_fn manage_relay_cache_fn;
     /* Extra repeat option */
     int extra_repeat_on_nack : 1;
     int extra_repeat_after_received_delayed : 1;
