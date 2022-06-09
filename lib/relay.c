@@ -267,6 +267,17 @@ int quicrq_relay_learn_start_point(quicrq_relay_cached_media_t* cached_ctx,
     return ret;
 }
 
+/* Purging the old fragments from the cache.
+ * There are two modes of operation.
+ * In the general case, we want to make sure that all data has a chance of being
+ * sent to the clients reading data from the cache. That means:
+ *  - only delete objects if all previous objects have been already received,
+ *  - only delete objects if all fragments have been received,
+ *  - only delete objects if all fragments are old enough.
+ * If the connection feeding the cache is closed, we will not get any new fragment,
+ * so there is no point waiting for them to arrive.
+ */
+
 void quicrq_relay_cache_media_purge(
     quicrq_relay_cached_media_t* cached_media,
     uint64_t current_time,
@@ -275,6 +286,7 @@ void quicrq_relay_cache_media_purge(
 {
     uint64_t cache_time_min = current_time - cache_duration_max;
     picosplay_node_t* fragment_node;
+    uint64_t non_deleted_object_id = cached_media->first_object_id;
 
     while ((fragment_node = picosplay_first(&cached_media->fragment_tree)) != NULL) {
         /* Locate the first fragment in object order */
@@ -286,7 +298,46 @@ void quicrq_relay_cache_media_purge(
             break;
         }
         else {
-            picosplay_delete_hint(&cached_media->fragment_tree, fragment_node);
+            int should_delete = 1;
+            if (!cached_media->is_closed) {
+                picosplay_node_t* next_fragment_node = fragment_node;
+                size_t next_offset = fragment->data_length;
+                int last_found = fragment->is_last_fragment;
+                should_delete = (fragment->object_id != cached_media->first_object_id) && fragment->offset == 0;
+
+                while (should_delete && (next_fragment_node = picosplay_next(next_fragment_node)) != NULL) {
+                    quicrq_relay_cached_fragment_t* next_fragment =
+                        (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(next_fragment_node);
+                    if (next_fragment->object_id != fragment->object_id ||
+                        next_fragment->cache_time > cache_time_min ||
+                        next_fragment->offset != next_offset) {
+                        /* If a fragment is missing, or too young, keep the whole object */
+                        should_delete = 0;
+                        break;
+                    }
+                    else {
+                        next_offset += next_fragment->data_length;
+                        if (next_fragment->is_last_fragment) {
+                            /* All fragments have been verified */
+                            last_found = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (should_delete) {
+                cached_media->first_object_id = fragment->object_id + 1;
+                while ((fragment_node = picosplay_first(&cached_media->fragment_tree)) != NULL) {
+                    quicrq_relay_cached_fragment_t* fragment =
+                        (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(fragment_node);
+                    if (fragment->object_id >= cached_media->first_object_id) {
+                        break;
+                    }
+                    else {
+                        picosplay_delete_hint(&cached_media->fragment_tree, fragment_node);
+                    }
+                }
+            }
         }
     }
 }
