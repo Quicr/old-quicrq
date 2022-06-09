@@ -454,7 +454,9 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
     int is_last_fragment;
     int is_media_finished;
     int is_still_active;
+    uint64_t group_id;
     uint64_t object_id;
+    uint8_t flags;
     size_t fragment_offset = 0;
     uint8_t* fragment = NULL;
     size_t fragment_length;
@@ -466,7 +468,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
             int media_was_sent = 0;
             int not_ready = 0;
 
-            /* Setup a datagram buffer conext to mimic picoquic's behavior */
+            /* Setup a datagram buffer context to mimic picoquic's behavior */
             relay_test_datagram_buffer_argument_t d_context = { 0 };
             data[0] = 0x30;
             d_context.bytes0 = &data[0];
@@ -507,7 +509,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                     const uint8_t* datagram_max = bytes + datagram_length;
 
                     bytes = quicrq_datagram_header_decode(bytes, datagram_max, &datagram_stream_id,
-                        &object_id, &object_offset, &queue_delay, &is_last_fragment);
+                        &group_id, &object_id, &object_offset, &queue_delay, &flags, &is_last_fragment);
                     if (bytes == NULL) {
                         DBG_PRINTF("Cannot decode datagram header, length = %zu", datagram_length);
                         ret = -1;

@@ -127,9 +127,10 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
 
 /* Encode and decode the header of datagram packets. */
 #define QUICRQ_DATAGRAM_HEADER_MAX 16
-uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, int is_last_fragment);
-const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* datagram_stream_id, 
-    uint64_t* object_id, uint64_t* object_offset, uint64_t *queue_delay, int * is_last_fragment);
+uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t group_id, 
+    uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, uint8_t flags, int is_last_fragment);
+const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* datagram_stream_id, uint64_t* group_id,
+    uint64_t* object_id, uint64_t* object_offset, uint64_t *queue_delay, uint8_t * flags, int * is_last_fragment);
 /* Stream header is indentical to repair message */
 #define QUICRQ_STREAM_HEADER_MAX 2+1+8+4+2
 
@@ -242,9 +243,11 @@ typedef struct st_quicrq_datagram_queued_repair_t {
 
 typedef struct st_quicrq_datagram_ack_state_t {
     picosplay_node_t datagram_ack_node;
+    uint64_t group_id;
     uint64_t object_id;
     uint64_t object_offset;
     uint64_t queue_delay;
+    uint8_t flags;
     int is_last_fragment;
     size_t length;
     int is_acked;
@@ -280,6 +283,7 @@ struct st_quicrq_stream_ctx_t {
     /* strean identifier */
     uint64_t stream_id;
     uint64_t datagram_stream_id;
+    uint64_t next_group_id;
     uint64_t next_object_id;
     uint64_t next_object_offset;
     uint64_t start_object_id;

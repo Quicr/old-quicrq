@@ -555,7 +555,8 @@ int quicrq_relay_datagram_publisher_prepare(
         size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
         uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
         uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-            datagram_stream_id, media_ctx->current_fragment->object_id, offset, media_ctx->current_fragment->queue_delay, 0);
+            datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
+            media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, 0);
         if (h_byte == NULL) {
             ret = -1;
         }
@@ -585,7 +586,8 @@ int quicrq_relay_datagram_publisher_prepare(
                         /* Push the header */
                         if (is_last_fragment) {
                             h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-                                datagram_stream_id, media_ctx->current_fragment->object_id, offset, media_ctx->current_fragment->queue_delay, 1);
+                                datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
+                                media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, 1);
 
                             if (h_byte != datagram_header + h_size) {
                                 /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
