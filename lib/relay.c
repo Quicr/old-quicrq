@@ -64,13 +64,13 @@ static void quicrq_relay_cache_fragment_node_delete(void* tree, picosplay_node_t
     UNREFERENCED_PARAMETER(tree);
 #endif
     quicrq_relay_cached_media_t* cached_media = (quicrq_relay_cached_media_t*)((char*)tree - offsetof(struct st_quicrq_relay_cached_media_t, fragment_tree));
-    quicrq_relay_cached_fragment_t* fragment = quicrq_relay_cache_fragment_node_value(node);
+    quicrq_relay_cached_fragment_t* fragment = (quicrq_relay_cached_fragment_t *)quicrq_relay_cache_fragment_node_value(node);
 
     if (fragment->previous_in_order == NULL) {
         cached_media->first_fragment = fragment->next_in_order;
     }
     else {
-        fragment->previous_in_order->next_in_order = fragment->next_in_order;;
+        fragment->previous_in_order->next_in_order = fragment->next_in_order;
     }
 
     if (fragment->next_in_order == NULL) {
@@ -127,6 +127,7 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
         ret = -1;
     }
     else {
+        memset(fragment, 0, sizeof(quicrq_relay_cached_fragment_t));
         if (cached_ctx->last_fragment == NULL) {
             cached_ctx->first_fragment = fragment;
         }
@@ -135,7 +136,6 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
             cached_ctx->last_fragment->next_in_order = fragment;
         }
         cached_ctx->last_fragment = fragment;
-        memset(fragment, 0, sizeof(quicrq_relay_cached_fragment_t));
         fragment->object_id = object_id;
         fragment->offset = offset;
         fragment->cache_time = current_time;
@@ -314,19 +314,18 @@ void quicrq_relay_cache_media_purge(
                     if (next_fragment->object_id != fragment->object_id ||
                         next_fragment->cache_time > cache_time_min ||
                         next_fragment->offset != next_offset) {
-                        /* If a fragment is missing, or too young, keep the whole object */
-                        should_delete = 0;
                         break;
                     }
                     else {
                         next_offset += next_fragment->data_length;
                         if (next_fragment->is_last_fragment) {
-                            /* All fragments have been verified */
+                            /* All fragments up to the last have been verified */
                             last_found = 1;
                             break;
                         }
                     }
                 }
+                should_delete &= last_found;
             }
             if (should_delete) {
                 cached_media->first_object_id = fragment->object_id + 1;

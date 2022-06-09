@@ -490,6 +490,9 @@ int quic_app_loop(picoquic_quic_config_t* config,
         }
     }
 
+    /* If relay or origin, delete cached entries longer than 2 minute */
+    quicrq_set_cache_duration(cb_ctx.qr_ctx, 120000000);
+
     /* Start the loop */
     if (ret == 0) {
 #if _WINDOWS
