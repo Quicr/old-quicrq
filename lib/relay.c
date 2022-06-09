@@ -288,7 +288,6 @@ void quicrq_relay_cache_media_purge(
     uint64_t cache_duration_max,
     uint64_t first_object_id_kept)
 {
-    uint64_t cache_time_min = current_time - cache_duration_max;
     picosplay_node_t* fragment_node;
 
     while ((fragment_node = picosplay_first(&cached_media->fragment_tree)) != NULL) {
@@ -296,7 +295,7 @@ void quicrq_relay_cache_media_purge(
         quicrq_relay_cached_fragment_t* fragment =
             (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(fragment_node);
         /* Check whether that fragment should be kept */
-        if (fragment->object_id >= first_object_id_kept || fragment->cache_time > cache_time_min) {
+        if (fragment->object_id >= first_object_id_kept || fragment->cache_time + cache_duration_max > current_time) {
             /* This fragment and all coming after it shall be kept. */
             break;
         }
@@ -312,7 +311,7 @@ void quicrq_relay_cache_media_purge(
                     quicrq_relay_cached_fragment_t* next_fragment =
                         (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(next_fragment_node);
                     if (next_fragment->object_id != fragment->object_id ||
-                        next_fragment->cache_time > cache_time_min ||
+                        next_fragment->cache_time + cache_duration_max > current_time ||
                         next_fragment->offset != next_offset) {
                         break;
                     }
