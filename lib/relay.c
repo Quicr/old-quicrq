@@ -63,6 +63,23 @@ static void quicrq_relay_cache_fragment_node_delete(void* tree, picosplay_node_t
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(tree);
 #endif
+    quicrq_relay_cached_media_t* cached_media = (quicrq_relay_cached_media_t*)((char*)tree - offsetof(struct st_quicrq_relay_cached_media_t, fragment_tree));
+    quicrq_relay_cached_fragment_t* fragment = (quicrq_relay_cached_fragment_t *)quicrq_relay_cache_fragment_node_value(node);
+
+    if (fragment->previous_in_order == NULL) {
+        cached_media->first_fragment = fragment->next_in_order;
+    }
+    else {
+        fragment->previous_in_order->next_in_order = fragment->next_in_order;
+    }
+
+    if (fragment->next_in_order == NULL) {
+        cached_media->last_fragment = fragment->previous_in_order;
+    }
+    else {
+        fragment->next_in_order->previous_in_order = fragment->previous_in_order;
+    }
+
     free(quicrq_relay_cache_fragment_node_value(node));
 }
 
@@ -89,6 +106,7 @@ void quicrq_relay_cache_media_init(quicrq_relay_cached_media_t* cached_media)
         quicrq_relay_cache_fragment_node_value);
 }
 
+
 /* Client part of the relay.
  * The connection is started when a context is specialized to become a relay
  */
@@ -98,7 +116,8 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     uint64_t offset,
     uint64_t queue_delay,
     int is_last_fragment,
-    size_t data_length)
+    size_t data_length,
+    uint64_t current_time)
 {
     int ret = 0;
     quicrq_relay_cached_fragment_t* fragment = (quicrq_relay_cached_fragment_t*)malloc(
@@ -108,16 +127,18 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
         ret = -1;
     }
     else {
+        memset(fragment, 0, sizeof(quicrq_relay_cached_fragment_t));
         if (cached_ctx->last_fragment == NULL) {
             cached_ctx->first_fragment = fragment;
         }
         else {
+            fragment->previous_in_order = cached_ctx->last_fragment;
             cached_ctx->last_fragment->next_in_order = fragment;
         }
         cached_ctx->last_fragment = fragment;
-        memset(fragment, 0, sizeof(quicrq_relay_cached_fragment_t));
         fragment->object_id = object_id;
         fragment->offset = offset;
+        fragment->cache_time = current_time;
         fragment->queue_delay = queue_delay;
         fragment->is_last_fragment = is_last_fragment;
         fragment->data = ((uint8_t*)fragment) + sizeof(quicrq_relay_cached_fragment_t);
@@ -135,7 +156,8 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     uint64_t offset,
     uint64_t queue_delay,
     int is_last_fragment,
-    size_t data_length)
+    size_t data_length,
+    uint64_t current_time)
 {
     int ret = 0;
     int data_was_added = 0;
@@ -143,6 +165,11 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     /* If the object is in the cache, check whether this fragment is already received */
     quicrq_relay_cached_fragment_t * first_fragment_state = NULL;
     quicrq_relay_cached_fragment_t key = { 0 };
+
+    if (object_id < cached_ctx->first_object_id) {
+        /* This fragment is too old to be considered. */
+        return 0;
+    }
 
     key.object_id = object_id;
     key.offset = UINT64_MAX;
@@ -152,7 +179,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
         if (first_fragment_state == NULL || first_fragment_state->object_id != object_id ||
             first_fragment_state->offset + first_fragment_state->data_length < offset) {
             /* Insert the whole fragment */
-            ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, data_length);
+            ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, data_length, current_time);
             data_was_added = 1;
             /* Mark done */
             data_length = 0;
@@ -163,7 +190,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
             if (offset + data_length > previous_last_byte) {
                 /* Some of the fragment data comes after this one. Submit */
                 size_t added_length = offset + data_length - previous_last_byte;
-                ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, added_length);
+                ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, added_length, current_time);
                 data_was_added = 1;
                 data_length -= added_length;
             }
@@ -217,6 +244,105 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     return ret;
 }
 
+int quicrq_relay_learn_start_point(quicrq_relay_cached_media_t* cached_ctx,
+    uint64_t start_object_id)
+{
+    int ret = 0;
+    /* Find all cache fragments that might be before the start point,
+     * and delete them */
+    picosplay_node_t* first_fragment_node = NULL;
+    cached_ctx->first_group_id = 0;
+    cached_ctx->first_object_id = start_object_id;
+    while ((first_fragment_node = picosplay_first(&cached_ctx->fragment_tree)) != NULL) {
+        quicrq_relay_cached_fragment_t* first_fragment_state = 
+            (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(first_fragment_node);
+        if (first_fragment_state == NULL || first_fragment_state->object_id >= start_object_id) {
+            break;
+        }
+        else {
+            picosplay_delete_hint(&cached_ctx->fragment_tree, first_fragment_node);
+        }
+    }
+    /* TODO: if the end is known, something special? */
+    return ret;
+}
+
+/* Purging the old fragments from the cache.
+ * There are two modes of operation.
+ * In the general case, we want to make sure that all data has a chance of being
+ * sent to the clients reading data from the cache. That means:
+ *  - only delete objects if all previous objects have been already received,
+ *  - only delete objects if all fragments have been received,
+ *  - only delete objects if all fragments are old enough.
+ * If the connection feeding the cache is closed, we will not get any new fragment,
+ * so there is no point waiting for them to arrive.
+ * 
+ * Deleting cached entries updates the "first_object_id" visible in the cache.
+ * If a client subscribes to the cached media after a cache update, that
+ * client will see the object ID numbers from that new start point on.
+ */
+
+void quicrq_relay_cache_media_purge(
+    quicrq_relay_cached_media_t* cached_media,
+    uint64_t current_time,
+    uint64_t cache_duration_max,
+    uint64_t first_object_id_kept)
+{
+    picosplay_node_t* fragment_node;
+
+    while ((fragment_node = picosplay_first(&cached_media->fragment_tree)) != NULL) {
+        /* Locate the first fragment in object order */
+        quicrq_relay_cached_fragment_t* fragment =
+            (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(fragment_node);
+        /* Check whether that fragment should be kept */
+        if (fragment->object_id >= first_object_id_kept || fragment->cache_time + cache_duration_max > current_time) {
+            /* This fragment and all coming after it shall be kept. */
+            break;
+        }
+        else {
+            int should_delete = 1;
+            if (!cached_media->is_closed) {
+                picosplay_node_t* next_fragment_node = fragment_node;
+                size_t next_offset = fragment->data_length;
+                int last_found = fragment->is_last_fragment;
+                should_delete = (fragment->object_id != cached_media->first_object_id) && fragment->offset == 0;
+
+                while (should_delete && (next_fragment_node = picosplay_next(next_fragment_node)) != NULL) {
+                    quicrq_relay_cached_fragment_t* next_fragment =
+                        (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(next_fragment_node);
+                    if (next_fragment->object_id != fragment->object_id ||
+                        next_fragment->cache_time + cache_duration_max > current_time ||
+                        next_fragment->offset != next_offset) {
+                        break;
+                    }
+                    else {
+                        next_offset += next_fragment->data_length;
+                        if (next_fragment->is_last_fragment) {
+                            /* All fragments up to the last have been verified */
+                            last_found = 1;
+                            break;
+                        }
+                    }
+                }
+                should_delete &= last_found;
+            }
+            if (should_delete) {
+                cached_media->first_object_id = fragment->object_id + 1;
+                while ((fragment_node = picosplay_first(&cached_media->fragment_tree)) != NULL) {
+                    quicrq_relay_cached_fragment_t* fragment =
+                        (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(fragment_node);
+                    if (fragment->object_id >= cached_media->first_object_id) {
+                        break;
+                    }
+                    else {
+                        picosplay_delete_hint(&cached_media->fragment_tree, fragment_node);
+                    }
+                }
+            }
+        }
+    }
+}
+
 int quicrq_relay_consumer_cb(
     quicrq_media_consumer_enum action,
     void* media_ctx,
@@ -236,7 +362,7 @@ int quicrq_relay_consumer_cb(
         /* Check that this datagram was not yet received.
          * This requires accessing the cache by object_id, offset and length. */
          /* Add fragment (or fragments) to cache */
-        ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, data_length);
+        ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, object_id, offset, queue_delay, is_last_fragment, data_length, current_time);
         /* Manage fin of transmission */
         if (ret == 0) {
             /* If the final object id is known, and the number of fully received objects
@@ -259,11 +385,30 @@ int quicrq_relay_consumer_cb(
             quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
         }
         break;
+    case quicrq_media_start_point:
+        /* Document the start point, and clean the cache of data before that point */
+        ret = quicrq_relay_learn_start_point(cons_ctx->cached_ctx, object_id);
+        if (ret == 0) {
+            /* Set the start point for the dependent streams. */
+            quicrq_stream_ctx_t* stream_ctx = cons_ctx->cached_ctx->srce_ctx->first_stream;
+            while (stream_ctx != NULL) {
+                /* for each client waiting for data on this media,
+                 * update the start point and then wakeup the stream 
+                 * so the start point can be releayed. */
+                stream_ctx->start_object_id = object_id;
+                if (stream_ctx->cnx_ctx->cnx != NULL) {
+                    picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+                }
+                stream_ctx = stream_ctx->next_stream_for_source;
+            }
+        }
+        break;
     case quicrq_media_close:
         /* Document the final object */
         if (cons_ctx->cached_ctx->final_object_id == 0) {
             cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->nb_object_received;
         }
+        cons_ctx->cached_ctx->is_closed = 1;
         /* Notify consumers of the stream */
         quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
         /* Free the media context resource */
@@ -517,7 +662,7 @@ int quicrq_relay_datagram_publisher_fn(
     return ret;
 }
 
-void* quicrq_relay_publisher_subscribe(void* v_srce_ctx)
+void* quicrq_relay_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t * stream_ctx)
 {
     quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)v_srce_ctx;
     quicrq_relay_publisher_context_t* media_ctx = (quicrq_relay_publisher_context_t*)
@@ -525,6 +670,9 @@ void* quicrq_relay_publisher_subscribe(void* v_srce_ctx)
     if (media_ctx != NULL) {
         memset(media_ctx, 0, sizeof(quicrq_relay_publisher_context_t));
         media_ctx->cache_ctx = cache_ctx;
+        if (stream_ctx != NULL) {
+            stream_ctx->start_object_id = cache_ctx->first_object_id;
+        }
     }
     return media_ctx;
 }
@@ -535,7 +683,6 @@ void quicrq_relay_publisher_delete(void* v_pub_ctx)
     quicrq_relay_cache_media_clear(cache_ctx);
     free(cache_ctx);
 }
-
 
 /* Default source is called when a client of a relay is loading a not-yet-cached
  * URL. This requires creating the desired URL, and then opening the stream to
@@ -736,6 +883,9 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
     return ret;
 }
 
+/* The relay functionality has to be established to add the relay
+ * function to a QUICRQ node.
+ */
 int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sockaddr* addr, int use_datagrams)
 {
     int ret = 0;
@@ -767,6 +917,7 @@ int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sock
             /* set a default post client on the relay */
             quicrq_set_media_init_callback(qr_ctx, quicrq_relay_consumer_init_callback);
             qr_ctx->relay_ctx = relay_ctx;
+            qr_ctx->manage_relay_cache_fn = quicrq_manage_relay_cache;
         }
     }
     return ret;
@@ -777,6 +928,42 @@ void quicrq_disable_relay(quicrq_ctx_t* qr_ctx)
     if (qr_ctx->relay_ctx != NULL) {
         free(qr_ctx->relay_ctx);
         qr_ctx->relay_ctx = NULL;
+        qr_ctx->manage_relay_cache_fn = NULL;
+    }
+}
+
+/* Management of the relay cache
+ */
+void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
+{
+    if (qr_ctx->relay_ctx != NULL && qr_ctx->cache_duration_max > 0) {
+        quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
+
+        /* Find all the sources that are cached by the relay function */
+        while (srce_ctx != NULL) {
+            quicrq_media_source_ctx_t* srce_to_delete = NULL;
+            if (srce_ctx->subscribe_fn == quicrq_relay_publisher_subscribe &&
+                srce_ctx->getdata_fn == quicrq_relay_publisher_fn &&
+                srce_ctx->get_datagram_fn == quicrq_relay_datagram_publisher_fn &&
+                srce_ctx->delete_fn == quicrq_relay_publisher_delete) {
+                /* This is a source created by the relay */
+                quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)srce_ctx->pub_ctx;
+                /* TODO: Check the lowest value of the published object along subscribed clients;
+                 * setting the lowest value to UIN64_MAX for now */
+                /* Purge cache from old entries */
+                quicrq_relay_cache_media_purge(cache_ctx,
+                    current_time, qr_ctx->cache_duration_max, UINT64_MAX);
+                /* If the cache is empty and the source is closed, schedule it for deletion. */
+                if (cache_ctx->first_fragment == NULL &&
+                    cache_ctx->is_closed) {
+                    srce_to_delete = srce_ctx;
+                }
+            }
+            srce_ctx = srce_ctx->next_source;
+            if (srce_to_delete != NULL) {
+                quicrq_delete_source(srce_to_delete, qr_ctx);
+            }
+        }
     }
 }
 

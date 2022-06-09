@@ -32,6 +32,7 @@ typedef struct st_test_media_publisher_context_t {
     uint64_t start_time;
     uint64_t* p_next_time;
     uint8_t* media_object;
+    uint64_t start_object;
     size_t media_object_alloc;
     size_t media_object_size;
     size_t media_object_read;
@@ -176,6 +177,7 @@ uint64_t test_media_object_source_next_time(test_media_object_source_context_t* 
 void test_media_object_source_delete(test_media_object_source_context_t* object_pub_ctx);
 test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, char const* media_source_path,
     const generation_parameters_t* generation_model, int is_real_time, uint64_t start_time);
+int test_media_object_source_set_start(test_media_object_source_context_t* object_pub_ctx, uint64_t start_group, uint64_t start_object);
 
 int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_datagram, int is_real_time, int is_post,
     char* result_file_name, char* result_log_name, size_t result_name_size);

@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.10d"
+#define QUICRQ_VERSION "0.11a"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
@@ -22,7 +22,7 @@ extern "C" {
  * different protocol versions will not be compatible, and connections attempts
  * between such binaries will fail, forcing deployments of compatible versions.
  */
-#define QUICRQ_ALPN "quicr-h10"
+#define QUICRQ_ALPN "quicr-h11"
 #define QUICRQ_PORT 853
 
 /* QUICR error codes */
@@ -61,6 +61,8 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
 void quicrq_delete(quicrq_ctx_t* ctx);
 picoquic_quic_t* quicrq_get_quic_ctx(quicrq_ctx_t* ctx);
 void quicrq_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
+void quicrq_set_cache_duration(quicrq_ctx_t* qr_ctx, uint64_t cache_duration_max);
+uint64_t quicrq_time_check(quicrq_ctx_t* qr_ctx, uint64_t current_time);
 
 quicrq_cnx_ctx_t* quicrq_create_cnx_context(quicrq_ctx_t* qr_ctx, picoquic_cnx_t* cnx);
 quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
@@ -117,6 +119,8 @@ typedef struct st_quicrq_media_object_source_ctx_t quicrq_media_object_source_ct
 
 quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
     quicrq_media_object_source_properties_t * properties);
+int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id);
+
 
 int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
@@ -180,7 +184,7 @@ typedef enum {
     quicrq_media_source_close
 } quicrq_media_source_action_enum;
 
-typedef void* (*quicrq_media_publisher_subscribe_fn)(void* pub_ctx);
+typedef void* (*quicrq_media_publisher_subscribe_fn)(void* pub_ctx, quicrq_stream_ctx_t * stream_ctx);
 typedef int (*quicrq_media_publisher_fn)(
     quicrq_media_source_action_enum action,
     void* media_ctx,
@@ -229,6 +233,7 @@ void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn de
 
 typedef enum {
     quicrq_media_datagram_ready = 0,
+    quicrq_media_start_point,
     quicrq_media_final_object_id,
     quicrq_media_close
 } quicrq_media_consumer_enum;

@@ -65,7 +65,7 @@ quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss,
 }
 
 /* Basic relay test */
-int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, uint64_t extra_delay)
+int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, uint64_t extra_delay, uint64_t start_point)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -84,8 +84,8 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     int partial_closure = 0;
     uint64_t client2_close_time = UINT64_MAX;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx-%llu.txt", is_real_time, use_datagrams,
-        (unsigned long long)simulate_losses, (unsigned long long) extra_delay);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx-%llu-%llu.txt", is_real_time, use_datagrams,
+        (unsigned long long)simulate_losses, (unsigned long long) extra_delay, (unsigned long long) start_point);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, 1,
@@ -121,6 +121,9 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time);
         if (config->object_sources[0] == NULL) {
             ret = -1;
+        }
+        else if (start_point > 0) {
+            ret = test_media_object_source_set_start(config->object_sources[0], 0, start_point);
         }
     }
 
@@ -244,35 +247,42 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
 
 int quicrq_triangle_basic_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0);
+    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_basic_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0x7080, 0);
+    int ret = quicrq_triangle_test_one(1, 0, 0x7080, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0);
+    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0);
+    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_extra_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000);
+    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 0);
+
+    return ret;
+}
+
+int quicrq_triangle_start_point_test()
+{
+    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 12345);
 
     return ret;
 }

@@ -70,6 +70,7 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_REPAIR 5
 #define QUICRQ_ACTION_POST 6
 #define QUICRQ_ACTION_ACCEPT 7
+#define QUICRQ_ACTION_START_POINT 8
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -79,6 +80,7 @@ typedef struct st_quicrq_message_t {
     size_t url_length;
     const uint8_t* url;
     uint64_t datagram_stream_id;
+    uint64_t group_id;
     uint64_t object_id;
     uint64_t offset;
     int is_last_fragment;
@@ -117,6 +119,9 @@ const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t*
 size_t quicrq_repair_msg_reserve(uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t* repair_data);
 const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length, const uint8_t** repair_data);
+size_t quicrq_start_msg_reserve(uint64_t start_group, uint64_t start_object);
+uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object);
+const uint8_t* quicrq_start_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);
 uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg);
 const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t * msg);
 
@@ -153,6 +158,8 @@ struct st_quicrq_media_object_source_ctx_t {
     struct st_quicrq_media_object_source_ctx_t* next_in_qr_ctx;
     quicrq_media_source_ctx_t* media_source_ctx;
     quicrq_media_object_source_properties_t properties;
+    uint64_t start_group_id;
+    uint64_t start_object_id;
     uint64_t next_object_id;
     picosplay_tree_t object_source_tree;
     int is_finished;
@@ -190,7 +197,7 @@ int quicrq_media_object_publisher(
     int* is_media_finished,
     int* is_still_active,
     uint64_t current_time);
-void* quicrq_media_object_publisher_subscribe(void* pub_ctx);
+void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t* stream_ctx);
 
 /* Quicrq stream handling.
  * Media stream come in two variants.
@@ -209,6 +216,7 @@ typedef enum {
     quicrq_sending_initial,
     quicrq_sending_repair,
     quicrq_sending_offset,
+    quicrq_sending_start_point,
     quicrq_sending_fin,
     quicrq_sending_no_more
 } quicrq_stream_sending_state_enum;
@@ -274,6 +282,7 @@ struct st_quicrq_stream_ctx_t {
     uint64_t datagram_stream_id;
     uint64_t next_object_id;
     uint64_t next_object_offset;
+    uint64_t start_object_id;
     uint64_t final_object_id;
     /* Control of datagrams sent for that media
      * We only keep track of fragments that are above the horizon.
@@ -303,6 +312,7 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_receive_complete: 1;
     unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
+    unsigned int is_start_object_id_sent : 1;
     unsigned int is_final_object_id_sent : 1;
 
     size_t bytes_sent;
@@ -338,6 +348,14 @@ struct st_quicrq_cnx_ctx_t {
     struct st_quicrq_stream_ctx_t* last_stream;
 };
 
+/* Prototype function for managing the cache of relays.
+ * Using a function pointer allows pure clients to operate without loading
+ * the relay functionality.
+ */
+ /* Management of the relay cache
+  */
+typedef void (*quicrq_manage_relay_cache_fn)(quicrq_ctx_t* qr_ctx, uint64_t current_time);
+
 /* Quicrq context */
 struct st_quicrq_ctx_t {
     picoquic_quic_t* quic; /* The quic context for the Quicrq service */
@@ -357,6 +375,16 @@ struct st_quicrq_ctx_t {
     /* List of connections */
     struct st_quicrq_cnx_ctx_t* first_cnx; /* First in double linked list of open connections in this context */
     struct st_quicrq_cnx_ctx_t* last_cnx; /* last in list of open connections in this context */
+    /* Cache management:
+     * cache_duration_max in micros seconds, or zero if no cache management required
+     * cache will be checked at once every cache_duration_max/2, as controlled
+     * by cache_check_next_time.
+     * When checking cache, the function manage_relay_cache_fn is called if the
+     * relay function is enabled.
+     */
+    uint64_t cache_duration_max;
+    uint64_t cache_check_next_time;
+    quicrq_manage_relay_cache_fn manage_relay_cache_fn;
     /* Extra repeat option */
     int extra_repeat_on_nack : 1;
     int extra_repeat_after_received_delayed : 1;

@@ -51,23 +51,26 @@ typedef struct st_quicrq_relay_cached_fragment_t {
     picosplay_node_t fragment_node;
     uint64_t object_id;
     uint64_t offset;
+    uint64_t cache_time;
     uint64_t queue_delay;
     int is_last_fragment;
+    struct st_quicrq_relay_cached_fragment_t* previous_in_order;
     struct st_quicrq_relay_cached_fragment_t* next_in_order;
     size_t data_length;
     uint8_t* data;
 } quicrq_relay_cached_fragment_t;
-
-
 
 typedef struct st_quicrq_relay_cached_media_t {
     quicrq_media_source_ctx_t* srce_ctx;
     uint64_t final_object_id;
     uint64_t nb_object_received;
     uint64_t subscribe_stream_id;
+    uint64_t first_group_id;
+    uint64_t first_object_id;
     quicrq_relay_cached_fragment_t* first_fragment;
     quicrq_relay_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree;
+    int is_closed;
 } quicrq_relay_cached_media_t;
 
 typedef struct st_quicrq_relay_publisher_context_t {
@@ -77,6 +80,7 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int is_object_complete;
     int is_media_complete;
     int is_sending_object;
+    int is_start_point_sent;
     quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
 } quicrq_relay_publisher_context_t;
@@ -101,7 +105,8 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     uint64_t offset,
     uint64_t queue_delay,
     int is_last_fragment,
-    size_t data_length);
+    size_t data_length,
+    uint64_t current_time);
 quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t object_id, uint64_t offset);
 
 int quicrq_relay_datagram_publisher_prepare(
@@ -134,5 +139,9 @@ int quicrq_relay_publisher_fn(
 
 quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx();
 void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx);
+
+/* Management of the relay cache
+ */
+void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time);
 
 #endif /* QUICRQ_INTERNAL_RELAY_H */

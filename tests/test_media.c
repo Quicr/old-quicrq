@@ -68,12 +68,15 @@ void* test_media_publisher_init(char const* media_source_path, const generation_
     return media_ctx;
 }
 
-void* test_media_publisher_subscribe(void* v_srce_ctx)
+void* test_media_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t* stream_ctx)
 {
     test_media_source_context_t* srce_ctx = (test_media_source_context_t*)v_srce_ctx;
     test_media_publisher_context_t* media_ctx = 
         test_media_publisher_init(srce_ctx->file_path, srce_ctx->generation_context, srce_ctx->is_real_time, 
             srce_ctx->start_time);
+#ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(stream_ctx);
+#endif
 
     if (media_ctx != NULL) {
         media_ctx->p_next_time = srce_ctx->p_next_time;
@@ -516,6 +519,17 @@ test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_
     return object_pub_ctx;
 }
 
+int test_media_object_source_set_start(test_media_object_source_context_t* object_pub_ctx, uint64_t start_group, uint64_t start_object)
+{
+    int ret = 0;
+    if (object_pub_ctx->object_source_ctx != NULL) {
+        ret = quicrq_object_source_set_start(object_pub_ctx->object_source_ctx, start_group, start_object);
+    }
+    else {
+        ret = -1;
+    }
+    return ret;
+}
 /* Media receiver definitions.
  * Manage a list of objects being reassembled. The list is organized as a splay,
  * indexed by the object id and object offset. When a new fragment is received
@@ -697,35 +711,6 @@ int test_media_consumer_object_ready(
     return ret;
 }
 
-int test_media_datagram_input(
-    void* media_ctx,
-    uint64_t current_time,
-    const uint8_t* data,
-    uint64_t object_id,
-    uint64_t offset,
-    int is_last_fragment,
-    size_t data_length)
-{
-    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-    int ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, object_id, offset, is_last_fragment, data_length, 
-        test_media_consumer_object_ready, media_ctx);
-
-    return ret;
-}
-
-int test_media_consumer_learn_final_object_id(
-    void* media_ctx,
-    uint64_t final_object_id)
-{
-    int ret = 0;
-    test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-
-    ret = quicrq_reassembly_learn_final_object_id(&cons_ctx->reassembly_ctx, final_object_id);
-
-    return ret;
-}
-
-
 int test_media_object_consumer_cb(
     quicrq_media_consumer_enum action,
     void* media_ctx,
@@ -742,15 +727,21 @@ int test_media_object_consumer_cb(
 
     switch (action) {
     case quicrq_media_datagram_ready:
-        ret = test_media_datagram_input(media_ctx, current_time, data, object_id, (size_t)offset, is_last_fragment, data_length);
-
+        ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, object_id, offset, is_last_fragment, data_length,
+            test_media_consumer_object_ready, cons_ctx);
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
         break;
     case quicrq_media_final_object_id:
-        test_media_consumer_learn_final_object_id(media_ctx, object_id);
-
+        ret = quicrq_reassembly_learn_final_object_id(&cons_ctx->reassembly_ctx, object_id);
+        if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
+            ret = quicrq_consumer_finished;
+        }
+        break;
+    case quicrq_media_start_point:
+        ret = quicrq_reassembly_learn_start_point(&cons_ctx->reassembly_ctx, object_id, current_time,
+            test_media_consumer_object_ready, cons_ctx);
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
@@ -1052,7 +1043,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     if (ret == 0) {
         srce_ctx = test_media_create_source(media_source_path, generation_model, is_real_time, &next_time, 0);
         if (srce_ctx != NULL) {
-            pub_ctx = test_media_publisher_subscribe(srce_ctx);
+            pub_ctx = test_media_publisher_subscribe(srce_ctx, NULL);
         }
         cons_ctx = test_media_consumer_init(media_result_file, media_result_log);
         if (pub_ctx == NULL || cons_ctx == NULL){
@@ -1408,7 +1399,7 @@ int quicrq_media_object_publish_test()
 
     /* Create a media context for the simulated object consumer */
     if (ret == 0) {
-        media_ctx = quicrq_media_object_publisher_subscribe(object_source_ctx);
+        media_ctx = quicrq_media_object_publisher_subscribe(object_source_ctx, NULL);
         if (media_ctx == NULL) {
             ret = -1;
         }
@@ -1546,7 +1537,7 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
         }
         else {
             /* Create a media context for the simulated object consumer */
-            media_ctx = quicrq_media_object_publisher_subscribe(object_source_pub->object_source_ctx->media_source_ctx);
+            media_ctx = quicrq_media_object_publisher_subscribe(object_source_pub->object_source_ctx->media_source_ctx, NULL);
             if (media_ctx == NULL) {
                 ret = -1;
             }
@@ -1889,7 +1880,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
     if (ret == 0) {
         srce_ctx = test_media_create_source(media_source_path, NULL, 1, &next_srce_time, 0);
         if (srce_ctx != NULL) {
-            if ((pub_ctx = test_media_publisher_subscribe(srce_ctx)) == NULL) {
+            if ((pub_ctx = test_media_publisher_subscribe(srce_ctx, NULL)) == NULL) {
                 ret = -1;
             }
         }
