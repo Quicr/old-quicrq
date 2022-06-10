@@ -946,7 +946,137 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                     stream_ctx->is_active_datagram = 0;
                 }
             }
-            else {
+            else
+#if 1
+            if (space < QUICRQ_DATAGRAM_HEADER_MAX) {
+                /* If picoquic did not provide enough space for a full datagram header, do nothing */
+                at_least_one_active = 1;
+            } else {
+                /* Check how much data is ready. We start first by polling the publisher, because that will 
+                 * handle any possible changes in group_id and object_id. Then we encode the datagram header,
+                 * and call the produce again to provide the bits that are actually available. There may be
+                 * a need to reencode the datagram header if the value of "is_last_fragment" changes between
+                 * the two calls, but that should never change the length of that header.
+                 */
+                uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
+                size_t available = 0;
+                size_t data_length = 0;
+                int is_new_group = 0;
+                uint64_t nb_objects_last_group = 0;
+                int is_last_fragment = 0;
+                int is_last_fragment_init = 0;
+                int is_media_finished = 0;
+                int is_still_active = 0;
+                uint8_t flags = 0;
+                size_t h_size = 0; /* TODO: encode the minimal value */
+                int8_t* h_byte = NULL;
+                uint8_t* buffer = NULL;
+
+                ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL,
+                    space - h_size, &available, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                if (ret < 0) {
+                    quicrq_log_message(stream_ctx->cnx_ctx, "Error, first publisher function call returns %d, space = %zu, available = %zu", ret, space - h_size, available);
+                    DBG_PRINTF("Error, first publisher function call returns %d, space = %zu, available = %zu", ret, space - h_size, available);
+                }
+                else {
+                    if (is_new_group) {
+                        nb_objects_last_group = stream_ctx->next_object_id;
+                        stream_ctx->next_group_id += 1;
+                        stream_ctx->next_object_id = 0;
+                    }
+                    if (is_media_finished) {
+                        /* Mark the stream as finished, prepare sending a final message */
+                        stream_ctx->final_group_id = stream_ctx->next_group_id;
+                        stream_ctx->final_object_id = stream_ctx->next_object_id;
+                        /* Wake up the control stream so the final message can be sent. */
+                        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+                    }
+                    if (available > 0) {
+                        is_last_fragment_init = is_last_fragment;
+                        /* Predict length of datagram_stream_id + length of offset.
+                         * TODO: the number of bytes available depends on the header size, which depends on
+                        * object_id, and offset. The object size and object offset are managed by the
+                        * sender code and are known in advance, but the "last_fragment" value is not.
+                        * We do a first encoding supposing last_fragment = 0. If this turns out
+                        * to be the actual last fragment, the coding will have to be fixed.
+                        */
+                        h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
+                            stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, flags, is_last_fragment);
+                        if (h_byte == NULL) {
+                            /* Not enough space in header buffer to encode the header. That should never happen */
+                            quicrq_log_message(stream_ctx->cnx_ctx, "Error: datagram header longer than %zu", QUICRQ_DATAGRAM_HEADER_MAX);
+                            DBG_PRINTF("Error: datagram header longer than %zu", QUICRQ_DATAGRAM_HEADER_MAX);
+                            ret = -1;
+                            break;
+                        }
+                        h_size = h_byte - datagram_header;
+                        if (h_size >= space) {
+                            /* TODO: should get a min encoding length per stream */
+                            /* Can't do anything there */
+                            at_least_one_active = 1;
+                        }
+                        else {
+                            if (h_size + available > space) {
+                                available = space - h_size;
+                                if (is_last_fragment) {
+                                    /* Not the last fragment anymore, as we reduced the size. */
+                                    is_last_fragment = 0;
+                                }
+                            }
+                            buffer = (uint8_t*)picoquic_provide_datagram_buffer(context, available + h_size);
+                            at_least_one_active = 1;
+                            if (buffer == NULL) {
+                                quicrq_log_message(stream_ctx->cnx_ctx, "Error, cannot obtain datagram buffer, space = %zu, available = %zu", space, available + h_size);
+                                DBG_PRINTF("Error, cannot obtain datagram buffer, space = %zu, available = %zu", space, available + h_size);
+                                ret = -1;
+                            }
+                            else {
+                                /* Push the header */
+                                h_byte = quicrq_datagram_header_encode(buffer, buffer + h_size + available, stream_ctx->datagram_stream_id,
+                                    stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, flags, is_last_fragment);
+                                if (h_byte != buffer + h_size) {
+                                    /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
+                                    quicrq_log_message(stream_ctx->cnx_ctx, "Error, cannot encode datagram header, expected = %zu", h_size);
+                                    DBG_PRINTF("Error, cannot encode datagram header, expected = %zu", h_size);
+                                    ret = -1;
+                                }
+                                /* Get the media */
+                                ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, h_byte, available, &data_length,
+                                    &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                                if (ret == 0 && available != data_length) {
+                                    /* Application returned different size on second call */
+                                    quicrq_log_message(stream_ctx->cnx_ctx, "Error,  application datagram provided %zu, expected %zu", data_length, available);
+                                    DBG_PRINTF("Error,  application datagram provided %zu, expected %zu", data_length, available);
+                                    ret = -1;
+                                }
+                                /* Keep track in stream context */
+                                if (ret == 0) {
+                                    ret = quicrq_datagram_ack_init(stream_ctx, stream_ctx->next_object_id, stream_ctx->next_object_offset,
+                                        ((uint8_t*)buffer) + h_size, data_length, 0,
+                                        is_last_fragment, NULL, current_time);
+                                    if (ret != 0) {
+                                        DBG_PRINTF("Datagram ack init returns %d", ret);
+                                    }
+                                }
+                                /* Update offset based on what is sent. */
+                                if (ret == 0) {
+                                    if (is_last_fragment) {
+                                        stream_ctx->next_object_id++;
+                                        stream_ctx->next_object_offset = 0;
+                                    }
+                                    else {
+                                        stream_ctx->next_object_offset += data_length;
+                                    }
+                                }
+                            }
+                            /* Exit the loop, since data was copied */
+                            break;
+                        }
+                    }
+                }
+            }
+#else
+            {
                 /* Check how much data is ready */
                 size_t available = 0;
                 size_t data_length = 0;
@@ -1056,6 +1186,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                     }
                 }
             }
+#endif
         }
         stream_ctx = stream_ctx->next_stream;
     }

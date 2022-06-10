@@ -288,7 +288,9 @@ struct st_quicrq_stream_ctx_t {
     uint64_t next_group_id;
     uint64_t next_object_id;
     uint64_t next_object_offset;
+    uint64_t start_group_id;
     uint64_t start_object_id;
+    uint64_t final_group_id;
     uint64_t final_object_id;
     /* Control of datagrams sent for that media
      * We only keep track of fragments that are above the horizon.
