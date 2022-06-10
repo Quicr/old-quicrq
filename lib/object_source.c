@@ -102,6 +102,7 @@ int quicrq_media_object_publisher(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    int* is_new_group,
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
@@ -111,6 +112,7 @@ int quicrq_media_object_publisher(
     quicrq_object_source_publisher_ctx_t* media_ctx = (quicrq_object_source_publisher_ctx_t*)v_media_ctx;
     quicrq_object_source_item_t* object_source_item = NULL;
     if (action == quicrq_media_source_get_data) {
+        *is_new_group = 0;
         *is_media_finished = 0;
         *is_last_fragment = 0;
         *is_still_active = 0;

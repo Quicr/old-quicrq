@@ -238,25 +238,29 @@ int quicrq_relay_datagram_client_test()
  */
 #define RELAY_TEST_OBJECT_MAX 32
 typedef struct st_relay_test_object_t {
+    uint64_t group_id;
+    uint64_t object_id;
     size_t length;
     uint8_t data[RELAY_TEST_OBJECT_MAX];
 } relay_test_object_t;
 
 relay_test_object_t relay_test_objects[] = {
-    { 25, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}},
-    { 8, { 10, 11, 12, 13, 14, 15, 16, 17 }},
-    { 9, { 20, 21, 22, 23, 24, 25, 26, 27, 28 }},
-    { 9, { 30, 31, 32, 33, 34, 35, 36, 37, 38 }},
-    { 10, { 40, 41, 42, 43, 44, 45, 46, 47, 48, 49 }},
-    { 5, { 50, 51, 52, 53, 54 }},
-    { 6, { 60, 61, 62, 63, 64, 65 }},
-    { 7, { 70, 71, 72, 73, 74, 75, 76 }},
-    { 30, { 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,
+    { 0, 0, 25, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}},
+    { 0, 1, 8, { 10, 11, 12, 13, 14, 15, 16, 17 }},
+    { 0, 2, 9, { 20, 21, 22, 23, 24, 25, 26, 27, 28 }},
+    { 0, 3, 9, { 30, 31, 32, 33, 34, 35, 36, 37, 38 }},
+    { 1, 0, 10, { 40, 41, 42, 43, 44, 45, 46, 47, 48, 49 }},
+    { 1, 1, 5, { 50, 51, 52, 53, 54 }},
+    { 1, 2, 6, { 60, 61, 62, 63, 64, 65 }},
+    { 1, 3, 7, { 70, 71, 72, 73, 74, 75, 76 }},
+    { 2, 0, 30, { 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,
             90, 91, 92, 93, 94, 95, 96, 97, 98, 99,
             100, 101, 102, 103, 104, 105, 106, 107, 108, 109 }}
 };
 
 size_t nb_relay_test_objects = sizeof(relay_test_objects) / sizeof(relay_test_object_t);
+size_t nb_relay_test_groups = 3;
+size_t nb_relay_test_groups_objects[3] = { 4, 4, 1 };
 
 int quicrq_relay_cache_verify(quicrq_relay_cached_media_t* cached_ctx)
 {
@@ -266,9 +270,12 @@ int quicrq_relay_cache_verify(quicrq_relay_cached_media_t* cached_ctx)
         size_t offset = 0;
         while (ret == 0 && offset < relay_test_objects[f_id].length) {
             /* Get fragment at specified offset */
-            quicrq_relay_cached_fragment_t* fragment = quicrq_relay_cache_get_fragment(cached_ctx, f_id, offset);
+
+            quicrq_relay_cached_fragment_t* fragment = quicrq_relay_cache_get_fragment(cached_ctx,
+                relay_test_objects[f_id].group_id, relay_test_objects[f_id].object_id, offset);
             if (fragment == NULL) {
-                DBG_PRINTF("Cannot find fragment, object %zu, offset %zu", f_id, offset);
+                DBG_PRINTF("Cannot find fragment, object %zu (%" PRIu64 ",%" PRIu64 ", offset % zu",
+                    f_id, relay_test_objects[f_id].group_id, relay_test_objects[f_id].object_id, offset);
                 ret = -1;
             }
             /* Check that length does not overflow */
@@ -398,8 +405,9 @@ int quicrq_relay_cache_fill_test_one(size_t fragment_max, size_t start_object, s
                         }
                     }
                     if (!should_skip) {
-                        ret = quicrq_relay_propose_fragment_to_cache(cached_ctx, 
-                            relay_test_objects[f_id].data + offset, f_id, offset, 0, is_last_fragment, data_length, 0);
+                        ret = quicrq_relay_propose_fragment_to_cache(cached_ctx, relay_test_objects[f_id].data + offset,
+                            relay_test_objects[f_id].group_id, relay_test_objects[f_id].object_id,
+                            offset, 0, 0, is_last_fragment, data_length, 0);
                         if (ret != 0) {
                             DBG_PRINTF("Proposed segment fails, object %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
                         }
@@ -446,17 +454,18 @@ typedef struct st_relay_test_datagram_buffer_argument_t {
 
 /* Simulate a relay trying to forward data after it is added to the cache. */
 int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx, quicrq_relay_cached_media_t* cached_ctx_p, 
-    uint64_t *sequential_object_id, size_t *sequential_offset,
+    uint64_t* sequential_group_id, uint64_t *sequential_object_id, size_t *sequential_offset,
     int is_datagram, uint64_t current_time)
 {
     int ret = 0;
     uint8_t data[1024];
+    int is_new_group;
     int is_last_fragment;
     int is_media_finished;
     int is_still_active;
-    uint64_t group_id;
+    uint64_t group_id = 0;
     uint64_t object_id;
-    uint8_t flags;
+    uint8_t flags = 0;
     size_t fragment_offset = 0;
     uint8_t* fragment = NULL;
     size_t fragment_length;
@@ -526,12 +535,17 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
             }
         }
         else {
-            /* The first call to the publisher functions positions to the current objectid, offset, etc. */
+            /* The first call to the publisher functions positions to the current group id, objectid, offset, etc. */
             ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, NULL, 1024, &fragment_length,
-                &is_last_fragment, &is_media_finished, &is_still_active, current_time);
-            if (fragment_length > 0) {
+                &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+            if (ret == 0 && fragment_length > 0) {
+                group_id = pub_ctx->current_group_id;
                 object_id = pub_ctx->current_object_id;
                 fragment_offset = pub_ctx->current_offset;
+                if (group_id != *sequential_group_id) {
+                    DBG_PRINTF("Expected group id = %" PRIu64 ", got %" PRIu64, *sequential_group_id, group_id);
+                    ret = -1;
+                }
                 if (object_id != *sequential_object_id) {
                     DBG_PRINTF("Expected object id = %" PRIu64 ", got %" PRIu64, *sequential_object_id, object_id);
                     ret = -1;
@@ -540,19 +554,28 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                     DBG_PRINTF("For object id = %" PRIu64 ", expected offset %zu got %zu", object_id, *sequential_offset, fragment_offset);
                     ret = -1;
                 }
-                /* The second call to the media function copies the data at the required space. */
-                ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, data, 1024, &fragment_length,
-                    &is_last_fragment, &is_media_finished, &is_still_active, current_time);
-                fragment = data;
-                if (is_last_fragment) {
-                    *sequential_object_id += 1;
-                    *sequential_offset = 0;
+                if (ret == 0) {
+                    /* The second call to the media function copies the data at the required space. */
+                    ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, data, 1024, &fragment_length,
+                        &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
                 }
-                else {
-                    *sequential_offset += fragment_length;
-                    if (*sequential_offset > RELAY_TEST_OBJECT_MAX) {
-                        DBG_PRINTF("Wrong offset: %zu", *sequential_offset);
-                        ret = -1;
+                if (ret == 0){
+                    fragment = data;
+                    if (is_last_fragment) {
+                        *sequential_offset = 0;
+                        *sequential_object_id += 1;
+                        if (*sequential_group_id < nb_relay_test_groups &&
+                            *sequential_object_id >= nb_relay_test_groups_objects[*sequential_group_id]) {
+                            *sequential_group_id += 1;
+                            *sequential_object_id = 0;
+                        }
+                    }
+                    else {
+                        *sequential_offset += fragment_length;
+                        if (*sequential_offset > RELAY_TEST_OBJECT_MAX) {
+                            DBG_PRINTF("Wrong offset: %zu", *sequential_offset);
+                            ret = -1;
+                        }
                     }
                 }
             }
@@ -560,7 +583,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
         if (ret == 0 && fragment_length > 0) {
             /* submit to the media cache */
             ret = quicrq_relay_propose_fragment_to_cache(cached_ctx_p,
-                fragment, object_id, fragment_offset, 0, is_last_fragment, fragment_length, 0);
+                fragment, group_id, object_id, fragment_offset, 0, flags, is_last_fragment, fragment_length, 0);
         }
     } while (ret == 0 && fragment_length > 0);
 
@@ -573,6 +596,7 @@ int quicrq_relay_cache_publish_test_one(int is_datagram)
     int nb_skipped = 0;
     /* Create caches and contexts */
     uint64_t current_time = 0;
+    uint64_t sequential_group_id = 0;
     uint64_t sequential_object_id = 0;
     size_t sequential_offset = 0;
     quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
@@ -625,13 +649,15 @@ int quicrq_relay_cache_publish_test_one(int is_datagram)
                     }
                 }
                 if (!should_skip) {
-                    ret = quicrq_relay_propose_fragment_to_cache(cached_ctx,
-                        relay_test_objects[f_id].data + offset, f_id, offset, 0, is_last_fragment, data_length, 0);
+                    ret = quicrq_relay_propose_fragment_to_cache(cached_ctx, relay_test_objects[f_id].data + offset,
+                        relay_test_objects[f_id].group_id, relay_test_objects[f_id].object_id,
+                        offset, 0, 0, is_last_fragment, data_length, 0);
                     if (ret != 0) {
                         DBG_PRINTF("Proposed segment fails, object %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
                     }
                     /* Simulate waking up the consumer and polling the data */
-                    ret = quicr_relay_cache_publish_simulate(pub_ctx, cached_ctx_p, &sequential_object_id, &sequential_offset,
+                    ret = quicr_relay_cache_publish_simulate(pub_ctx, cached_ctx_p, 
+                        &sequential_group_id, &sequential_object_id, &sequential_offset,
                         is_datagram, current_time);
                 }
                 else {
