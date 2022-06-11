@@ -524,18 +524,18 @@ int quicrq_relay_publisher_fn(
                     quicrq_relay_cached_fragment_t* next_group_fragment = quicrq_relay_cache_get_fragment(media_ctx->cache_ctx,
                         media_ctx->current_group_id + 1, 0, 0);
                     if (next_group_fragment != NULL) {
-#if 1
-                        /* This is the first fragment of a new group, maybe */
-                        DBG_PRINTF("%s", "Bug");
-                        /* TODO: this is pure test code, should be replaced by something real */
-                        if (media_ctx->current_object_id > 3) {
+                        /* This is the first fragment of a new group. Check whether the objects from the
+                         * previous group have been all received. */
+                        if (media_ctx->current_object_id >= next_group_fragment->nb_objects_previous_group) {
                             media_ctx->current_fragment = next_group_fragment;
                             media_ctx->current_group_id = media_ctx->current_group_id + 1;
                             media_ctx->current_object_id = 0;
                             media_ctx->current_offset = 0;
                             *is_new_group = 1;
                         }
-#endif
+                        else {
+                            DBG_PRINTF("Group %" PRIu64 " is not complete.", media_ctx->current_group_id);
+                        }
                     }
                 }
             }
