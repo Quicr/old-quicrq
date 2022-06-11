@@ -167,6 +167,7 @@ int test_media_object_consumer_cb(
     uint64_t offset,
     uint64_t queue_delay,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length);
 void* test_media_publisher_init(char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time, uint64_t start_time);

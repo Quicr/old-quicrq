@@ -123,6 +123,7 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     uint64_t offset,
     uint64_t queue_delay,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length,
     uint64_t current_time)
@@ -150,6 +151,7 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
         fragment->cache_time = current_time;
         fragment->queue_delay = queue_delay;
         fragment->flags = flags;
+        fragment->nb_objects_previous_group = nb_objects_previous_group;
         fragment->is_last_fragment = is_last_fragment;
         fragment->data = ((uint8_t*)fragment) + sizeof(quicrq_relay_cached_fragment_t);
         fragment->data_length = data_length;
@@ -167,6 +169,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     uint64_t offset,
     uint64_t queue_delay,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length,
     uint64_t current_time)
@@ -196,7 +199,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
             first_fragment_state->offset + first_fragment_state->data_length < offset) {
             /* Insert the whole fragment */
             ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, 
-                group_id, object_id, offset, queue_delay, flags, is_last_fragment, data_length, current_time);
+                group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
             data_was_added = 1;
             /* Mark done */
             data_length = 0;
@@ -208,9 +211,11 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
                 /* Some of the fragment data comes after this one. Submit */
                 size_t added_length = offset + data_length - previous_last_byte;
                 ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, 
-                    group_id, object_id, offset, queue_delay, flags, is_last_fragment, added_length, current_time);
+                    group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, added_length, current_time);
                 data_was_added = 1;
                 data_length -= added_length;
+                /* Previous group count is only used on first fragment */
+                nb_objects_previous_group = 0;
             }
             if (offset >= first_fragment_state->offset) {
                 /* What remained of the fragment overlaps with existing data */
@@ -375,6 +380,7 @@ int quicrq_relay_consumer_cb(
     uint64_t offset,
     uint64_t queue_delay,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length)
 {
@@ -387,7 +393,7 @@ int quicrq_relay_consumer_cb(
          * This requires accessing the cache by object_id, offset and length. */
          /* Add fragment (or fragments) to cache */
         ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, 
-            group_id, object_id, offset, queue_delay, flags, is_last_fragment, data_length, current_time);
+            group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
         /* Manage fin of transmission */
         if (ret == 0) {
             /* If the final object id is known, and the number of fully received objects
@@ -609,7 +615,7 @@ int quicrq_relay_datagram_publisher_prepare(
         uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
         uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
             datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
-            media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, 0);
+            media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, media_ctx->current_fragment->nb_objects_previous_group, 0);
         if (h_byte == NULL) {
             ret = -1;
         }
@@ -640,7 +646,7 @@ int quicrq_relay_datagram_publisher_prepare(
                         if (is_last_fragment) {
                             h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
                                 datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
-                                media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, 1);
+                                media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, media_ctx->current_fragment->nb_objects_previous_group, 1);
 
                             if (h_byte != datagram_header + h_size) {
                                 /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */

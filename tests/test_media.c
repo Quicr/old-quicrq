@@ -725,6 +725,7 @@ int test_media_object_consumer_cb(
     uint64_t offset,
     uint64_t queue_delay,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length)
 {
@@ -1074,9 +1075,18 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
             current_time = test_media_publisher_next_time(pub_ctx, current_time);
             inactive++;
         } else {
+            uint64_t nb_objects_previous_group = 0;
             inactive = 0;
+            if (is_new_group) {
+                if (group_id > 0) {
+                    nb_objects_previous_group = object_id + 1;
+                    group_id += 1;
+                    object_id = 0;
+                    object_offset = 0;
+                }
+            }
             ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                group_id, object_id, object_offset, 0, flags, is_last_fragment, data_length);
+                group_id, object_id, object_offset, 0, flags, nb_objects_previous_group, is_last_fragment, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Consumer, ret=%d", ret);
             }
@@ -1097,7 +1107,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
 
     if (ret == 0) {
         ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL,
-            group_id, object_id, 0, 0, 0, 0, 0);
+            group_id, object_id, 0, 0, 0, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
@@ -1293,9 +1303,18 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret == 0) {
+            uint64_t nb_objects_previous_group = 0;
+            if (is_new_group) {
+                if (group_id > 0) {
+                    nb_objects_previous_group = object_id + 1;
+                    group_id += 1;
+                    object_id = 0;
+                    object_offset = 0;
+                }
+            }
             if (is_media_finished || data_length > 0) {
                 ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    group_id, object_id, object_offset, 0, flags, is_last_fragment, data_length);
+                    group_id, object_id, object_offset, 0, flags, nb_objects_previous_group, is_last_fragment, data_length);
                 if (ret == 0) {
                     inactive = 0;
                 }
@@ -1322,7 +1341,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
 
     /* Close publisher by closing the connection context */
     if (ret == 0) {
-        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, group_id, object_id, 0, 0, 0, 0, 0);
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, group_id, object_id, 0, 0, 0, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
@@ -1593,9 +1612,18 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
         }
 
         if (ret == 0) {
+            uint64_t nb_objects_previous_group = 0;
+            if (is_new_group) {
+                if (group_id > 0) {
+                    nb_objects_previous_group = object_id + 1;
+                    group_id += 1;
+                    object_id = 0;
+                    object_offset = 0;
+                }
+            }
             if (is_media_finished || data_length > 0) {
                 ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    group_id, object_id, object_offset, 0, flags, is_last_fragment, data_length);
+                    group_id, object_id, object_offset, 0, flags, nb_objects_previous_group, is_last_fragment, data_length);
                 if (ret == 0) {
                     inactive = 0;
                 }
@@ -1622,7 +1650,7 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
 
     /* Close publisher by closing the connection context */
     if (ret == 0) {
-        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, group_id, object_id, 0, 0, 0, 0, 0);
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, group_id, object_id, 0, 0, 0, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
@@ -1762,13 +1790,22 @@ int quicrq_object_stream_test_one(char const* media_source_name, char const* med
 
     /* Loop through publish and consume until finished */
     while (ret == 0 && !is_media_finished && inactive < 32) {
+        uint64_t nb_objects_previous_group = 0;
         ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret == 0) {
+            if (is_new_group) {
+                if (group_id > 0) {
+                    nb_objects_previous_group = object_id + 1;
+                }
+                group_id += 1;
+                object_id = 0;
+                object_offset = 0;
+            }
             if (is_media_finished || data_length > 0) {
                 ret = quicrq_media_object_bridge_fn(quicrq_media_datagram_ready, object_stream_ctx->media_ctx, current_time, media_buffer,
-                    group_id, object_id, object_offset, 0, flags, is_last_fragment, data_length);
+                    group_id, object_id, object_offset, 0, flags, nb_objects_previous_group, is_last_fragment, data_length);
                 if (ret == 0) {
                     inactive = 0;
                 }
@@ -1795,7 +1832,7 @@ int quicrq_object_stream_test_one(char const* media_source_name, char const* med
 
     /* Close publisher by closing the connection context */
     if (ret == 0) {
-        ret = quicrq_media_object_bridge_fn(quicrq_media_final_object_id, object_stream_ctx->media_ctx, current_time, NULL, group_id, object_id, 0, 0, 0, 0, 0);
+        ret = quicrq_media_object_bridge_fn(quicrq_media_final_object_id, object_stream_ctx->media_ctx, current_time, NULL, group_id, object_id, 0, 0, 0, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             ret = 0;
         }
@@ -1960,9 +1997,10 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
             last_loss = loss;
         }
         else {
-            /* Simulate arrival of packet */
+            /* Simulate arrival of packet -- TODO: deal with group_id */
+            uint64_t nb_objects_previous_group = 0;
             ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, media_buffer,
-                    group_id, object_id, object_offset, 0, flags, is_last_fragment, data_length);
+                    group_id, object_id, object_offset, 0, flags, nb_objects_previous_group, is_last_fragment, data_length);
             if (ret != 0) {
                 DBG_PRINTF("Media consumer callback: ret = %d", ret);
                 break;
@@ -1984,7 +2022,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
 
     /* Indicate the final object_id, to simulate what datagrams would do */
     if (ret == 0) {
-        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, group_id, object_id, 0, 0, 0, 0, 0);
+        ret = test_media_object_consumer_cb(quicrq_media_final_object_id, cons_ctx, current_time, NULL, group_id, object_id, 0, 0, 0, 0, 0, 0);
         if (ret == quicrq_consumer_finished) {
             consumer_properly_finished = 1;
             if (nb_losses > 0) {
@@ -2011,7 +2049,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
                 /* Simulate repair of a hole */
                 actual_dup++;
                 ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
-                    loss->group_id, loss->object_id, loss->offset, 0, 0, loss->is_last_fragment, loss->length);
+                    loss->group_id, loss->object_id, loss->offset, 0, 0, 0, loss->is_last_fragment, loss->length);
                 if (ret != 0) {
                     DBG_PRINTF("Media consumer callback: ret = %d", ret);
                 }
@@ -2029,7 +2067,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         while (loss != NULL && ret == 0) {
             /* Simulate repair of a hole */
             ret = test_media_object_consumer_cb(quicrq_media_datagram_ready, cons_ctx, current_time, loss->media_buffer,
-                loss->group_id, loss->object_id, loss->offset, 0, 0, loss->is_last_fragment, loss->length);
+                loss->group_id, loss->object_id, loss->offset, 0, 0, 0, loss->is_last_fragment, loss->length);
             if (ret == quicrq_consumer_finished) {
                 consumer_properly_finished = 1;
                 ret = 0;

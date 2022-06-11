@@ -327,11 +327,12 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     uint64_t object_id;
     uint64_t object_offset;
     uint64_t queue_delay;
+    uint64_t nb_objects_previous_group;
     uint8_t flags;
     int is_last_fragment;
     const uint8_t* next_bytes;
 
-    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &is_last_fragment);
+    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
     if (next_bytes == NULL) {
         DBG_PRINTF("%s", "Error decoding datagram header");
         ret = -1;
@@ -357,7 +358,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
                     object_id, datagram_stream_id, stream_ctx->stream_id);
             }
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, group_id, object_id, object_offset, 
-                queue_delay, flags, is_last_fragment, bytes_max - next_bytes);
+                queue_delay, flags, nb_objects_previous_group, is_last_fragment, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
                 ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
             }
@@ -732,7 +733,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
             /* Encode the header */
             found->last_sent_time = picoquic_get_quic_time(picoquic_get_quic_ctx(stream_ctx->cnx_ctx->cnx));
             bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->datagram_stream_id,
-                found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, found->is_last_fragment);
+                found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, found->nb_objects_previous_group, found->is_last_fragment);
             /* Check how much data should be send in this fragment */
             header_length = bytes - datagram;
             datagram_length = header_length + data_length;
@@ -740,7 +741,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
                 if (found->is_last_fragment) {
                     /* Erase the last segment mark in datagram header */
                     bytes = quicrq_datagram_header_encode(datagram, bytes_max, stream_ctx->datagram_stream_id,
-                        found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, 0);
+                        found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, found->nb_objects_previous_group, 0);
                     header_length = bytes - datagram;
                 }
                 fragment_length = PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH - header_length;
@@ -826,6 +827,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     uint64_t object_offset;
     uint64_t queue_delay;
     uint8_t flags;
+    uint64_t nb_objects_previous_group;
     int is_last_fragment;
     const uint8_t* next_bytes;
 
@@ -833,7 +835,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
         ret = -1;
     }
     else {
-        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &is_last_fragment);
+        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
         /* Retrieve the stream context for the datagram */
         if (next_bytes == NULL) {
             ret = -1;
@@ -960,9 +962,8 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 size_t available = 0;
                 size_t data_length = 0;
                 int is_new_group = 0;
-                uint64_t nb_objects_last_group = 0;
+                uint64_t nb_objects_previous_group = 0;
                 int is_last_fragment = 0;
-                int is_last_fragment_init = 0;
                 int is_media_finished = 0;
                 int is_still_active = 0;
                 uint8_t flags = 0;
@@ -978,9 +979,10 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 }
                 else {
                     if (is_new_group) {
-                        nb_objects_last_group = stream_ctx->next_object_id;
+                        nb_objects_previous_group = stream_ctx->next_object_id;
                         stream_ctx->next_group_id += 1;
                         stream_ctx->next_object_id = 0;
+                        stream_ctx->next_object_offset = 0;
                     }
                     if (is_media_finished) {
                         /* Mark the stream as finished, prepare sending a final message */
@@ -990,7 +992,6 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                     }
                     if (available > 0) {
-                        is_last_fragment_init = is_last_fragment;
                         /* Predict length of datagram_stream_id + length of offset.
                          * TODO: the number of bytes available depends on the header size, which depends on
                         * object_id, and offset. The object size and object offset are managed by the
@@ -999,7 +1000,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                         * to be the actual last fragment, the coding will have to be fixed.
                         */
                         h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
-                            stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, flags, is_last_fragment);
+                            stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, flags, nb_objects_previous_group, is_last_fragment);
                         if (h_byte == NULL) {
                             /* Not enough space in header buffer to encode the header. That should never happen */
                             quicrq_log_message(stream_ctx->cnx_ctx, "Error: datagram header longer than %zu", QUICRQ_DATAGRAM_HEADER_MAX);
@@ -1031,7 +1032,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                             else {
                                 /* Push the header */
                                 h_byte = quicrq_datagram_header_encode(buffer, buffer + h_size + available, stream_ctx->datagram_stream_id,
-                                    stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, flags, is_last_fragment);
+                                    stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, flags, nb_objects_previous_group, is_last_fragment);
                                 if (h_byte != buffer + h_size) {
                                     /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
                                     quicrq_log_message(stream_ctx->cnx_ctx, "Error, cannot encode datagram header, expected = %zu", h_size);
@@ -1383,7 +1384,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->stream_id, stream_ctx->final_object_id);
                             stream_ctx->start_object_id = incoming.object_id;
                             ret = stream_ctx->consumer_fn(quicrq_media_start_point, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
-                                NULL, incoming.group_id, incoming.object_id, 0, 0, incoming.flags, 0, 0);
+                                NULL, incoming.group_id, incoming.object_id, 0, 0, incoming.flags, 0, 0, 0);
 
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
@@ -1396,7 +1397,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the final offset to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_final_object_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
-                                incoming.group_id, incoming.object_id, 0, 0, 0, 0, 0);
+                                incoming.group_id, incoming.object_id, 0, 0, 0, 0, 0, 0);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 1, 0, ret);
                         }
                         break;
@@ -1412,7 +1413,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
-                                incoming.data, incoming.group_id, incoming.object_id, incoming.offset, 0, incoming.flags,
+                                incoming.data, incoming.group_id, incoming.object_id, incoming.offset, 0, incoming.flags, /* TODO: nb_objects_previous_group*/ 0,
                                 incoming.is_last_fragment, incoming.length);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
@@ -1839,7 +1840,7 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
         }
         else {
             if (stream_ctx->consumer_fn != NULL) {
-                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 0, 0, 0, 0, 0);
+                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 0, 0, 0, 0, 0, 0);
             }
         }
     }

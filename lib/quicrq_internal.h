@@ -129,9 +129,9 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
 /* Encode and decode the header of datagram packets. */
 #define QUICRQ_DATAGRAM_HEADER_MAX 16
 uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t group_id, 
-    uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, uint8_t flags, int is_last_fragment);
+    uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, uint8_t flags, uint64_t nb_objects_previous_group, int is_last_fragment);
 const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* datagram_stream_id, uint64_t* group_id,
-    uint64_t* object_id, uint64_t* object_offset, uint64_t *queue_delay, uint8_t * flags, int * is_last_fragment);
+    uint64_t* object_id, uint64_t* object_offset, uint64_t *queue_delay, uint8_t * flags, uint64_t *nb_objects_previous_group, int * is_last_fragment);
 /* Stream header is indentical to repair message */
 #define QUICRQ_STREAM_HEADER_MAX 2+1+8+4+2
 
@@ -250,6 +250,7 @@ typedef struct st_quicrq_datagram_ack_state_t {
     uint64_t object_offset;
     uint64_t queue_delay;
     uint8_t flags;
+    uint64_t nb_objects_previous_group;
     int is_last_fragment;
     size_t length;
     int is_acked;
@@ -437,6 +438,7 @@ int quicrq_media_object_bridge_fn(
     uint64_t offset,
     uint64_t queue_delay,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length);
 /* For logging.. */

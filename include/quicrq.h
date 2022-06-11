@@ -282,6 +282,7 @@ typedef int (*quicrq_media_consumer_fn)(
     uint64_t offset,
     uint64_t queue_delay,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length);
 

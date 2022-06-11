@@ -396,7 +396,7 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
 
 /* encoding of the datagram header */
 uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t group_id,
-    uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, uint8_t flags, int is_last_fragment)
+    uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, uint8_t flags, uint64_t nb_objects_previous_group, int is_last_fragment)
 {
     uint64_t offset_and_fin = (object_offset << 1) | (unsigned int)(is_last_fragment & 1);
 #if 1
@@ -411,6 +411,9 @@ uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint6
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, queue_delay)) != NULL){
         if (bytes < bytes_max) {
             *bytes++ = flags;
+            if (object_id == 0 && object_offset == 0) {
+                bytes = picoquic_frames_varint_encode(bytes, bytes_max, nb_objects_previous_group);
+            }
         }
         else {
             bytes = NULL;
@@ -420,7 +423,7 @@ uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint6
 }
 
 const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* datagram_stream_id, uint64_t* group_id,
-    uint64_t* object_id, uint64_t* object_offset, uint64_t* queue_delay, uint8_t* flags, int* is_last_fragment)
+    uint64_t* object_id, uint64_t* object_offset, uint64_t* queue_delay, uint8_t* flags, uint64_t* nb_objects_previous_group, int* is_last_fragment)
 {
     uint64_t offset_and_fin = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id)) != NULL &&
@@ -431,6 +434,12 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
         (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, flags)) != NULL) {
         *object_offset = (offset_and_fin >> 1);
         *is_last_fragment = (int)(offset_and_fin & 1);
+        if (*object_id == 0 && *object_offset == 0) {
+            bytes = picoquic_frames_varint_decode(bytes, bytes_max, nb_objects_previous_group);
+        }
+        else {
+            *nb_objects_previous_group = 0;
+        }
 #if 1
         if (*group_id != 0) {
             DBG_PRINTF("%s", "Bug");

@@ -54,6 +54,7 @@ typedef struct st_quicrq_relay_cached_fragment_t {
     uint64_t offset;
     uint64_t cache_time;
     uint64_t queue_delay;
+    uint64_t nb_objects_previous_group;
     uint8_t flags;
     int is_last_fragment;
     struct st_quicrq_relay_cached_fragment_t* previous_in_order;
@@ -110,6 +111,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     uint64_t offset,
     uint64_t queue_delay,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length,
     uint64_t current_time);
