@@ -191,7 +191,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     /* First, create a "mock" buffer based on the available space instead of the actual number of bytes.
      * By design, we are creating a "repair" object, but using the "repair request" encoding. */
     uint8_t* h_byte = quicrq_repair_request_encode(stream_header+2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_REPAIR,
-        stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, space);
+        stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, space);
     if (h_byte == NULL) {
         /* That should not happen, unless the stream_header size is way too small */
         ret = -1;
@@ -249,10 +249,10 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         else {
             /* Encode the actual header, instead of a prediction */
             h_byte = quicrq_repair_request_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_REPAIR,
-                stream_ctx->next_object_id, stream_ctx->next_object_offset, is_last_fragment, available);
+                stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, is_last_fragment, available);
             if (is_last_fragment) {
-                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final fragment of object %" PRIu64 " on stream %" PRIu64,
-                    stream_ctx->next_object_id, stream_ctx->stream_id);
+                picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final fragment of object %" PRIu64 ",%" PRIu64 " on stream % " PRIu64,
+                    stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->stream_id);
             }
             if (h_byte == NULL) {
                 /* That should not happen, unless the stream_header size was way too small */
@@ -1126,14 +1126,15 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         if (stream_ctx->is_sender) {
             if (stream_ctx->datagram_repair_first != NULL) {
                 /* Encode the first repair in queue in the protocol buffer */
-                if (quicrq_msg_buffer_alloc(message, quicrq_repair_msg_reserve(stream_ctx->datagram_repair_first->object_id,
-                    stream_ctx->datagram_repair_first->object_offset, stream_ctx->datagram_repair_first->is_last_fragment,
+                if (quicrq_msg_buffer_alloc(message, quicrq_repair_msg_reserve(stream_ctx->datagram_repair_first->group_id,
+                    stream_ctx->datagram_repair_first->object_id, stream_ctx->datagram_repair_first->object_offset,
+                    stream_ctx->datagram_repair_first->is_last_fragment,
                     stream_ctx->datagram_repair_first->length), 0) != 0) {
                     ret = -1;
                 }
                 else {
                     uint8_t* message_next = quicrq_repair_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_REPAIR,
-                        stream_ctx->datagram_repair_first->object_id, stream_ctx->datagram_repair_first->object_offset, stream_ctx->datagram_repair_first->is_last_fragment,
+                        stream_ctx->datagram_repair_first->group_id, stream_ctx->datagram_repair_first->object_id, stream_ctx->datagram_repair_first->object_offset, stream_ctx->datagram_repair_first->is_last_fragment,
                         stream_ctx->datagram_repair_first->length, stream_ctx->datagram_repair_first->datagram);
                     if (message_next == NULL) {
                         ret = -1;
@@ -1426,7 +1427,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
-                                incoming.data, incoming.group_id, incoming.object_id, incoming.offset, 0, incoming.flags, /* TODO: nb_objects_previous_group*/ 0,
+                                incoming.data, incoming.group_id, incoming.object_id, incoming.offset, 0, incoming.flags, /* TODO: ectects_previous_group*/ 0,
                                 incoming.is_last_fragment, incoming.length);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
