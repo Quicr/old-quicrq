@@ -741,7 +741,7 @@ int test_media_object_consumer_cb(
         }
         break;
     case quicrq_media_final_object_id:
-        ret = quicrq_reassembly_learn_final_object_id(&cons_ctx->reassembly_ctx, object_id);
+        ret = quicrq_reassembly_learn_final_object_id(&cons_ctx->reassembly_ctx, group_id, object_id);
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }

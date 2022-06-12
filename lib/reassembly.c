@@ -94,8 +94,9 @@ void quicrq_reassembly_release(quicrq_reassembly_context_t* reassembly_ctx)
             }
             next_node = picosplay_next(next_node);
         }
-        DBG_PRINTF("Reassembly next: %" PRIu64 ", final: %" PRIu64 ", is_finished: %d",
-            reassembly_ctx->next_object_id, reassembly_ctx->final_object_id, reassembly_ctx->is_finished);
+        DBG_PRINTF("Reassembly next: %" PRIu64 ", final: %" PRIu64 ", %" PRIu64 ", is_finished: %d",
+            reassembly_ctx->next_object_id,
+            reassembly_ctx->final_group_id, reassembly_ctx->final_object_id, reassembly_ctx->is_finished);
         DBG_PRINTF("Reassembly contains %d objects, %d incomplete", nb_objects, nb_incomplete);
     }
 
@@ -339,7 +340,8 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
         reassembly_ctx->next_object_id++;
     }
     /* Mark finished if everything was received */
-    if (reassembly_ctx->final_object_id > 0 && reassembly_ctx->next_object_id >= reassembly_ctx->final_object_id) {
+    if ((reassembly_ctx->final_group_id > 0 ||reassembly_ctx->final_object_id > 0) &&
+        reassembly_ctx->next_object_id >= reassembly_ctx->final_object_id) {
         reassembly_ctx->is_finished = 1;
     }
     return ret;
@@ -442,14 +444,17 @@ int quicrq_reassembly_learn_start_point(
 
 int quicrq_reassembly_learn_final_object_id(
     quicrq_reassembly_context_t* reassembly_ctx,
+    uint64_t final_group_id,
     uint64_t final_object_id)
 {
     int ret = 0;
 
-    if (reassembly_ctx->final_object_id == 0) {
+    if (reassembly_ctx->final_group_id == 0 && reassembly_ctx->final_object_id == 0) {
+        reassembly_ctx->final_group_id = final_group_id;
         reassembly_ctx->final_object_id = final_object_id;
     }
-    else if (final_object_id != reassembly_ctx->final_object_id) {
+    else if (reassembly_ctx->final_group_id != final_group_id ||
+        final_object_id != reassembly_ctx->final_object_id) {
         ret = -1;
     }
 

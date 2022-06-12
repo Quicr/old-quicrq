@@ -95,7 +95,7 @@ int quicrq_media_object_bridge_fn(
         }
         break;
     case quicrq_media_final_object_id:
-        ret = quicrq_reassembly_learn_final_object_id(&bridge_ctx->reassembly_ctx, object_id);
+        ret = quicrq_reassembly_learn_final_object_id(&bridge_ctx->reassembly_ctx, group_id, object_id);
         if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }

@@ -70,26 +70,32 @@ const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_m
  *     offset(i)
  */
 
-size_t quicrq_fin_msg_reserve(uint64_t final_object_id)
+size_t quicrq_fin_msg_reserve(uint64_t final_group_id, uint64_t final_object_id)
 {
 #ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(final_group_id);
     UNREFERENCED_PARAMETER(final_object_id);
 #endif
-    return 9;
+    return 17;
 }
 
-uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_object_id)
+uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type,
+    uint64_t final_group_id, uint64_t final_object_id)
 {
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL) {
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, final_group_id)) != NULL) {
         bytes = picoquic_frames_varint_encode(bytes, bytes_max, final_object_id);
     }
     return bytes;
 }
 
-const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* final_object_id)
+const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+    uint64_t* final_group_id, uint64_t* final_object_id)
 {
+    *final_group_id = 0;
     *final_object_id = 0;
-    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL) {
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, final_group_id)) != NULL) {
         bytes = picoquic_frames_varint_decode(bytes, bytes_max, final_object_id);
     }
     return bytes;
@@ -333,7 +339,7 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
             bytes = quicrq_rq_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url, &msg->datagram_stream_id);
             break;
         case QUICRQ_ACTION_FIN_DATAGRAM:
-            bytes = quicrq_fin_msg_decode(bytes, bytes_max, &msg->message_type, &msg->object_id);
+            bytes = quicrq_fin_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
             break;
         case QUICRQ_ACTION_REQUEST_REPAIR:
             bytes = quicrq_repair_request_decode(bytes, bytes_max, &msg->message_type, &msg->object_id, &msg->offset, &msg->is_last_fragment, &msg->length);
@@ -368,7 +374,7 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         bytes = quicrq_rq_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url, msg->datagram_stream_id);
         break;
     case QUICRQ_ACTION_FIN_DATAGRAM:
-        bytes = quicrq_fin_msg_encode(bytes, bytes_max, msg->message_type, msg->object_id);
+        bytes = quicrq_fin_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
         break;
     case QUICRQ_ACTION_REQUEST_REPAIR:
         bytes = quicrq_repair_request_encode(bytes, bytes_max, msg->message_type, msg->object_id, msg->offset, msg->is_last_fragment, msg->length);

@@ -398,8 +398,11 @@ int quicrq_relay_consumer_cb(
         if (ret == 0) {
             /* If the final object id is known, and the number of fully received objects
              * matches that object id, then the transmission is finished. */
+#if 1
             /* TODO: manage count versus group ID. */
-            if (cons_ctx->cached_ctx->final_object_id > 0 &&
+            DBG_PRINTF("%s", "Bug");
+#endif
+            if ((cons_ctx->cached_ctx->final_group_id > 0 || cons_ctx->cached_ctx->final_object_id > 0) &&
                 cons_ctx->cached_ctx->nb_object_received >= cons_ctx->cached_ctx->final_object_id) {
                 ret = quicrq_consumer_finished;
             }
@@ -410,7 +413,10 @@ int quicrq_relay_consumer_cb(
         cons_ctx->cached_ctx->final_group_id = group_id;
         cons_ctx->cached_ctx->final_object_id = object_id;
         /* Manage fin of transmission */
+#if 1
         /* TODO: manage count versus group ID. */
+        DBG_PRINTF("%s", "Bug");
+#endif
         if (cons_ctx->cached_ctx->nb_object_received >= cons_ctx->cached_ctx->final_object_id) {
             ret = quicrq_consumer_finished;
         }
@@ -439,7 +445,10 @@ int quicrq_relay_consumer_cb(
         break;
     case quicrq_media_close:
         /* Document the final object */
+#if 1
         /* TODO: manage groups versus number of objects */
+        DBG_PRINTF("%s", "bug");
+#endif
         if (cons_ctx->cached_ctx->final_object_id == 0) {
             cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->nb_object_received;
         }
@@ -708,11 +717,12 @@ int quicrq_relay_datagram_publisher_fn(
          * been sent.
          */
 
-        if (media_ctx->cache_ctx->final_object_id != 0 &&
+        if ((media_ctx->cache_ctx->final_group_id != 0 || media_ctx->cache_ctx->final_object_id != 0) &&
             media_ctx->current_fragment != NULL &&
             media_ctx->length_sent >= media_ctx->current_fragment->data_length &&
             media_ctx->current_fragment->next_in_order == NULL) {
             /* Mark the stream as finished, prepare sending a final message */
+            stream_ctx->final_group_id = media_ctx->cache_ctx->final_group_id;
             stream_ctx->final_object_id = media_ctx->cache_ctx->final_object_id;
             /* Wake up the control stream so the final message can be sent. */
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);

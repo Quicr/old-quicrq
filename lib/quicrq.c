@@ -214,9 +214,10 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                 /* Send the fin object immediately, because it would be very hard to get
                  * a new "prepare to send" callback after an empty response.
                  */
+                stream_ctx->final_group_id = stream_ctx->next_group_id;
                 stream_ctx->final_object_id = stream_ctx->next_object_id;
                 h_byte = quicrq_fin_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FIN_DATAGRAM,
-                    stream_ctx->final_object_id);
+                    stream_ctx->final_group_id, stream_ctx->final_object_id);
                 if (h_byte == NULL || h_byte > stream_header + space) {
                     ret = -1;
                 }
@@ -229,8 +230,9 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         ret = -1;
                     }
                     else {
-                        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Fin object of stream %" PRIu64 " : %" PRIu64,
-                            stream_ctx->stream_id, stream_ctx->final_object_id);
+                        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, 
+                            "Fin group, object of stream %" PRIu64 " : %" PRIu64 ", %" PRIu64,
+                            stream_ctx->stream_id, stream_ctx->final_group_id, stream_ctx->final_object_id);
 
                         stream_header[0] = (uint8_t)(h_size >> 8);
                         stream_header[1] = (uint8_t)(h_size & 0xff);
@@ -286,6 +288,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         }
 
                         if (is_media_finished) {
+                            stream_ctx->final_group_id = stream_ctx->next_group_id;
                             stream_ctx->final_object_id = stream_ctx->next_object_id;
                             stream_ctx->send_state = quicrq_sending_ready;
                         }
@@ -1142,16 +1145,18 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-            else if (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent) {
-                quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", sending final object id: %" PRIu64,
-                    stream_ctx->stream_id, stream_ctx->final_object_id);
+            else if ((stream_ctx->final_group_id > 0 || stream_ctx->final_object_id > 0) &&
+                !stream_ctx->is_final_object_id_sent) {
+                quicrq_log_message(stream_ctx->cnx_ctx, 
+                    "Stream %" PRIu64 ", sending final group id: %" PRIu64 ", object id : % " PRIu64,
+                    stream_ctx->stream_id, stream_ctx->final_group_id, stream_ctx->final_object_id);
                 /* TODO: encode the final offset message in the protocol buffer */
-                if (quicrq_msg_buffer_alloc(message, quicrq_fin_msg_reserve(stream_ctx->final_object_id), 0) != 0) {
+                if (quicrq_msg_buffer_alloc(message, quicrq_fin_msg_reserve(stream_ctx->final_group_id, stream_ctx->final_object_id), 0) != 0) {
                     ret = -1;
                 }
                 else {
                     uint8_t* message_next = quicrq_fin_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_FIN_DATAGRAM,
-                        stream_ctx->final_object_id);
+                        stream_ctx->final_group_id, stream_ctx->final_object_id);
                     if (message_next == NULL) {
                         ret = -1;
                     }
@@ -1187,17 +1192,20 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
                 quicrq_log_message(stream_ctx->cnx_ctx, "Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64,
                     stream_ctx->stream_id, stream_ctx->send_state, stream_ctx->final_object_id);
-                DBG_PRINTF("Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64, 
-                    stream_ctx->stream_id, stream_ctx->send_state, stream_ctx->final_object_id);
+                DBG_PRINTF("Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64 ",%" PRIu64,
+                    stream_ctx->stream_id, stream_ctx->send_state,
+                    stream_ctx->final_group_id, stream_ctx->final_object_id);
                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
             }
         }
         else {
             /* TODO: consider receiver messages */
-            quicrq_log_message(stream_ctx->cnx_ctx, "Consider receiver messages on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
-                stream_ctx->final_object_id);
-            DBG_PRINTF("Consider receiver messages on stream %" PRIu64 ", final: %" PRIu64, stream_ctx->stream_id,
-                stream_ctx->final_object_id);
+            quicrq_log_message(stream_ctx->cnx_ctx,
+                "Consider receiver messages on stream %" PRIu64 ", final: %" PRIu64 ", %" PRIu64,
+                stream_ctx->stream_id, stream_ctx->final_group_id, stream_ctx->final_object_id);
+            DBG_PRINTF(
+                "Consider receiver messages on stream %" PRIu64 ", final: %" PRIu64 ", %" PRIu64,
+                stream_ctx->stream_id, stream_ctx->final_group_id, stream_ctx->final_object_id);
         }
     }
 
@@ -1214,13 +1222,15 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         case quicrq_sending_initial:
             /* Send available buffer data. Mark state ready after sent. */
             more_to_send = (stream_ctx->datagram_repair_first != NULL ||
-                (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent));
+                ((stream_ctx->final_group_id > 0 || stream_ctx->final_object_id > 0) &&
+                    !stream_ctx->is_final_object_id_sent));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             break;
         case quicrq_sending_repair:
             /* Send available buffer data and repair data. Dequeue repair and mark state ready after sent. */
             more_to_send = (stream_ctx->datagram_repair_first->next_repair != NULL ||
-                (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent));
+                ((stream_ctx->final_group_id > 0 || stream_ctx->final_object_id > 0) &&
+                    !stream_ctx->is_final_object_id_sent));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 quicrq_remove_repair_in_stream_ctx(stream_ctx, stream_ctx->datagram_repair_first);
@@ -1380,8 +1390,10 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         }
                         else {
                             /* Pass the start point to the media consumer. */
-                            quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", start point notified: %" PRIu64,
-                                stream_ctx->stream_id, stream_ctx->final_object_id);
+                            quicrq_log_message(stream_ctx->cnx_ctx,
+                                "Stream %" PRIu64 ", start point notified: %" PRIu64 ", %" PRIu64,
+                                stream_ctx->stream_id, incoming.group_id, incoming.object_id);
+                            stream_ctx->start_group_id = incoming.group_id;
                             stream_ctx->start_object_id = incoming.object_id;
                             ret = stream_ctx->consumer_fn(quicrq_media_start_point, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
                                 NULL, incoming.group_id, incoming.object_id, 0, 0, incoming.flags, 0, 0, 0);
@@ -1390,7 +1402,8 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         }
                         break;
                     case QUICRQ_ACTION_FIN_DATAGRAM:
-                        if (stream_ctx->receive_state != quicrq_receive_repair || stream_ctx->final_object_id != 0) {
+                        if (stream_ctx->receive_state != quicrq_receive_repair ||
+                            (stream_ctx->final_object_id != 0 || stream_ctx->final_object_id != 0)) {
                             /* Protocol error */
                             ret = -1;
                         }

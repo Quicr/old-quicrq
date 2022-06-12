@@ -111,9 +111,11 @@ typedef struct st_quicrq_message_t {
 size_t quicrq_rq_msg_reserve(size_t url_length);
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint64_t datagram_stream_id);
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint64_t* datagram_stream_id);
-size_t quicrq_fin_msg_reserve(uint64_t final_object_id);
-uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_object_id);
-const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* final_object_id);
+size_t quicrq_fin_msg_reserve(uint64_t final_group_id, uint64_t final_object_id);
+uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, 
+    uint64_t final_group_id, uint64_t final_object_id);
+const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
+    uint64_t* message_type, uint64_t* final_group_id, uint64_t* final_object_id);
 size_t quicrq_repair_request_reserve(uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length);

@@ -20,6 +20,7 @@ extern "C" {
 typedef struct st_quicrq_reassembly_context_t {
     picosplay_tree_t object_tree;
     uint64_t next_object_id;
+    uint64_t final_group_id;
     uint64_t final_object_id;
     int is_finished : 1;
 } quicrq_reassembly_context_t;
@@ -62,6 +63,7 @@ int quicrq_reassembly_learn_start_point(quicrq_reassembly_context_t* reassembly_
 /* Obtain the final object ID */
 int quicrq_reassembly_learn_final_object_id(
     quicrq_reassembly_context_t* reassembly_ctx,
+    uint64_t final_group_id,
     uint64_t final_object_id);
 
 /* Find the object number of the last reassembled object */

@@ -66,7 +66,7 @@ static quicrq_message_t fin_msg = {
     0,
     NULL,
     0,
-    0,
+    17,
     123456,
     0,
     0,
@@ -78,6 +78,7 @@ static quicrq_message_t fin_msg = {
 
 static uint8_t fin_msg_bytes[] = {
     QUICRQ_ACTION_FIN_DATAGRAM,
+    0x11,
     0x80, 0x01, 0xe2, 0x40
 };
 
