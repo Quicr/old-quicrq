@@ -131,6 +131,11 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     int ret = 0;
     quicrq_relay_cached_fragment_t* fragment = (quicrq_relay_cached_fragment_t*)malloc(
         sizeof(quicrq_relay_cached_fragment_t) + data_length);
+#if 1
+    if (group_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
 
     if (fragment == NULL) {
         ret = -1;
@@ -180,6 +185,11 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     /* If the object is in the cache, check whether this fragment is already received */
     quicrq_relay_cached_fragment_t * first_fragment_state = NULL;
     quicrq_relay_cached_fragment_t key = { 0 };
+#if 1
+    if (group_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
 
     if (group_id < cached_ctx->first_group_id ||
         (group_id == cached_ctx->first_group_id &&
@@ -387,6 +397,11 @@ int quicrq_relay_consumer_cb(
     int ret = 0;
     quicrq_relay_consumer_context_t * cons_ctx = (quicrq_relay_consumer_context_t*)media_ctx;
 
+#if 1
+    if (group_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
     switch (action) {
     case quicrq_media_datagram_ready:
         /* Check that this datagram was not yet received.
@@ -415,7 +430,7 @@ int quicrq_relay_consumer_cb(
         /* Manage fin of transmission */
 #if 1
         /* TODO: manage count versus group ID. */
-        DBG_PRINTF("%s", "Bug");
+        DBG_PRINTF("%s", "Test object received bug");
 #endif
         if (cons_ctx->cached_ctx->nb_object_received >= cons_ctx->cached_ctx->final_object_id) {
             ret = quicrq_consumer_finished;
@@ -447,7 +462,7 @@ int quicrq_relay_consumer_cb(
         /* Document the final object */
 #if 1
         /* TODO: manage groups versus number of objects */
-        DBG_PRINTF("%s", "bug");
+        DBG_PRINTF("%s", "test object received bug");
 #endif
         if (cons_ctx->cached_ctx->final_object_id == 0) {
             cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->nb_object_received;

@@ -101,7 +101,7 @@ static quicrq_message_t repair_request_msg = {
 
 static uint8_t repair_request_msg_bytes[] = {
     QUICRQ_ACTION_REQUEST_REPAIR,
-    0x80, 0x01, 0xe2, 0x40,
+    0x0, 0x80, 0x01, 0xe2, 0x40,
     0x49, 0xa5,
     (uint8_t)sizeof(repair_bytes)
 };
@@ -123,6 +123,7 @@ static quicrq_message_t repair_msg = {
 
 static uint8_t repair_msg_bytes[] = {
     QUICRQ_ACTION_REPAIR,
+    0x00,
     0x80, 0x01, 0xe2, 0x40,
     0x49, 0xa5,
     (uint8_t)sizeof(repair_bytes),

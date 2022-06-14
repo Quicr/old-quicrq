@@ -143,6 +143,7 @@ const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t*
     int * is_last_fragment, size_t* repair_length)
 {
     uint64_t offset_and_fin = 0;
+    *repair_group_id = 0;
     *repair_object_id = 0;
     *repair_offset = 0;
     *is_last_fragment = 0;
@@ -185,6 +186,11 @@ uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t m
     uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t * repair_data)
 {
     uint64_t offset_and_fin = (repair_offset << 1) | (uint64_t)(is_last_fragment & 1);
+#if 1
+    if (repair_group_id != 0) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_group_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_object_id)) != NULL &&
