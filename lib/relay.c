@@ -686,7 +686,10 @@ int quicrq_relay_datagram_publisher_prepare(
                             *at_least_one_active = 1;
                             if (stream_ctx != NULL) {
                                 /* Keep track in stream context */
-                                ret = quicrq_datagram_ack_init(stream_ctx, media_ctx->current_fragment->object_id, offset, 
+                                ret = quicrq_datagram_ack_init(stream_ctx,
+                                    media_ctx->current_fragment->group_id,
+                                    media_ctx->current_fragment->object_id, offset, 
+                                    media_ctx->current_fragment->nb_objects_previous_group,
                                     ((uint8_t*)buffer) + h_size, copied,
                                     media_ctx->current_fragment->queue_delay, is_last_fragment, NULL, 
                                     picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
