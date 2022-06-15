@@ -742,7 +742,8 @@ int test_media_object_consumer_cb(
 #endif
     switch (action) {
     case quicrq_media_datagram_ready:
-        ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, flags, is_last_fragment, data_length,
+        ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, flags,
+            nb_objects_previous_group, is_last_fragment, data_length,
             test_media_consumer_object_ready, cons_ctx);
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;

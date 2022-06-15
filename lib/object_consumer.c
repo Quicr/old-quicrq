@@ -83,7 +83,8 @@ int quicrq_media_object_bridge_fn(
 #endif
     switch (action) {
     case quicrq_media_datagram_ready:
-        ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, flags, is_last_fragment, data_length,
+        ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, flags,
+            nb_objects_previous_group, is_last_fragment, data_length,
             quicrq_media_object_bridge_ready, bridge_ctx);
         if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;

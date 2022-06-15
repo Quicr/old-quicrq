@@ -34,6 +34,7 @@ typedef struct st_quicrq_reassembly_object_t {
     struct st_quicrq_reassembly_packet_t* last_packet;
     uint64_t group_id;
     uint64_t object_id;
+    uint64_t nb_objects_previous_group;
     uint64_t final_offset;
     uint8_t flags;
     uint64_t data_received;
@@ -104,10 +105,11 @@ void quicrq_reassembly_release(quicrq_reassembly_context_t* reassembly_ctx)
     memset(reassembly_ctx, 0, sizeof(quicrq_reassembly_context_t));
 }
 
-static quicrq_reassembly_object_t* quicrq_object_find(quicrq_reassembly_context_t* object_list, uint64_t object_id)
+static quicrq_reassembly_object_t* quicrq_object_find(quicrq_reassembly_context_t* object_list, uint64_t group_id, uint64_t object_id)
 {
     quicrq_reassembly_object_t* object = NULL;
     quicrq_reassembly_object_t key_object = { 0 };
+    key_object.group_id = group_id;
     key_object.object_id = object_id;
     picosplay_node_t* node = picosplay_find(&object_list->object_tree, (void*)&key_object);
     if (node != NULL) {
@@ -160,11 +162,13 @@ static quicrq_reassembly_packet_t* quicrq_reassembly_object_create_packet(
     return packet;
 }
 
-static quicrq_reassembly_object_t* quicrq_reassembly_object_create(quicrq_reassembly_context_t* reassembly_ctx, uint64_t object_id)
+static quicrq_reassembly_object_t* quicrq_reassembly_object_create(quicrq_reassembly_context_t* reassembly_ctx,
+    uint64_t group_id, uint64_t object_id)
 {
     quicrq_reassembly_object_t* object = (quicrq_reassembly_object_t*)malloc(sizeof(quicrq_reassembly_object_t));
     if (object != NULL) {
         memset(object, 0, sizeof(quicrq_reassembly_object_t));
+        object->group_id = group_id;
         object->object_id = object_id;
         picosplay_insert(&reassembly_ctx->object_tree, object);
     }
@@ -328,9 +332,29 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
     int ret = 0;
     quicrq_reassembly_object_t* object = NULL;
 
-    /* TODO: delete all objects that might be located before the "next id" */
+    /* Objects are "in order" if one of two conditions is true:
+    *  - The object with key "next group id" and "next object id" is present,
+    *  - or, the object with key "next_group_id + 1" and value "next object id=0" is present, and
+    *    the number of objects in the previous group matches "next object id"
+    */
 
-    while (ret == 0 && (object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_object_id)) != NULL && object->reassembled != NULL) {
+    while (ret == 0){
+        object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_group_id, reassembly_ctx->next_object_id);
+        if (object != NULL) {
+            if (object->reassembled == NULL) {
+                object = NULL;
+            }
+        } else {
+            object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_group_id + 1, 0);
+            if (object != NULL && object->reassembled != NULL &&
+                object->nb_objects_previous_group == reassembly_ctx->next_object_id) {
+                reassembly_ctx->next_group_id += 1;
+                reassembly_ctx->next_object_id = 0;
+            }
+        }
+        if (object == NULL) {
+            break;
+        } 
         /* Submit the object in order */
         ret = ready_fn(app_media_ctx, current_time, object->group_id, object->object_id, object->flags, object->reassembled,
             (size_t)object->final_offset, quicrq_reassembly_object_repair);
@@ -355,6 +379,7 @@ int quicrq_reassembly_input(
     uint64_t object_id,
     uint64_t offset,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length,
     quicrq_reassembly_object_ready_fn ready_fn,
@@ -370,17 +395,21 @@ int quicrq_reassembly_input(
         /* No need for this object. */
     }
     else {
-        quicrq_reassembly_object_t* object = quicrq_object_find(reassembly_ctx, object_id);
+        quicrq_reassembly_object_t* object = quicrq_object_find(reassembly_ctx, group_id, object_id);
 
         if (object == NULL) {
             /* Create a media object for reassembly */
-            object = quicrq_reassembly_object_create(reassembly_ctx, object_id);
+            object = quicrq_reassembly_object_create(reassembly_ctx, group_id, object_id);
         }
         /* per fragment logic */
         if (object == NULL) {
             ret = -1;
         }
         else {
+            /* If this is the first fragment and first object, document the previous group */
+            if (object_id == 0 && offset == 0) {
+                object->nb_objects_previous_group = nb_objects_previous_group;
+            }
             /* If this is the last fragment, update the object length */
             if (is_last_fragment) {
                 if (object->final_offset == 0) {
@@ -397,8 +426,20 @@ int quicrq_reassembly_input(
             }
             else if (object->final_offset > 0 && object->data_received >= object->final_offset) {
                 /* If the object is complete, verify and submit */
-                quicrq_reassembly_object_mode_enum object_mode = (reassembly_ctx->next_object_id == object_id) ?
+                quicrq_reassembly_object_mode_enum object_mode;
+                if (group_id == reassembly_ctx->next_group_id + 1 &&
+                    object_id == 0 && object->nb_objects_previous_group == reassembly_ctx->next_object_id) {
+                    /* This is the first object of a new group, and all objects of the previous group
+                     * have been received */
+                    reassembly_ctx->next_group_id += 1;
+                    reassembly_ctx->next_object_id = 0;
+                }
+
+                object_mode = (
+                    reassembly_ctx->next_group_id == group_id &&
+                    reassembly_ctx->next_object_id == object_id ) ?
                     quicrq_reassembly_object_in_sequence : quicrq_reassembly_object_peek;
+
                 if (object->reassembled == NULL) {
                     /* Reassemble and verify -- maybe should do that in real time instead of at the end? */
                     ret = quicrq_reassembly_object_reassemble(object);

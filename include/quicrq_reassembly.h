@@ -19,6 +19,7 @@ extern "C" {
 
 typedef struct st_quicrq_reassembly_context_t {
     picosplay_tree_t object_tree;
+    uint64_t next_group_id;
     uint64_t next_object_id;
     uint64_t final_group_id;
     uint64_t final_object_id;
@@ -52,6 +53,7 @@ int quicrq_reassembly_input(
     uint64_t object_id,
     uint64_t offset,
     uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length,
     quicrq_reassembly_object_ready_fn ready_fn,
