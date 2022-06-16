@@ -18,7 +18,9 @@
  */
 typedef struct st_quicrq_object_source_item_t {
     picosplay_node_t object_node;
+    uint64_t group_id;
     uint64_t object_id;
+    uint64_t nb_objects_previous_group;
     uint64_t object_time;
     size_t object_length;
     uint8_t* object;
@@ -32,7 +34,11 @@ static void* quicrq_object_source_node_value(picosplay_node_t* object_node)
 }
 
 static int64_t quicrq_object_source_node_compare(void* l, void* r) {
-    return (int64_t)((quicrq_object_source_item_t*)l)->object_id - ((quicrq_object_source_item_t*)r)->object_id;
+    int64_t ret = ((quicrq_object_source_item_t*)l)->group_id - ((quicrq_object_source_item_t*)r)->group_id;
+    if (ret == 0) {
+        ret = ((quicrq_object_source_item_t*)l)->object_id - ((quicrq_object_source_item_t*)r)->object_id;
+    }
+    return ret;
 }
 
 static picosplay_node_t* quicrq_object_source_node_create(void* v_media_object)
@@ -54,9 +60,11 @@ void quicrq_object_source_list_init(quicrq_media_object_source_ctx_t* object_sou
         quicrq_object_source_node_create, quicrq_object_source_node_delete, quicrq_object_source_node_value);
 }
 
-quicrq_object_source_item_t* quicrq_get_object_source_item(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t object_id)
+quicrq_object_source_item_t* quicrq_get_object_source_item(quicrq_media_object_source_ctx_t* object_source_ctx,
+    uint64_t group_id, uint64_t object_id)
 {
     quicrq_object_source_item_t key = { 0 };
+    key.group_id = group_id;
     key.object_id = object_id;
     quicrq_object_source_item_t* found = (quicrq_object_source_item_t*)quicrq_object_source_node_value(
         picosplay_find(&object_source_ctx->object_source_tree, &key));
@@ -67,6 +75,7 @@ quicrq_object_source_item_t* quicrq_get_object_source_item(quicrq_media_object_s
  */
 typedef struct st_quicrq_object_source_publisher_ctx_t {
     quicrq_media_object_source_ctx_t* object_source_ctx;
+    uint64_t next_group_id;
     uint64_t next_object_id;
     size_t next_object_offset;
     int next_was_sent;
@@ -82,6 +91,8 @@ void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t
         media_ctx->object_source_ctx = object_srce_ctx;
         media_ctx->next_object_id = object_srce_ctx->start_object_id;
         if (stream_ctx != NULL) {
+            stream_ctx->start_group_id = object_srce_ctx->start_group_id;
+            stream_ctx->next_group_id = object_srce_ctx->start_group_id;
             stream_ctx->start_object_id = object_srce_ctx->start_object_id;
             stream_ctx->next_object_id = object_srce_ctx->start_object_id;
         }
@@ -124,7 +135,21 @@ int quicrq_media_object_publisher(
             media_ctx->next_was_sent = 0;
         }
         /* retrieve the object */
-        object_source_item = quicrq_get_object_source_item(media_ctx->object_source_ctx, media_ctx->next_object_id);
+        object_source_item = quicrq_get_object_source_item(media_ctx->object_source_ctx, 
+            media_ctx->next_group_id, media_ctx->next_object_id);
+        if (object_source_item == NULL && media_ctx->next_object_id > 0) {
+            object_source_item = quicrq_get_object_source_item(media_ctx->object_source_ctx,
+                media_ctx->next_group_id + 1, 0);
+            if (object_source_item != NULL && object_source_item->nb_objects_previous_group <= media_ctx->next_object_id) {
+                media_ctx->next_group_id++;
+                media_ctx->next_object_id = 0;
+                media_ctx->next_object_offset = 0;
+                media_ctx->next_was_sent = 0;
+            }
+            else {
+                object_source_item = NULL;
+            }
+        }
         if (object_source_item == NULL) {
             /* This object is not yet available */
             if (media_ctx->object_source_ctx->is_finished) {
@@ -224,6 +249,7 @@ int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
     uint8_t* object_data,
     size_t object_length,
+    int is_new_group,
     quicrq_media_object_properties_t* properties)
 {
     int ret = 0;
@@ -233,13 +259,21 @@ int quicrq_publish_object(
         ret = -1;
     }
     else {
+        uint64_t nb_objects_previous_group = 0;
         /* Add the object at the end of the cache. */
         memset(source_object, 0, allocated);
+        if (is_new_group && object_source_ctx->next_object_id > 0) {
+            nb_objects_previous_group = object_source_ctx->next_object_id;
+            object_source_ctx->next_group_id++;
+            object_source_ctx->next_object_id = 0;
+        }
+        source_object->group_id = object_source_ctx->next_group_id;
         source_object->object_id = object_source_ctx->next_object_id;
         object_source_ctx->next_object_id++;
         source_object->object_length = object_length;
         source_object->object_time = picoquic_get_quic_time(object_source_ctx->qr_ctx->quic);
         source_object->object = ((uint8_t *)source_object) + sizeof(quicrq_object_source_item_t);
+        source_object->nb_objects_previous_group = nb_objects_previous_group;
         memcpy(source_object->object, object_data, object_length);
         (void)picosplay_insert(&object_source_ctx->object_source_tree, source_object);
         /* Signal to the quic context that the source is now active. */

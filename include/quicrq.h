@@ -127,6 +127,7 @@ int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
     uint8_t* object,
     size_t object_length,
+    int is_new_group,
     quicrq_media_object_properties_t * properties);
 
 void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_ctx);

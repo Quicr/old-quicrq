@@ -449,7 +449,10 @@ int test_media_object_source_iterate(
             else if (!pub_ctx->is_real_time ||
                 current_time >= pub_ctx->start_time + pub_ctx->current_header.timestamp) {
                 /* else if the data is not published, publish it */
-                ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, NULL);
+                /* For test purpose, we consider objects larger than 10000 bytes as starting a new group */
+                int is_new_group = (pub_ctx->media_object_size > 10000);
+                ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, 
+                    is_new_group, NULL);
                 object_pub_ctx->object_is_published = 1;
                 *is_active |= 1;
             }
@@ -1441,11 +1444,13 @@ int quicrq_media_object_publish_test()
 
     for (size_t i = 0; ret == 0 && i < nb_targets; i++) {
         /* Publish a simulated object */
+        int is_new_group;
         if (targets[i] > target_max) {
             ret = -1;
         }
         memset(object_frame, (uint8_t)i, targets[i]);
-        ret = quicrq_publish_object(object_source_ctx, object_frame, targets[i], NULL);
+        is_new_group = (targets[i] > 10000);
+        ret = quicrq_publish_object(object_source_ctx, object_frame, targets[i], is_new_group, NULL);
 
         if (ret == 0) {
             /* Verify that the object can be read properly */

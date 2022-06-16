@@ -165,6 +165,7 @@ struct st_quicrq_media_object_source_ctx_t {
     quicrq_media_object_source_properties_t properties;
     uint64_t start_group_id;
     uint64_t start_object_id;
+    uint64_t next_group_id;
     uint64_t next_object_id;
     picosplay_tree_t object_source_tree;
     int is_finished;
