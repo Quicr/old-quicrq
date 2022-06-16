@@ -450,7 +450,8 @@ int test_media_object_source_iterate(
                 current_time >= pub_ctx->start_time + pub_ctx->current_header.timestamp) {
                 /* else if the data is not published, publish it */
                 /* For test purpose, we consider objects larger than 10000 bytes as starting a new group */
-                int is_new_group = (pub_ctx->media_object_size > 10000);
+                /* Special case of audio: small packets, group by itself. */
+                int is_new_group = (pub_ctx->media_object_size > 10000 || pub_ctx->media_object_size < 200);
                 ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, 
                     is_new_group, NULL);
                 object_pub_ctx->object_is_published = 1;
