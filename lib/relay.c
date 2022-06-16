@@ -116,6 +116,54 @@ void quicrq_relay_cache_media_init(quicrq_relay_cached_media_t* cached_media)
 /* Client part of the relay.
  * The connection is started when a context is specialized to become a relay
  */
+
+ /* Relay cache progress.
+  * Manage the "next_group" and "next_object" items.
+  */
+void quicrq_relay_cache_progress(quicrq_relay_cached_media_t* cached_ctx,
+    quicrq_relay_cached_fragment_t* fragment)
+{
+    /* Check whether the next object is present */
+    picosplay_node_t* next_fragment_node = &fragment->fragment_node;
+
+    do {
+        int is_expected = 0;
+        fragment = (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(next_fragment_node);
+        if (fragment == NULL) {
+            break;
+        }
+        if (fragment->group_id == cached_ctx->next_group_id &&
+            fragment->object_id == cached_ctx->next_object_id &&
+            fragment->offset == cached_ctx->next_offset) {
+            is_expected = 1;
+        }
+        else if (fragment->group_id == (cached_ctx->next_group_id + 1) &&
+            fragment->object_id == 0 &&
+            fragment->offset == 0 &&
+            cached_ctx->next_object_id > 0 &&
+            cached_ctx->next_offset == 0 &&
+            cached_ctx->next_object_id == fragment->nb_objects_previous_group) {
+            cached_ctx->next_object_id += 1;
+            cached_ctx->next_object_id = 0;
+            cached_ctx->next_offset = 0;
+            is_expected = 1;
+        }
+        if (is_expected) {
+            if (fragment->is_last_fragment) {
+                cached_ctx->next_object_id += 1;
+                cached_ctx->next_offset = 0;
+            }
+            else {
+                cached_ctx->next_offset += fragment->data_length;
+            }
+        }
+        else {
+            break;
+        }
+    } while ((next_fragment_node = picosplay_next(next_fragment_node)) != NULL);
+}
+
+
 int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
     uint64_t group_id,
@@ -131,11 +179,6 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     int ret = 0;
     quicrq_relay_cached_fragment_t* fragment = (quicrq_relay_cached_fragment_t*)malloc(
         sizeof(quicrq_relay_cached_fragment_t) + data_length);
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 
     if (fragment == NULL) {
         ret = -1;
@@ -162,6 +205,7 @@ int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
         fragment->data_length = data_length;
         memcpy(fragment->data, data, data_length);
         picosplay_insert(&cached_ctx->fragment_tree, fragment);
+        quicrq_relay_cache_progress(cached_ctx, fragment);
     }
 
     return ret;
@@ -185,11 +229,6 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     /* If the object is in the cache, check whether this fragment is already received */
     quicrq_relay_cached_fragment_t * first_fragment_state = NULL;
     quicrq_relay_cached_fragment_t key = { 0 };
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 
     if (group_id < cached_ctx->first_group_id ||
         (group_id == cached_ctx->first_group_id &&
@@ -287,6 +326,12 @@ int quicrq_relay_learn_start_point(quicrq_relay_cached_media_t* cached_ctx,
     picosplay_node_t* first_fragment_node = NULL;
     cached_ctx->first_group_id = start_group_id;
     cached_ctx->first_object_id = start_object_id;
+    if (cached_ctx->next_group_id < start_group_id ||
+        (cached_ctx->next_group_id == start_group_id &&
+            cached_ctx->next_object_id < start_object_id)) {
+        cached_ctx->next_group_id = start_group_id;
+        cached_ctx->next_object_id = start_object_id;
+    }
     while ((first_fragment_node = picosplay_first(&cached_ctx->fragment_tree)) != NULL) {
         quicrq_relay_cached_fragment_t* first_fragment_state = 
             (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(first_fragment_node);
@@ -397,11 +442,6 @@ int quicrq_relay_consumer_cb(
     int ret = 0;
     quicrq_relay_consumer_context_t * cons_ctx = (quicrq_relay_consumer_context_t*)media_ctx;
 
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
     switch (action) {
     case quicrq_media_datagram_ready:
         /* Check that this datagram was not yet received.
@@ -411,14 +451,11 @@ int quicrq_relay_consumer_cb(
             group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
         /* Manage fin of transmission */
         if (ret == 0) {
-            /* If the final object id is known, and the number of fully received objects
-             * matches that object id, then the transmission is finished. */
-#if 1
-            /* TODO: manage count versus group ID. */
-            DBG_PRINTF("%s", "Bug");
-#endif
+            /* If the final group id and object id are known, and the next expected
+             * values match, then the transmission is finished. */
             if ((cons_ctx->cached_ctx->final_group_id > 0 || cons_ctx->cached_ctx->final_object_id > 0) &&
-                cons_ctx->cached_ctx->nb_object_received >= cons_ctx->cached_ctx->final_object_id) {
+                cons_ctx->cached_ctx->next_group_id == cons_ctx->cached_ctx->final_group_id &&
+                cons_ctx->cached_ctx->next_object_id == cons_ctx->cached_ctx->final_object_id) {
                 ret = quicrq_consumer_finished;
             }
         }
@@ -428,11 +465,8 @@ int quicrq_relay_consumer_cb(
         cons_ctx->cached_ctx->final_group_id = group_id;
         cons_ctx->cached_ctx->final_object_id = object_id;
         /* Manage fin of transmission */
-#if 1
-        /* TODO: manage count versus group ID. */
-        DBG_PRINTF("%s", "Test object received bug");
-#endif
-        if (cons_ctx->cached_ctx->nb_object_received >= cons_ctx->cached_ctx->final_object_id) {
+        if (cons_ctx->cached_ctx->next_group_id == cons_ctx->cached_ctx->final_group_id &&
+            cons_ctx->cached_ctx->next_object_id == cons_ctx->cached_ctx->final_object_id) {
             ret = quicrq_consumer_finished;
         }
         if (ret == 0) {
@@ -460,12 +494,40 @@ int quicrq_relay_consumer_cb(
         break;
     case quicrq_media_close:
         /* Document the final object */
-#if 1
-        /* TODO: manage groups versus number of objects */
-        DBG_PRINTF("%s", "test object received bug");
-#endif
-        if (cons_ctx->cached_ctx->final_object_id == 0) {
-            cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->nb_object_received;
+        if (cons_ctx->cached_ctx->final_group_id == 0 && cons_ctx->cached_ctx->final_object_id == 0) {
+            /* Document the last group_id and object_id that were fully received. */
+            if (cons_ctx->cached_ctx->next_offset == 0) {
+                cons_ctx->cached_ctx->final_group_id = cons_ctx->cached_ctx->next_group_id;
+                cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->next_object_id;
+            }
+            else  if (cons_ctx->cached_ctx->next_object_id > 1) {
+                cons_ctx->cached_ctx->final_group_id = cons_ctx->cached_ctx->next_group_id;
+                cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->next_object_id - 1;
+            }
+            else {
+                /* find the last object that was fully received. If there is none,
+                 * leave the final_group_id and final_object_id
+                 */
+                quicrq_relay_cached_fragment_t key = { 0 };
+                picosplay_node_t* fragment_node = NULL;
+                quicrq_relay_cached_fragment_t* fragment = NULL;
+
+                key.group_id = cons_ctx->cached_ctx->next_group_id;
+                key.object_id = 0;
+                key.offset = 0;
+                fragment_node = picosplay_find_previous(&cons_ctx->cached_ctx->fragment_tree, &key);
+                if (fragment_node != NULL) {
+                    fragment = (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(fragment_node);
+                }
+                if (fragment != NULL) {
+                    cons_ctx->cached_ctx->final_group_id = fragment->group_id;
+                    cons_ctx->cached_ctx->final_object_id = fragment->object_id;
+                }
+                else {
+                    cons_ctx->cached_ctx->final_group_id = cons_ctx->cached_ctx->first_group_id;
+                    cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->first_object_id;
+                }
+            }
         }
         cons_ctx->cached_ctx->is_closed = 1;
         /* Notify consumers of the stream */
@@ -1021,7 +1083,8 @@ void quicrq_disable_relay(quicrq_ctx_t* qr_ctx)
     }
 }
 
-/* Management of the relay cache
+/* Management of the relay cache.
+ * Ensure that old segments are removed.
  */
 void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
 {

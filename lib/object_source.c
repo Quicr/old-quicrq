@@ -213,12 +213,6 @@ int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_sour
         object_source_ctx->start_group_id = start_group_id;
         object_source_ctx->start_object_id = start_object_id;
         object_source_ctx->next_object_id = start_object_id;
-
-#if 1
-        if (start_group_id != 0) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
     }
     else {
         ret = -1;

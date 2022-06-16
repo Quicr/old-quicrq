@@ -38,11 +38,6 @@ int quicrq_media_object_bridge_ready(
 {
     int ret = 0;
     quicrq_object_stream_consumer_ctx* bridge_ctx = (quicrq_object_stream_consumer_ctx*)media_ctx;
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 
     /* TODO: for some streams, we may be able to "jump ahead" and
         * use the latest object without waiting for the full sequence */
@@ -76,11 +71,7 @@ int quicrq_media_object_bridge_fn(
 {
     int ret = 0;
     quicrq_object_stream_consumer_ctx* bridge_ctx = (quicrq_object_stream_consumer_ctx*)media_ctx;
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     switch (action) {
     case quicrq_media_datagram_ready:
         ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, flags,

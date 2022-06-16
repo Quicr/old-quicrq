@@ -365,6 +365,7 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
     }
     /* Mark finished if everything was received */
     if ((reassembly_ctx->final_group_id > 0 ||reassembly_ctx->final_object_id > 0) &&
+        reassembly_ctx->next_group_id >= reassembly_ctx->final_group_id &&
         reassembly_ctx->next_object_id >= reassembly_ctx->final_object_id) {
         reassembly_ctx->is_finished = 1;
     }
@@ -386,11 +387,7 @@ int quicrq_reassembly_input(
     void* app_media_ctx)
 {
     int ret = 0;
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     if (object_id < reassembly_ctx->next_object_id) {
         /* No need for this object. */
     }

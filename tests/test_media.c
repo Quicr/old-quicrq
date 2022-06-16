@@ -681,11 +681,7 @@ int test_media_consumer_object_ready(
 {
     int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     /* Find the object header */
     if (data_length < QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
         /* Malformed object */
@@ -735,11 +731,7 @@ int test_media_object_consumer_cb(
 {
     int ret = 0;
     test_media_consumer_context_t* cons_ctx = (test_media_consumer_context_t*)media_ctx;
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     switch (action) {
     case quicrq_media_datagram_ready:
         ret = quicrq_reassembly_input(&cons_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, flags,
@@ -826,11 +818,7 @@ int test_object_stream_consumer_cb(
 {
     int ret = 0;
     test_object_stream_ctx_t* cons_ctx = (test_object_stream_ctx_t*)object_consumer_ctx;
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     switch (action) {
     case quicrq_media_datagram_ready:
         /* Find the object header */

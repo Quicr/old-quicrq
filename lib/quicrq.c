@@ -574,11 +574,7 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id,
     uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time)
 {
     int ret = 0;
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     /* Check whether the object is below the horizon */
     if (quicrq_datagram_check_horizon(stream_ctx, group_id, object_id, object_offset) < 0) {
         /* at or below horizon, not new. */
@@ -637,11 +633,6 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t group_i
     int64_t horizon_delta = object_id - stream_ctx->horizon_object_id;
     int64_t acked_length = length;
     uint64_t acked_offset = object_offset;
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 
     /* If at horizon, check offset */
     if (horizon_delta_group  == 0 && horizon_delta == 0) {
@@ -1365,11 +1356,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                     /* Decode the incoming message */
                     quicrq_message_t incoming = { 0 };
                     const uint8_t* r_bytes = quicrq_msg_decode(stream_ctx->message_receive.buffer, stream_ctx->message_receive.buffer + stream_ctx->message_receive.message_size, &incoming);
-#if 1
-                    if (incoming.group_id != 0) {
-                        DBG_PRINTF("%s", "Bug");
-                    }
-#endif
+
                     if (r_bytes == NULL) {
                         /* Message was incorrect */
                         ret = -1;

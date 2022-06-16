@@ -186,11 +186,7 @@ uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t m
     uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t * repair_data)
 {
     uint64_t offset_and_fin = (repair_offset << 1) | (uint64_t)(is_last_fragment & 1);
-#if 1
-    if (repair_group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_group_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_object_id)) != NULL &&
@@ -426,11 +422,7 @@ uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint6
     uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, uint8_t flags, uint64_t nb_objects_previous_group, int is_last_fragment)
 {
     uint64_t offset_and_fin = (object_offset << 1) | (unsigned int)(is_last_fragment & 1);
-#if 1
-    if (group_id != 0) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
+
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_stream_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, group_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id)) != NULL &&
@@ -467,11 +459,6 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
         else {
             *nb_objects_previous_group = 0;
         }
-#if 1
-        if (*group_id != 0) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
     }
     return bytes;
 }
