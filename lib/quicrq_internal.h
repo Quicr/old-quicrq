@@ -119,9 +119,9 @@ const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_
 size_t quicrq_repair_request_reserve(uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length);
-size_t quicrq_repair_msg_reserve(uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
-uint8_t* quicrq_repair_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t* repair_data);
-const uint8_t* quicrq_repair_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t *repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length, const uint8_t** repair_data);
+size_t quicrq_fragment_msg_reserve(uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
+uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t* repair_data);
+const uint8_t* quicrq_fragment_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t *repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length, const uint8_t** repair_data);
 size_t quicrq_start_msg_reserve(uint64_t start_group, uint64_t start_object);
 uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object);
 const uint8_t* quicrq_start_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);
@@ -236,7 +236,7 @@ typedef enum {
     quicrq_receive_done
 }  quicrq_stream_receive_state_enum;
 
-
+#if 0
 typedef struct st_quicrq_datagram_queued_repair_t {
     struct st_quicrq_datagram_queued_repair_t* next_repair;
     struct st_quicrq_datagram_queued_repair_t* previous_repair;
@@ -247,6 +247,7 @@ typedef struct st_quicrq_datagram_queued_repair_t {
     int is_last_fragment;
     size_t length;
 } quicrq_datagram_queued_repair_t;
+#endif
 
 typedef struct st_quicrq_datagram_ack_state_t {
     picosplay_node_t datagram_ack_node;
@@ -282,9 +283,11 @@ struct st_quicrq_stream_ctx_t {
     quicrq_media_source_ctx_t* media_source;
     struct st_quicrq_stream_ctx_t* next_stream_for_source;
     struct st_quicrq_stream_ctx_t* previous_stream_for_source;
+#if 0
     /* datagram repair is a misnomer,  is only used for sending fragments of stream */
     quicrq_datagram_queued_repair_t* datagram_repair_first;
     quicrq_datagram_queued_repair_t* datagram_repair_last;
+#endif
     /* queue of datagrams that qualify for extra transmission */
     struct st_quicrq_datagram_ack_state_t* extra_first;
     struct st_quicrq_datagram_ack_state_t* extra_last;
