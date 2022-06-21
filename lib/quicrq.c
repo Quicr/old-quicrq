@@ -366,7 +366,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
 
     return ret;
 }
-
+#if 0
 void quicrq_remove_repair_in_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_datagram_queued_repair_t* repair)
 {
     if (repair->previous_repair == NULL) {
@@ -385,6 +385,7 @@ void quicrq_remove_repair_in_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_
 
     free(repair);
 }
+#endif
 
 /* Handle the list of datagrams pending acknowledgement or retransmission.
  * The code maintains an acknowledgement tree of the fragments that were sent.
@@ -1091,15 +1092,16 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         quicrq_message_buffer_t* message = &stream_ctx->message_sent;
         /* Ready to send next message */
         if (stream_ctx->is_sender) {
+#if 0
             if (stream_ctx->datagram_repair_first != NULL) {
                 /* Encode the first repair in queue in the protocol buffer */
-                if (quicrq_msg_buffer_alloc(message, quicrq_repair_msg_reserve(stream_ctx->datagram_repair_first->object_id,
+                if (quicrq_msg_buffer_alloc(message, quicrq_fragment_msg_reserve(stream_ctx->datagram_repair_first->object_id,
                     stream_ctx->datagram_repair_first->object_offset, stream_ctx->datagram_repair_first->is_last_fragment,
                     stream_ctx->datagram_repair_first->length), 0) != 0) {
                     ret = -1;
                 }
                 else {
-                    uint8_t* message_next = quicrq_repair_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_REPAIR,
+                    uint8_t* message_next = quicrq_fragment_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_REPAIR,
                         stream_ctx->datagram_repair_first->object_id, stream_ctx->datagram_repair_first->object_offset, stream_ctx->datagram_repair_first->is_last_fragment,
                         stream_ctx->datagram_repair_first->length, stream_ctx->datagram_repair_first->datagram);
                     if (message_next == NULL) {
@@ -1112,7 +1114,9 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-            else if (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent) {
+            else 
+#endif           
+            if (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent) {
                 quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", sending final object id: %" PRIu64,
                     stream_ctx->stream_id, stream_ctx->final_object_id);
                 /* TODO: encode the final offset message in the protocol buffer */
@@ -1183,22 +1187,36 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             break;
         case quicrq_sending_initial:
             /* Send available buffer data. Mark state ready after sent. */
+#if 1
+            more_to_send = (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent);
+#else
             more_to_send = (stream_ctx->datagram_repair_first != NULL ||
                 (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent));
+#endif
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             break;
         case quicrq_sending_repair:
             /* Send available buffer data and repair data. Dequeue repair and mark state ready after sent. */
+#if 1
+            more_to_send = (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent);
+#else
             more_to_send = (stream_ctx->datagram_repair_first->next_repair != NULL ||
                 (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent));
+#endif
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
+#if 0
             if (stream_ctx->send_state == quicrq_sending_ready){
                 quicrq_remove_repair_in_stream_ctx(stream_ctx, stream_ctx->datagram_repair_first);
             }
+#endif
             break;
         case quicrq_sending_offset:
             /* Send available buffer data and repair data. Mark offset sent and mark state ready after sent. */
+#if 1
+            more_to_send = 0;
+#else
             more_to_send = (stream_ctx->datagram_repair_first != NULL);
+#endif
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 stream_ctx->is_final_object_id_sent = 1;
@@ -1790,10 +1808,11 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
     }
 
     quicrq_unsubscribe_local_media(stream_ctx);
-
+#if 0
     while (stream_ctx->datagram_repair_first != NULL) {
         quicrq_remove_repair_in_stream_ctx(stream_ctx, stream_ctx->datagram_repair_first);
     }
+#endif
 
     if (cnx_ctx->cnx != NULL) {
         (void)picoquic_mark_active_stream(cnx_ctx->cnx, stream_ctx->stream_id, 0, NULL);
