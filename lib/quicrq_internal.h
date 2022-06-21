@@ -236,19 +236,6 @@ typedef enum {
     quicrq_receive_done
 }  quicrq_stream_receive_state_enum;
 
-#if 0
-typedef struct st_quicrq_datagram_queued_repair_t {
-    struct st_quicrq_datagram_queued_repair_t* next_repair;
-    struct st_quicrq_datagram_queued_repair_t* previous_repair;
-    uint8_t* datagram;
-    uint64_t group_id;
-    uint64_t object_id;
-    uint64_t object_offset;
-    int is_last_fragment;
-    size_t length;
-} quicrq_datagram_queued_repair_t;
-#endif
-
 typedef struct st_quicrq_datagram_ack_state_t {
     picosplay_node_t datagram_ack_node;
     uint64_t group_id;
@@ -283,11 +270,6 @@ struct st_quicrq_stream_ctx_t {
     quicrq_media_source_ctx_t* media_source;
     struct st_quicrq_stream_ctx_t* next_stream_for_source;
     struct st_quicrq_stream_ctx_t* previous_stream_for_source;
-#if 0
-    /* datagram repair is a misnomer,  is only used for sending fragments of stream */
-    quicrq_datagram_queued_repair_t* datagram_repair_first;
-    quicrq_datagram_queued_repair_t* datagram_repair_last;
-#endif
     /* queue of datagrams that qualify for extra transmission */
     struct st_quicrq_datagram_ack_state_t* extra_first;
     struct st_quicrq_datagram_ack_state_t* extra_last;

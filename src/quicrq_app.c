@@ -143,10 +143,6 @@ int quicrq_app_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mo
             }
             break;
         case picoquic_packet_loop_after_send:
-#if 0
-            /* Post send callback. Check whether sources need to be awakaned */
-            quicrq_app_wake_up_sources(cb_ctx, picoquic_get_quic_time(quic));
-#endif
             /* if a client, exit the loop if connection is gone. */
             if (cb_ctx->mode == quicrq_app_mode_client) {
                 /* if a client, exit the loop if connection is gone. */

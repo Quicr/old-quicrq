@@ -67,7 +67,8 @@ const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_m
  * 
  * quicrq_fin_message {
  *     message_type(i),
- *     offset(i)
+ *     final_group_id(i),
+ *     final_object_id(i)
  */
 
 size_t quicrq_fin_msg_reserve(uint64_t final_group_id, uint64_t final_object_id)
@@ -101,15 +102,16 @@ const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_
     return bytes;
 }
 
-
 /* Encoding or decoding the repair request message
  *
- * quicrq_fin_message {
+ * quicrq_repaier_request_message {
  *     message_type(i),
  *     group_id(i),
  *     object_id(i),
  *     offset(i),
  *     length(i)
+ * 
+ * This message is not used, except for test of protocol formats.
  */
 
 size_t quicrq_repair_request_reserve(uint64_t repair_group_id,
@@ -159,7 +161,7 @@ const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t*
     return bytes;
 }
 
-/* Encoding or decoding the frgament message
+/* Encoding or decoding the fragment message
  *
  * quicrq_fragment_message {
  *     message_type(i),
@@ -227,6 +229,15 @@ size_t quicrq_start_msg_reserve(uint64_t start_group, uint64_t start_object)
 #endif
     return 17;
 }
+
+
+/* Encoding or decoding the start point message
+ *
+ * quicrq_fin_message {
+ *     message_type(i),
+ *     start_group_id(i),
+ *     start_object_id(i)
+ */
 
 uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object)
 {
