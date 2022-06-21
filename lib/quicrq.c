@@ -1272,19 +1272,21 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         case quicrq_sending_initial:
             /* Send available buffer data. Mark state ready after sent. */
 #if 1
-            more_to_send = (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent);
+            more_to_send = (stream_ctx->final_group_id > 0 || stream_ctx->final_object_id > 0) && !stream_ctx->is_final_object_id_sent;
 #else
             more_to_send = (stream_ctx->datagram_repair_first != NULL ||
                 (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent));
+#endif
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             break;
         case quicrq_sending_repair:
             /* Send available buffer data and repair data. Dequeue repair and mark state ready after sent. */
 #if 1
-            more_to_send = (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent);
+            more_to_send = (stream_ctx->final_group_id > 0 || stream_ctx->final_object_id > 0) && !stream_ctx->is_final_object_id_sent;
 #else
             more_to_send = (stream_ctx->datagram_repair_first->next_repair != NULL ||
                 (stream_ctx->final_object_id > 0 && !stream_ctx->is_final_object_id_sent));
+#endif
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
 #if 0
             if (stream_ctx->send_state == quicrq_sending_ready){
