@@ -104,7 +104,7 @@ const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_
 
 /* Encoding or decoding the repair request message
  *
- * quicrq_repaier_request_message {
+ * quicrq_repair_request_message {
  *     message_type(i),
  *     group_id(i),
  *     object_id(i),
@@ -372,7 +372,7 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
         case QUICRQ_ACTION_REQUEST_REPAIR:
             bytes = quicrq_repair_request_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id, &msg->offset, &msg->is_last_fragment, &msg->length);
             break;
-        case QUICRQ_ACTION_REPAIR:
+        case QUICRQ_ACTION_FRAGMENT:
             bytes = quicrq_fragment_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id, &msg->offset, &msg->is_last_fragment, &msg->length, &msg->data);
             break;
         case QUICRQ_ACTION_POST:
@@ -407,7 +407,7 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
     case QUICRQ_ACTION_REQUEST_REPAIR:
         bytes = quicrq_repair_request_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id, msg->offset, msg->is_last_fragment, msg->length);
         break;
-    case QUICRQ_ACTION_REPAIR:
+    case QUICRQ_ACTION_FRAGMENT:
         bytes = quicrq_fragment_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id, msg->offset, msg->is_last_fragment, msg->length, msg->data);
         break;
     case QUICRQ_ACTION_POST:
@@ -731,7 +731,7 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
                 stream_ctx->consumer_fn = media_consumer_fn;
                 stream_ctx->media_ctx = media_ctx;
                 stream_ctx->send_state = quicrq_sending_initial;
-                stream_ctx->receive_state = quicrq_receive_repair;
+                stream_ctx->receive_state = quicrq_receive_fragment;
                 stream_ctx->cnx_ctx->next_datagram_stream_id += 1;
                 if (p_stream_ctx != NULL) {
                     *p_stream_ctx = stream_ctx;
@@ -862,7 +862,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             stream_ctx->is_datagram = use_datagrams;
             message->message_size = message_next - message->buffer;
             stream_ctx->send_state = quicrq_sending_initial;
-            stream_ctx->receive_state = quicrq_receive_repair;
+            stream_ctx->receive_state = quicrq_receive_fragment;
             if (use_datagrams) {
                 stream_ctx->datagram_stream_id = datagram_stream_id;
                 stream_ctx->cnx_ctx->next_datagram_stream_id += 1;
@@ -884,7 +884,7 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
 {
     int ret = 0;
     /* Confirm the datagram or stream status */
-    stream_ctx->receive_state = quicrq_receive_repair;
+    stream_ctx->receive_state = quicrq_receive_fragment;
     stream_ctx->is_sender = 1;
     if (use_datagrams) {
         stream_ctx->is_datagram = 1;

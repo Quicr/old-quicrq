@@ -67,7 +67,7 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_OPEN_DATAGRAM 2
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
-#define QUICRQ_ACTION_REPAIR 5
+#define QUICRQ_ACTION_FRAGMENT 5
 #define QUICRQ_ACTION_POST 6
 #define QUICRQ_ACTION_ACCEPT 7
 #define QUICRQ_ACTION_START_POINT 8
@@ -232,7 +232,7 @@ typedef enum {
     quicrq_receive_initial = 0,
     quicrq_receive_stream,
     quicrq_receive_confirmation,
-    quicrq_receive_repair,
+    quicrq_receive_fragment,
     quicrq_receive_done
 }  quicrq_stream_receive_state_enum;
 

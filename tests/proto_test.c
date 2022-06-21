@@ -106,8 +106,8 @@ static uint8_t repair_request_msg_bytes[] = {
     (uint8_t)sizeof(repair_bytes)
 };
 
-static quicrq_message_t repair_msg = {
-    QUICRQ_ACTION_REPAIR,
+static quicrq_message_t fragment_msg = {
+    QUICRQ_ACTION_FRAGMENT,
     0,
     NULL,
     0,
@@ -121,8 +121,8 @@ static quicrq_message_t repair_msg = {
     0
 };
 
-static uint8_t repair_msg_bytes[] = {
-    QUICRQ_ACTION_REPAIR,
+static uint8_t fragment_msg_bytes[] = {
+    QUICRQ_ACTION_FRAGMENT,
     0x00,
     0x80, 0x01, 0xe2, 0x40,
     0x49, 0xa5,
@@ -228,7 +228,7 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(datagram_rq, datagram_rq_bytes),
     PROTO_TEST_ITEM(fin_msg, fin_msg_bytes),
     PROTO_TEST_ITEM(repair_request_msg, repair_request_msg_bytes),
-    PROTO_TEST_ITEM(repair_msg, repair_msg_bytes),
+    PROTO_TEST_ITEM(fragment_msg, fragment_msg_bytes),
     PROTO_TEST_ITEM(post_msg, post_msg_bytes),
     PROTO_TEST_ITEM(accept_dg, accept_dg_bytes),
     PROTO_TEST_ITEM(accept_st, accept_st_bytes),
