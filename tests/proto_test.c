@@ -8,8 +8,8 @@
 #include "picoquic_utils.h"
 
 /*
-#define QUICRQ_ACTION_OPEN_STREAM 1
-#define QUICRQ_ACTION_OPEN_DATAGRAM 2
+#define QUICRQ_ACTION_REQUEST_STREAM 1
+#define QUICRQ_ACTION_REQUEST_DATAGRAM 2
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
 */
@@ -19,7 +19,7 @@
 static uint8_t url1[] = { URL1_BYTES };
 
 static quicrq_message_t stream_rq = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     sizeof(url1),
     url1,
     0,
@@ -34,13 +34,13 @@ static quicrq_message_t stream_rq = {
 };
 
 static uint8_t stream_rq_bytes[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     sizeof(url1),
     URL1_BYTES
 };
 
 static quicrq_message_t datagram_rq = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1),
     url1,
     1234,
@@ -55,7 +55,7 @@ static quicrq_message_t datagram_rq = {
 };
 
 static uint8_t datagram_rq_bytes[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1),
     URL1_BYTES,
     0x44, 0xd2
@@ -242,52 +242,52 @@ static uint8_t bad_bytes1[] = {
 };
 
 static uint8_t bad_bytes2[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     URL1_BYTES
 };
 
 static uint8_t bad_bytes3[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     0x8f, 0xff, 0xff, 0xff,
     URL1_BYTES
 };
 
 static uint8_t bad_bytes4[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     0x4f, 0xff,
     URL1_BYTES
 };
 
 static uint8_t bad_bytes5[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     sizeof(url1) + 1,
     URL1_BYTES,
 };
 
 static uint8_t bad_bytes6[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     URL1_BYTES,
     0x44, 0xd2
 };
 
 static uint8_t bad_bytes7[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     0x8f, 0xff, 0xff, 0xff,
     URL1_BYTES,
     0x44, 0xd2
 };
 
 static uint8_t bad_bytes8[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     0x4f, 0xff,
     URL1_BYTES,
     0x44, 0xd2
 };
 
 static uint8_t bad_bytes9[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1) + 1,
     URL1_BYTES,
     0x44, 0xd2

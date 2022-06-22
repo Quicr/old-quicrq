@@ -63,8 +63,8 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
  * - Request repair: when a stream is opened as datagram, some datagrams may be lost. The receiver may request data at offset and length.
  * - Repair: 1 byte code, followed by content of a datagram
  */
-#define QUICRQ_ACTION_OPEN_STREAM 1
-#define QUICRQ_ACTION_OPEN_DATAGRAM 2
+#define QUICRQ_ACTION_REQUEST_STREAM 1
+#define QUICRQ_ACTION_REQUEST_DATAGRAM 2
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
 #define QUICRQ_ACTION_FRAGMENT 5
@@ -122,9 +122,9 @@ const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t*
 size_t quicrq_fragment_msg_reserve(uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t* repair_data);
 const uint8_t* quicrq_fragment_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t *repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length, const uint8_t** repair_data);
-size_t quicrq_start_msg_reserve(uint64_t start_group, uint64_t start_object);
-uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object);
-const uint8_t* quicrq_start_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);
+size_t quicrq_start_point_msg_reserve(uint64_t start_group, uint64_t start_object);
+uint8_t* quicrq_start_point_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object);
+const uint8_t* quicrq_start_point_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);
 uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg);
 const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t * msg);
 
