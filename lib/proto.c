@@ -41,7 +41,7 @@ uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t messa
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url)) != NULL){
-        if (message_type == QUICRQ_ACTION_OPEN_DATAGRAM) {
+        if (message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
             bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_stream_id);
         }
     }
@@ -57,7 +57,7 @@ const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_m
         (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, url_length)) != NULL){
         *url = bytes;
         if ((bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length)) != NULL &&
-            *message_type == QUICRQ_ACTION_OPEN_DATAGRAM) {
+            *message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
             bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id);
         }
     }
@@ -67,58 +67,73 @@ const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_m
  * 
  * quicrq_fin_message {
  *     message_type(i),
- *     offset(i)
+ *     final_group_id(i),
+ *     final_object_id(i)
+ * }
  */
 
-size_t quicrq_fin_msg_reserve(uint64_t final_object_id)
+size_t quicrq_fin_msg_reserve(uint64_t final_group_id, uint64_t final_object_id)
 {
 #ifdef _WINDOWS
+    UNREFERENCED_PARAMETER(final_group_id);
     UNREFERENCED_PARAMETER(final_object_id);
 #endif
-    return 9;
+    return 17;
 }
 
-uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t final_object_id)
+uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type,
+    uint64_t final_group_id, uint64_t final_object_id)
 {
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL) {
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, final_group_id)) != NULL) {
         bytes = picoquic_frames_varint_encode(bytes, bytes_max, final_object_id);
     }
     return bytes;
 }
 
-const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* final_object_id)
+const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+    uint64_t* final_group_id, uint64_t* final_object_id)
 {
+    *final_group_id = 0;
     *final_object_id = 0;
-    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL) {
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, final_group_id)) != NULL) {
         bytes = picoquic_frames_varint_decode(bytes, bytes_max, final_object_id);
     }
     return bytes;
 }
 
-
 /* Encoding or decoding the repair request message
  *
- * quicrq_fin_message {
+ * quicrq_repair_request_message {
  *     message_type(i),
+ *     group_id(i),
+ *     object_id(i),
  *     offset(i),
  *     length(i)
+ * 
+ * This message is not used, except for test of protocol formats.
  */
 
-size_t quicrq_repair_request_reserve(uint64_t fragment_object_id, uint64_t fragment_offset, int is_last_fragment, size_t fragment_length)
+size_t quicrq_repair_request_reserve(uint64_t repair_group_id,
+    uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length)
 {
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(fragment_object_id);
-    UNREFERENCED_PARAMETER(fragment_offset);
+    UNREFERENCED_PARAMETER(repair_group_id);
+    UNREFERENCED_PARAMETER(repair_object_id);
+    UNREFERENCED_PARAMETER(repair_offset);
     UNREFERENCED_PARAMETER(is_last_fragment);
-    UNREFERENCED_PARAMETER(fragment_length);
+    UNREFERENCED_PARAMETER(repair_length);
 #endif
     return 1 + 8 + 8 + 8;
 }
 
-uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_object_id, uint64_t fragment_offset, int is_last_fragment, size_t repair_length)
+uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type,
+    uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length)
 {
-    uint64_t offset_and_fin = (fragment_offset << 1) | (uint64_t)(is_last_fragment & 1);
+    uint64_t offset_and_fin = (repair_offset << 1) | (uint64_t)(is_last_fragment & 1);
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_group_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_object_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset_and_fin)) != NULL) {
         bytes = picoquic_frames_varint_encode(bytes, bytes_max, repair_length);
@@ -127,77 +142,97 @@ uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64
 }
 
 const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, 
-    uint64_t * repair_object_id, uint64_t* fragment_offset, int * is_last_fragment, size_t* repair_length)
+    uint64_t * repair_group_id, uint64_t * repair_object_id, uint64_t* repair_offset,
+    int * is_last_fragment, size_t* repair_length)
 {
     uint64_t offset_and_fin = 0;
+    *repair_group_id = 0;
     *repair_object_id = 0;
-    *fragment_offset = 0;
+    *repair_offset = 0;
     *is_last_fragment = 0;
     *repair_length = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, repair_group_id)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, repair_object_id)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &offset_and_fin)) != NULL &&
         (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, repair_length)) != NULL) {
-        *fragment_offset = (offset_and_fin >> 1);
+        *repair_offset = (offset_and_fin >> 1);
         *is_last_fragment = (int)(offset_and_fin & 1);
     }
     return bytes;
 }
 
-/* Encoding or decoding the frgament message
+/* Encoding or decoding the fragment message
  *
  * quicrq_fragment_message {
  *     message_type(i),
+ *     group_id(i),
  *     object_id(i),
  *     offset(i),
  *     length(i),
  *     data(...)
+ * }
  */
 
-size_t quicrq_fragment_msg_reserve(uint64_t fragment_object_id, uint64_t fragment_offset, int is_last_fragment, size_t fragment_length)
+size_t quicrq_fragment_msg_reserve(uint64_t group_id, uint64_t object_id, uint64_t offset, int is_last_fragment, size_t repair_length)
 {
 #ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(fragment_object_id);
-    UNREFERENCED_PARAMETER(fragment_offset);
+    UNREFERENCED_PARAMETER(group_id);
+    UNREFERENCED_PARAMETER(object_id);
+    UNREFERENCED_PARAMETER(offset);
     UNREFERENCED_PARAMETER(is_last_fragment);
 #endif
-    return 1 + 8 + 8 + 8 + fragment_length;
+    return 1 + 8 + 8 + 8 + 8 + repair_length;
 }
 
-uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t fragment_object_id, 
-    uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t * repair_data)
+uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type,
+    uint64_t group_id, uint64_t object_id,
+    uint64_t offset, int is_last_fragment, size_t length, const uint8_t * data)
 {
-    uint64_t offset_and_fin = (repair_offset << 1) | (uint64_t)(is_last_fragment & 1);
+    uint64_t offset_and_fin = ( offset << 1) | (uint64_t)(is_last_fragment & 1);
+
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
-        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, fragment_object_id)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, group_id)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset_and_fin)) != NULL) {
-        bytes = picoquic_frames_length_data_encode(bytes, bytes_max, repair_length, repair_data);
+        bytes = picoquic_frames_length_data_encode(bytes, bytes_max, length, data);
     }
     return bytes;
 }
 
 const uint8_t* quicrq_fragment_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
-    uint64_t * fragment_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t * repair_length, const uint8_t ** repair_data)
+    uint64_t * group_id, uint64_t * object_id, uint64_t* offset, int* is_last_fragment, size_t * length, const uint8_t ** data)
 {
     uint64_t offset_and_fin = 0;
-    *fragment_object_id = 0;
-    *repair_offset = 0;
+    *group_id = 0;
+    *object_id = 0;
+    *offset = 0;
     *is_last_fragment = 0;
-    *repair_length = 0;
-    *repair_data = NULL;
+    *length = 0;
+    *data = NULL;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, fragment_object_id)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, group_id)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, object_id)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &offset_and_fin)) != NULL &&
-        (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, repair_length)) != NULL){
-        *repair_offset = (offset_and_fin >> 1);
+        (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, length)) != NULL){
+        *offset = (offset_and_fin >> 1);
         *is_last_fragment = (int)(offset_and_fin & 1);
-        *repair_data = bytes;
-        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *repair_length);
+        *data = bytes;
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *length);
     }
     return bytes;
 }
 
-size_t quicrq_start_msg_reserve(uint64_t start_group, uint64_t start_object)
+/* Encoding or decoding the start point message
+ *
+ * quicrq_start_point_message {
+ *     message_type(i),
+ *     start_group_id(i),
+ *     start_object_id(i)
+ * }
+ */
+
+size_t quicrq_start_point_msg_reserve(uint64_t start_group, uint64_t start_object)
 {
 #ifdef _WINDOWS
     UNREFERENCED_PARAMETER(start_group);
@@ -206,7 +241,8 @@ size_t quicrq_start_msg_reserve(uint64_t start_group, uint64_t start_object)
     return 17;
 }
 
-uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object)
+
+uint8_t* quicrq_start_point_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object)
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, start_group)) != NULL) {
@@ -215,7 +251,7 @@ uint8_t* quicrq_start_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t me
     return bytes;
 }
 
-const uint8_t* quicrq_start_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object)
+const uint8_t* quicrq_start_point_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object)
 {
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_group)) != NULL){
@@ -329,18 +365,18 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
         /* TODO: do not decode the message type twice */
         bytes = bytes0;
         switch (msg->message_type) {
-        case QUICRQ_ACTION_OPEN_STREAM:
-        case QUICRQ_ACTION_OPEN_DATAGRAM:
+        case QUICRQ_ACTION_REQUEST_STREAM:
+        case QUICRQ_ACTION_REQUEST_DATAGRAM:
             bytes = quicrq_rq_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url, &msg->datagram_stream_id);
             break;
         case QUICRQ_ACTION_FIN_DATAGRAM:
-            bytes = quicrq_fin_msg_decode(bytes, bytes_max, &msg->message_type, &msg->object_id);
+            bytes = quicrq_fin_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
             break;
         case QUICRQ_ACTION_REQUEST_REPAIR:
-            bytes = quicrq_repair_request_decode(bytes, bytes_max, &msg->message_type, &msg->object_id, &msg->offset, &msg->is_last_fragment, &msg->length);
+            bytes = quicrq_repair_request_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id, &msg->offset, &msg->is_last_fragment, &msg->length);
             break;
-        case QUICRQ_ACTION_REPAIR:
-            bytes = quicrq_fragment_msg_decode(bytes, bytes_max, &msg->message_type, &msg->object_id, &msg->offset, &msg->is_last_fragment, &msg->length, &msg->data);
+        case QUICRQ_ACTION_FRAGMENT:
+            bytes = quicrq_fragment_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id, &msg->offset, &msg->is_last_fragment, &msg->length, &msg->data);
             break;
         case QUICRQ_ACTION_POST:
             bytes = quicrq_post_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url, &msg->use_datagram);
@@ -349,7 +385,7 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
             bytes = quicrq_accept_msg_decode(bytes, bytes_max, &msg->message_type, &msg->use_datagram, &msg->datagram_stream_id);
             break;
         case QUICRQ_ACTION_START_POINT:
-            bytes = quicrq_start_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
+            bytes = quicrq_start_point_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
             break;
         default:
             /* Unexpected message type */
@@ -364,18 +400,18 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg)
 {
     switch (msg->message_type) {
-    case QUICRQ_ACTION_OPEN_STREAM:
-    case QUICRQ_ACTION_OPEN_DATAGRAM:
+    case QUICRQ_ACTION_REQUEST_STREAM:
+    case QUICRQ_ACTION_REQUEST_DATAGRAM:
         bytes = quicrq_rq_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url, msg->datagram_stream_id);
         break;
     case QUICRQ_ACTION_FIN_DATAGRAM:
-        bytes = quicrq_fin_msg_encode(bytes, bytes_max, msg->message_type, msg->object_id);
+        bytes = quicrq_fin_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
         break;
     case QUICRQ_ACTION_REQUEST_REPAIR:
-        bytes = quicrq_repair_request_encode(bytes, bytes_max, msg->message_type, msg->object_id, msg->offset, msg->is_last_fragment, msg->length);
+        bytes = quicrq_repair_request_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id, msg->offset, msg->is_last_fragment, msg->length);
         break;
-    case QUICRQ_ACTION_REPAIR:
-        bytes = quicrq_fragment_msg_encode(bytes, bytes_max, msg->message_type, msg->object_id, msg->offset, msg->is_last_fragment, msg->length, msg->data);
+    case QUICRQ_ACTION_FRAGMENT:
+        bytes = quicrq_fragment_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id, msg->offset, msg->is_last_fragment, msg->length, msg->data);
         break;
     case QUICRQ_ACTION_POST:
         bytes = quicrq_post_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url, msg->use_datagram);
@@ -384,7 +420,7 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         bytes = quicrq_accept_msg_encode(bytes, bytes_max, msg->message_type, msg->use_datagram, msg->datagram_stream_id);
         break;
     case QUICRQ_ACTION_START_POINT:
-        bytes = quicrq_start_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
+        bytes = quicrq_start_point_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
         break;
     default:
         /* Unexpected message type */
@@ -395,29 +431,58 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
 }
 
 
-/* encoding of the datagram header */
-uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id,
-    uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, int is_last_fragment)
+/* encoding of the datagram header
+ * quicrq_datagram_header { 
+ *     datagram_stream_id (i)
+ *     group_id (i)
+ *     object_id (i)
+ *     offset_and_fin (i)
+ *     queue_delay (i)
+ *     flags (8)
+ *     [nb_objects_previous_group (i)]
+ * }
+ */
+uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t group_id,
+    uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, uint8_t flags, uint64_t nb_objects_previous_group, int is_last_fragment)
 {
     uint64_t offset_and_fin = (object_offset << 1) | (unsigned int)(is_last_fragment & 1);
+
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_stream_id)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, group_id)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id)) != NULL &&
-        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset_and_fin)) != NULL) {
-        bytes = picoquic_frames_varint_encode(bytes, bytes_max, queue_delay);
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, offset_and_fin)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, queue_delay)) != NULL){
+        if (bytes < bytes_max) {
+            *bytes++ = flags;
+            if (object_id == 0 && object_offset == 0) {
+                bytes = picoquic_frames_varint_encode(bytes, bytes_max, nb_objects_previous_group);
+            }
+        }
+        else {
+            bytes = NULL;
+        }
     }
     return bytes;
 }
 
-const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * datagram_stream_id,
-    uint64_t* object_id, uint64_t* object_offset, uint64_t * queue_delay, int * is_last_fragment)
+const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* datagram_stream_id, uint64_t* group_id,
+    uint64_t* object_id, uint64_t* object_offset, uint64_t* queue_delay, uint8_t* flags, uint64_t* nb_objects_previous_group, int* is_last_fragment)
 {
     uint64_t offset_and_fin = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, group_id)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, object_id)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &offset_and_fin)) != NULL &&
-        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, queue_delay)) != NULL) {
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, queue_delay)) != NULL &&
+        (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, flags)) != NULL) {
         *object_offset = (offset_and_fin >> 1);
         *is_last_fragment = (int)(offset_and_fin & 1);
+        if (*object_id == 0 && *object_offset == 0) {
+            bytes = picoquic_frames_varint_decode(bytes, bytes_max, nb_objects_previous_group);
+        }
+        else {
+            *nb_objects_previous_group = 0;
+        }
     }
     return bytes;
 }
@@ -666,7 +731,7 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
             /* Format the media request */
             uint64_t datagram_stream_id = stream_ctx->cnx_ctx->next_datagram_stream_id;
             uint8_t* message_next = quicrq_rq_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
-                (use_datagrams)? QUICRQ_ACTION_OPEN_DATAGRAM:QUICRQ_ACTION_OPEN_STREAM, url_length, url, datagram_stream_id);
+                (use_datagrams)? QUICRQ_ACTION_REQUEST_DATAGRAM:QUICRQ_ACTION_REQUEST_STREAM, url_length, url, datagram_stream_id);
             if (message_next == NULL) {
                 ret = -1;
             } else {
@@ -679,7 +744,7 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
                 stream_ctx->consumer_fn = media_consumer_fn;
                 stream_ctx->media_ctx = media_ctx;
                 stream_ctx->send_state = quicrq_sending_initial;
-                stream_ctx->receive_state = quicrq_receive_repair;
+                stream_ctx->receive_state = quicrq_receive_fragment;
                 stream_ctx->cnx_ctx->next_datagram_stream_id += 1;
                 if (p_stream_ctx != NULL) {
                     *p_stream_ctx = stream_ctx;
@@ -810,7 +875,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             stream_ctx->is_datagram = use_datagrams;
             message->message_size = message_next - message->buffer;
             stream_ctx->send_state = quicrq_sending_initial;
-            stream_ctx->receive_state = quicrq_receive_repair;
+            stream_ctx->receive_state = quicrq_receive_fragment;
             if (use_datagrams) {
                 stream_ctx->datagram_stream_id = datagram_stream_id;
                 stream_ctx->cnx_ctx->next_datagram_stream_id += 1;
@@ -832,7 +897,7 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
 {
     int ret = 0;
     /* Confirm the datagram or stream status */
-    stream_ctx->receive_state = quicrq_receive_repair;
+    stream_ctx->receive_state = quicrq_receive_fragment;
     stream_ctx->is_sender = 1;
     if (use_datagrams) {
         stream_ctx->is_datagram = 1;

@@ -49,10 +49,13 @@
 
 typedef struct st_quicrq_relay_cached_fragment_t {
     picosplay_node_t fragment_node;
+    uint64_t group_id;
     uint64_t object_id;
     uint64_t offset;
     uint64_t cache_time;
     uint64_t queue_delay;
+    uint64_t nb_objects_previous_group;
+    uint8_t flags;
     int is_last_fragment;
     struct st_quicrq_relay_cached_fragment_t* previous_in_order;
     struct st_quicrq_relay_cached_fragment_t* next_in_order;
@@ -62,11 +65,15 @@ typedef struct st_quicrq_relay_cached_fragment_t {
 
 typedef struct st_quicrq_relay_cached_media_t {
     quicrq_media_source_ctx_t* srce_ctx;
+    uint64_t final_group_id;
     uint64_t final_object_id;
     uint64_t nb_object_received;
     uint64_t subscribe_stream_id;
     uint64_t first_group_id;
     uint64_t first_object_id;
+    uint64_t next_group_id;
+    uint64_t next_object_id;
+    uint64_t next_offset;
     quicrq_relay_cached_fragment_t* first_fragment;
     quicrq_relay_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree;
@@ -75,6 +82,7 @@ typedef struct st_quicrq_relay_cached_media_t {
 
 typedef struct st_quicrq_relay_publisher_context_t {
     quicrq_relay_cached_media_t* cache_ctx;
+    uint64_t current_group_id;
     uint64_t current_object_id;
     size_t current_offset;
     int is_object_complete;
@@ -101,13 +109,17 @@ typedef struct st_quicrq_relay_context_t {
 
 int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
+    uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
     uint64_t queue_delay,
+    uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length,
     uint64_t current_time);
-quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, uint64_t object_id, uint64_t offset);
+quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, 
+    uint64_t group_id, uint64_t object_id, uint64_t offset);
 
 int quicrq_relay_datagram_publisher_prepare(
     quicrq_stream_ctx_t* stream_ctx,
@@ -132,6 +144,7 @@ int quicrq_relay_publisher_fn(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    int * is_new_group,
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,

@@ -8,8 +8,8 @@
 #include "picoquic_utils.h"
 
 /*
-#define QUICRQ_ACTION_OPEN_STREAM 1
-#define QUICRQ_ACTION_OPEN_DATAGRAM 2
+#define QUICRQ_ACTION_REQUEST_STREAM 1
+#define QUICRQ_ACTION_REQUEST_DATAGRAM 2
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
 */
@@ -19,9 +19,10 @@
 static uint8_t url1[] = { URL1_BYTES };
 
 static quicrq_message_t stream_rq = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     sizeof(url1),
     url1,
+    0,
     0,
     0,
     0,
@@ -33,16 +34,17 @@ static quicrq_message_t stream_rq = {
 };
 
 static uint8_t stream_rq_bytes[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     sizeof(url1),
     URL1_BYTES
 };
 
 static quicrq_message_t datagram_rq = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1),
     url1,
     1234,
+    0,
     0,
     0,
     0,
@@ -53,7 +55,7 @@ static quicrq_message_t datagram_rq = {
 };
 
 static uint8_t datagram_rq_bytes[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1),
     URL1_BYTES,
     0x44, 0xd2
@@ -64,8 +66,9 @@ static quicrq_message_t fin_msg = {
     0,
     NULL,
     0,
-    0,
+    17,
     123456,
+    0,
     0,
     0,
     0,
@@ -75,6 +78,7 @@ static quicrq_message_t fin_msg = {
 
 static uint8_t fin_msg_bytes[] = {
     QUICRQ_ACTION_FIN_DATAGRAM,
+    0x11,
     0x80, 0x01, 0xe2, 0x40
 };
 
@@ -88,6 +92,7 @@ static quicrq_message_t repair_request_msg = {
     0,
     123456,
     1234,
+    0,
     1,
     sizeof(repair_bytes),
     NULL,
@@ -96,27 +101,29 @@ static quicrq_message_t repair_request_msg = {
 
 static uint8_t repair_request_msg_bytes[] = {
     QUICRQ_ACTION_REQUEST_REPAIR,
-    0x80, 0x01, 0xe2, 0x40,
+    0x0, 0x80, 0x01, 0xe2, 0x40,
     0x49, 0xa5,
     (uint8_t)sizeof(repair_bytes)
 };
 
-static quicrq_message_t repair_msg = {
-    QUICRQ_ACTION_REPAIR,
+static quicrq_message_t fragment_msg = {
+    QUICRQ_ACTION_FRAGMENT,
     0,
     NULL,
     0,
     0,
     123456,
     1234,
+    0,
     1,
     sizeof(repair_bytes),
     repair_bytes,
     0
 };
 
-static uint8_t repair_msg_bytes[] = {
-    QUICRQ_ACTION_REPAIR,
+static uint8_t fragment_msg_bytes[] = {
+    QUICRQ_ACTION_FRAGMENT,
+    0x00,
     0x80, 0x01, 0xe2, 0x40,
     0x49, 0xa5,
     (uint8_t)sizeof(repair_bytes),
@@ -127,6 +134,7 @@ static quicrq_message_t post_msg = {
     QUICRQ_ACTION_POST,
     sizeof(url1),
     url1,
+    0,
     0,
     0,
     0,
@@ -154,6 +162,7 @@ static quicrq_message_t accept_dg = {
     0,
     0,
     0,
+    0,
     NULL,
     1
 };
@@ -169,6 +178,7 @@ static quicrq_message_t accept_st = {
     QUICRQ_ACTION_ACCEPT,
     0,
     NULL,
+    0,
     0,
     0,
     0,
@@ -195,6 +205,7 @@ static quicrq_message_t start_msg = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -217,7 +228,7 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(datagram_rq, datagram_rq_bytes),
     PROTO_TEST_ITEM(fin_msg, fin_msg_bytes),
     PROTO_TEST_ITEM(repair_request_msg, repair_request_msg_bytes),
-    PROTO_TEST_ITEM(repair_msg, repair_msg_bytes),
+    PROTO_TEST_ITEM(fragment_msg, fragment_msg_bytes),
     PROTO_TEST_ITEM(post_msg, post_msg_bytes),
     PROTO_TEST_ITEM(accept_dg, accept_dg_bytes),
     PROTO_TEST_ITEM(accept_st, accept_st_bytes),
@@ -231,52 +242,52 @@ static uint8_t bad_bytes1[] = {
 };
 
 static uint8_t bad_bytes2[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     URL1_BYTES
 };
 
 static uint8_t bad_bytes3[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     0x8f, 0xff, 0xff, 0xff,
     URL1_BYTES
 };
 
 static uint8_t bad_bytes4[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     0x4f, 0xff,
     URL1_BYTES
 };
 
 static uint8_t bad_bytes5[] = {
-    QUICRQ_ACTION_OPEN_STREAM,
+    QUICRQ_ACTION_REQUEST_STREAM,
     sizeof(url1) + 1,
     URL1_BYTES,
 };
 
 static uint8_t bad_bytes6[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     URL1_BYTES,
     0x44, 0xd2
 };
 
 static uint8_t bad_bytes7[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     0x8f, 0xff, 0xff, 0xff,
     URL1_BYTES,
     0x44, 0xd2
 };
 
 static uint8_t bad_bytes8[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     0x4f, 0xff,
     URL1_BYTES,
     0x44, 0xd2
 };
 
 static uint8_t bad_bytes9[] = {
-    QUICRQ_ACTION_OPEN_DATAGRAM,
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1) + 1,
     URL1_BYTES,
     0x44, 0xd2
@@ -368,6 +379,9 @@ int proto_msg_test()
             ret = -1;
         }
         else if (result.url_length != 0 && memcmp(result.url, proto_cases[i].result->url, result.url_length) != 0) {
+            ret = -1;
+        }
+        else if (result.datagram_stream_id != proto_cases[i].result->datagram_stream_id) {
             ret = -1;
         }
         else if (result.group_id != proto_cases[i].result->group_id) {

@@ -29,7 +29,9 @@ typedef struct st_quicrq_object_stream_consumer_ctx {
 int quicrq_media_object_bridge_ready(
     void* media_ctx,
     uint64_t current_time,
+    uint64_t group_id,
     uint64_t object_id,
+    uint8_t flags,
     const uint8_t* data,
     size_t data_length,
     quicrq_reassembly_object_mode_enum object_mode)
@@ -46,7 +48,7 @@ int quicrq_media_object_bridge_ready(
         ret = bridge_ctx->object_stream_consumer_fn(
             quicrq_media_datagram_ready,
             bridge_ctx->object_stream_consumer_ctx,
-            current_time, object_id,
+            current_time, group_id, object_id,
             data, data_length,  NULL);
     }
        
@@ -58,9 +60,12 @@ int quicrq_media_object_bridge_fn(
     void* media_ctx,
     uint64_t current_time,
     const uint8_t* data,
+    uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
     uint64_t queue_delay,
+    uint8_t flags,
+    uint64_t nb_objects_previous_group,
     int is_last_fragment,
     size_t data_length)
 {
@@ -69,14 +74,15 @@ int quicrq_media_object_bridge_fn(
 
     switch (action) {
     case quicrq_media_datagram_ready:
-        ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, object_id, offset, is_last_fragment, data_length,
+        ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, flags,
+            nb_objects_previous_group, is_last_fragment, data_length,
             quicrq_media_object_bridge_ready, bridge_ctx);
         if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
         break;
     case quicrq_media_final_object_id:
-        ret = quicrq_reassembly_learn_final_object_id(&bridge_ctx->reassembly_ctx, object_id);
+        ret = quicrq_reassembly_learn_final_object_id(&bridge_ctx->reassembly_ctx, group_id, object_id);
         if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
         }
@@ -92,7 +98,7 @@ int quicrq_media_object_bridge_fn(
         ret = bridge_ctx->object_stream_consumer_fn(
             quicrq_media_close,
             bridge_ctx->object_stream_consumer_ctx,
-            current_time, object_id,
+            current_time, group_id, object_id,
             NULL, 0, NULL);
         quicrq_reassembly_release(&bridge_ctx->reassembly_ctx);
         free(media_ctx);
