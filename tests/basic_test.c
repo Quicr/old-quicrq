@@ -319,6 +319,13 @@ void quicrq_test_config_delete(quicrq_test_config_t* config)
     }
 
     if (config->object_sources != NULL) {
+        for (int i = 0; i < config->nb_object_sources; i++) {
+            if (config->object_sources[i] != NULL) {
+                config->object_sources[i]->object_source_ctx = NULL; /* is deleted with QUIC context */
+                test_media_object_source_delete(config->object_sources[i]);
+                config->object_sources[i] = NULL;
+            }
+        }
         free(config->object_sources);
     }
 
