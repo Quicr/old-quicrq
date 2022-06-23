@@ -312,6 +312,8 @@ void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source
     else if (object_source_ctx->next_in_qr_ctx != NULL) {
         object_source_ctx->next_in_qr_ctx->previous_in_qr_ctx = object_source_ctx->previous_in_qr_ctx;
     }
+    /* Free the tree */
+    picosplay_empty_tree(&object_source_ctx->object_source_tree);
     /* Free the resource */
     free(object_source_ctx);
 }
