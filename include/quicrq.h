@@ -122,7 +122,6 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
     quicrq_media_object_source_properties_t * properties);
 int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id);
 
-
 int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
     uint8_t* object,
@@ -191,44 +190,11 @@ quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx
 
 void quicrq_unsubscribe_object_stream(quicrq_object_stream_consumer_ctx* subscribe_ctx);
 
- /* Quic media consumer.
-  * The application sets a "media consumer function" and a "media consumer context" for
-  * the media stream. On the client side, this is done by a call to "quicrq_cnx_subscribe_media"
-  * which will trigger the opening of the media stream through the protocol.
-  * 
-  * For client published streams, the client uses "quicrq_cnx_post_media"
-  * to start the media stream. The server will receive an initial command
-  * containing the media URL, and use 
-  */
-
-typedef int (*quicrq_media_consumer_fn)(
-    quicrq_media_consumer_enum action,
-    void* media_ctx,
-    uint64_t current_time,
-    const uint8_t* data,
-    uint64_t group_id,
-    uint64_t object_id,
-    uint64_t offset,
-    uint64_t queue_delay,
-    uint8_t flags,
-    uint64_t nb_objects_previous_group,
-    int is_last_fragment,
-    size_t data_length);
-
-int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx,
-    const uint8_t* url, size_t url_length, int use_datagrams,
-    quicrq_media_consumer_fn media_consumer_fn, void* media_ctx);
-
-int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx, quicrq_stream_ctx_t** p_stream_ctx);
-
 int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
     int use_datagrams);
 
 typedef int (*quicrq_media_consumer_init_fn)(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length);
 int quicrq_set_media_init_callback(quicrq_ctx_t* ctx, quicrq_media_consumer_init_fn media_init_fn);
-
-int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_consumer_fn media_fn, void* media_ctx);
 
 quicrq_cnx_ctx_t* quicrq_first_connection(quicrq_ctx_t* qr_ctx);
 int quicrq_cnx_has_stream(quicrq_cnx_ctx_t* cnx_ctx);
@@ -238,9 +204,6 @@ int quicrq_is_cnx_disconnected(quicrq_cnx_ctx_t* cnx_ctx);
 int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
-
-
-
 
 /* Handling of extra repeats
  *
