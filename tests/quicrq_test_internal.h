@@ -62,11 +62,6 @@ typedef struct st_quicrq_test_attach_t {
     struct sockaddr_storage node_addr;
 } quicrq_test_attach_t;
 
-typedef struct st_quicrq_test_source_t {
-    uint64_t next_source_time;
-    quicrq_media_source_ctx_t* srce_ctx;
-} quicrq_test_source_t;
-
 typedef struct st_test_media_source_context_t {
     char const* file_path;
     const generation_parameters_t* generation_context;
@@ -141,8 +136,6 @@ void quicrq_test_config_target_free(quicrq_test_config_target_t* target);
 
 extern const generation_parameters_t video_1mps;
 
-quicrq_media_source_ctx_t* test_media_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, char const* media_source_path,
-    const generation_parameters_t* generation_model, int is_real_time, uint64_t* p_next_time, uint64_t start_time);
 int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log);
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file);
 

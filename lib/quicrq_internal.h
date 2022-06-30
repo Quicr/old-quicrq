@@ -154,6 +154,81 @@ typedef int (*quicrq_datagram_publisher_fn)(
     int* media_was_sent,
     int* at_least_one_active);
 
+/* Media publisher API.
+ * This now only an internal API. 
+ *
+ * Publisher connect a source to a local context by calling `quicrq_publish_source`.
+ * This registers an URL for the source, and creates a source entry in the local context.
+ *
+ * - qr_ctx: QUICR context in which the media is published
+ * - url, url_length: URL of the media fragment
+ * - media_publisher_subscribe_fn: callback function for subscribing a new consumer to the media source.
+ * - media_publisher_fn: callback function for processing media arrival
+ * - media_ctx: media context managed by the publisher, specific to that URL.
+ *
+ * When a subscribe request arrives, the stack looks for a media source, which could be
+ * an actual source, or the cached version of the media published by another node
+ * for that URL. (In relays and origin servers, a new cache entry is automatically
+ * created upon the request to an URL.) Once the stack has identified the source
+ * context, it will make a first call to the "subscribe" function, which will
+ * return a "media context" specific to that source and that subscription.
+ *
+ * After that, the stack will try to send the media as a series of objects, each
+ * composed of a series of fragments. The data is obtained by a series of calls
+ * to the "publisher" function, with the following parameters:
+ *
+ * - action: set to get data for retrieving data, or close to indicate end of
+ *   the transmission. After a call to close, the media context can be freed.
+ * - media_ctx: as produced by the call to the subscribe function.
+ * - data: either NULL, or a pointer to the memory location where data shall
+ *   be copied. (See below for the logic of calling the function twice)
+ * - data_max_size: the space available at the memory location.
+ * - &data_length: the data available to fill that space.
+ * - &is_last_fragment: whether this is the last fragment in a object
+ * - &is_media_finished: whether there is no more data to send.
+ * - current_time: time, in microseconds. (May be virtual time during simulations
+ *   and tests.)
+ *
+ * The stack will make two calls to fill a packet: a first call with "data" set
+ * to NULL to learn the number of bytes available, and the value of "is_last_fragment"
+ * and "is_media_finished", and a second call to actually request the data. It is
+ * essential that data_length, is_last_fragment and is_media_finished are set to
+ * the same value in both calls.
+ *
+ * The media is sent as a series of objects. The stack inserts a small header in
+ * front of each fragment to specify the object number, the offset in the object,
+ * and whether this is the last fragment. This is used by the reassembly
+ * processes (see quicrq_reassembly.h). Intermediate relay may wait until the
+ * last fragment is received to forward data belonging to a object.
+ */
+
+typedef enum {
+    quicrq_media_source_get_data = 0,
+    quicrq_media_source_close
+} quicrq_media_source_action_enum;
+
+typedef void* (*quicrq_media_publisher_subscribe_fn)(void* pub_ctx, quicrq_stream_ctx_t* stream_ctx);
+typedef int (*quicrq_media_publisher_fn)(
+    quicrq_media_source_action_enum action,
+    void* media_ctx,
+    uint8_t* data,
+    size_t data_max_size,
+    size_t* data_length,
+    int* is_new_group,
+    int* is_last_fragment,
+    int* is_media_finished,
+    int* is_still_active,
+    uint64_t current_time);
+typedef void (*quicrq_media_publisher_delete_fn)(void* pub_ctx);
+
+typedef struct st_quicrq_media_source_ctx_t quicrq_media_source_ctx_t;
+quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
+    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn,
+    quicrq_media_publisher_fn getdata_fn, quicrq_media_publisher_delete_fn delete_fn);
+void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_ctx);
+void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
+
+
  /* Quicrq per media object source context.
   */
 
