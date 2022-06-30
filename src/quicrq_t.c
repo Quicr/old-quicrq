@@ -61,6 +61,7 @@ static const quicrq_test_def_t test_table[] =
     { "triangle_datagram_loss", quicrq_triangle_datagram_loss_test },
     { "triangle_datagram_extra", quicrq_triangle_datagram_extra_test },
     { "triangle_start_point", quicrq_triangle_start_point_test },
+    { "triangle_cache", quicrq_triangle_cache_test },
     { "pyramid_basic", quicrq_pyramid_basic_test },
     { "pyramid_datagram", quicrq_pyramid_datagram_test },
     { "pyramid_datagram_loss", quicrq_pyramid_datagram_loss_test },

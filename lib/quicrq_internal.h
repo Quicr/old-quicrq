@@ -461,10 +461,9 @@ struct st_quicrq_cnx_ctx_t {
 /* Prototype function for managing the cache of relays.
  * Using a function pointer allows pure clients to operate without loading
  * the relay functionality.
+ * Function returns the next time at which management action is needed.
  */
- /* Management of the relay cache
-  */
-typedef void (*quicrq_manage_relay_cache_fn)(quicrq_ctx_t* qr_ctx, uint64_t current_time);
+typedef uint64_t (*quicrq_manage_relay_cache_fn)(quicrq_ctx_t* qr_ctx, uint64_t current_time);
 
 /* Quicrq context */
 struct st_quicrq_ctx_t {
@@ -492,6 +491,7 @@ struct st_quicrq_ctx_t {
      * When checking cache, the function manage_relay_cache_fn is called if the
      * relay function is enabled.
      */
+    int is_cache_closing_needed;
     uint64_t cache_duration_max;
     uint64_t cache_check_next_time;
     quicrq_manage_relay_cache_fn manage_relay_cache_fn;
