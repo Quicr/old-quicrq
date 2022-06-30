@@ -1783,6 +1783,8 @@ quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
     if (cnx != NULL) {
         quicrq_init_transport_parameters(&client_parameters, 1);
         picoquic_set_transport_parameters(cnx, &client_parameters);
+        /* Enable keep alive with period= 10 second to avoid closing connections. */
+        picoquic_enable_keep_alive(cnx, 10000000);
 
         if (picoquic_start_client_cnx(cnx) != 0) {
             picoquic_delete_cnx(cnx);
