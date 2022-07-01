@@ -1119,6 +1119,27 @@ void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
     }
 }
 
+/* Management of subscriptions on relays. 
+ * At both relays and origins, the notification happen:
+ * - when a new source is created
+ * - when a new subscription arrives
+ * At relays, we get extra processing: the relay will also create matching subscriptions
+ * to the origin. When the relay is notifoed of a new URL, it automatically
+ * creates an empty source, and requests it from the origin. If a new source is
+ * created, the relay will post the corresponding notifications.
+ */
+int quicrq_manage_relay_subscription_initial(quicrq_stream_ctx_t * stream_ctx)
+{
+    /* On initial subscription, notify all the locally managed sources */
+    quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
+    quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
+
+    while (srce_ctx != NULL) {
+
+    }
+
+}
+
 /*
  * The origin server behavior is very similar to the behavior of a realy, but
  * there are some key differences:
@@ -1182,6 +1203,9 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
     }
     return ret;
 }
+
+
+
 
 int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
 {

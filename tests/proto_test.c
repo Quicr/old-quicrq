@@ -216,6 +216,51 @@ static uint8_t start_msg_bytes[] = {
     0x80, 0x01, 0xe2, 0x40
 };
 
+static quicrq_message_t subscribe_msg = {
+    QUICRQ_ACTION_SUBSCRIBE,
+    sizeof(url1),
+    url1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    0
+};
+
+static uint8_t subscribe_msg_bytes[] = {
+    QUICRQ_ACTION_SUBSCRIBE,
+    sizeof(url1),
+    URL1_BYTES
+};
+
+static quicrq_message_t notify_msg = {
+    QUICRQ_ACTION_NOTIFY,
+    sizeof(url1),
+    url1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    0
+};
+
+static uint8_t notify_msg_bytes[] = {
+    QUICRQ_ACTION_NOTIFY,
+    sizeof(url1),
+    URL1_BYTES
+};
+
+
+
+
 typedef struct st_proto_test_case_t {
     uint8_t* const data;
     size_t data_length;
@@ -232,7 +277,9 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(post_msg, post_msg_bytes),
     PROTO_TEST_ITEM(accept_dg, accept_dg_bytes),
     PROTO_TEST_ITEM(accept_st, accept_st_bytes),
-    PROTO_TEST_ITEM(start_msg, start_msg_bytes)
+    PROTO_TEST_ITEM(start_msg, start_msg_bytes),
+    PROTO_TEST_ITEM(subscribe_msg, subscribe_msg_bytes),
+    PROTO_TEST_ITEM(notify_msg, notify_msg_bytes)
 };
 
 static uint8_t bad_bytes1[] = {

@@ -71,6 +71,8 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_POST 6
 #define QUICRQ_ACTION_ACCEPT 7
 #define QUICRQ_ACTION_START_POINT 8
+#define QUICRQ_ACTION_SUBSCRIBE 9
+#define QUICRQ_ACTION_NOTIFY 10
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -108,6 +110,12 @@ typedef struct st_quicrq_message_t {
  * - allocate a buffer with at least that size
  * - encode the message using xxxx_encode
  */
+size_t quicrq_subscribe_msg_reserve(size_t url_length);
+uint8_t* quicrq_subscribe_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url);
+const uint8_t* quicrq_subscribe_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
+size_t quicrq_notify_msg_reserve(size_t url_length);
+uint8_t* quicrq_notify_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url);
+const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
 size_t quicrq_rq_msg_reserve(size_t url_length);
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint64_t datagram_stream_id);
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint64_t* datagram_stream_id);
@@ -225,6 +233,10 @@ typedef enum {
     quicrq_sending_offset,
     quicrq_sending_start_point,
     quicrq_sending_fin,
+    quicrq_sending_subscribe,
+    quicrq_waiting_notify,
+    quicrq_sending_notify,
+    quicrq_notify_ready,
     quicrq_sending_no_more
 } quicrq_stream_sending_state_enum;
 
@@ -233,6 +245,7 @@ typedef enum {
     quicrq_receive_stream,
     quicrq_receive_confirmation,
     quicrq_receive_fragment,
+    quicrq_receive_notify,
     quicrq_receive_done
 }  quicrq_stream_receive_state_enum;
 
@@ -263,6 +276,12 @@ typedef struct st_quicrq_datagram_ack_state_t {
     uint64_t last_sent_time;
 } quicrq_datagram_ack_state_t;
 
+typedef struct st_quicrq_notify_url_t {
+    struct st_quicrq_notify_url_t* next_notify_url;
+    size_t url_len;
+    uint8_t* url;
+} quicrq_notify_url_t;
+
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
@@ -273,7 +292,7 @@ struct st_quicrq_stream_ctx_t {
     /* queue of datagrams that qualify for extra transmission */
     struct st_quicrq_datagram_ack_state_t* extra_first;
     struct st_quicrq_datagram_ack_state_t* extra_last;
-    /* strean identifier */
+    /* stream identifier */
     uint64_t stream_id;
     uint64_t datagram_stream_id;
     uint64_t next_group_id;
@@ -296,6 +315,12 @@ struct st_quicrq_stream_ctx_t {
     int nb_extra_sent;
     int nb_fragment_lost;
     picosplay_tree_t datagram_ack_tree;
+    /* For notification streams, URL and notification queue */
+    uint8_t* subscribe_prefix;
+    size_t subscribe_prefix_length;
+    quicrq_notify_url_t* first_notify_url;
+    quicrq_media_notify_fn media_notify_fn;
+    void* notify_ctx;
     /* Stream state */
     quicrq_stream_sending_state_enum send_state;
     quicrq_stream_receive_state_enum receive_state;
@@ -355,6 +380,12 @@ struct st_quicrq_cnx_ctx_t {
  /* Management of the relay cache
   */
 typedef void (*quicrq_manage_relay_cache_fn)(quicrq_ctx_t* qr_ctx, uint64_t current_time);
+
+/* Management of notifications
+ */
+
+int quicrq_notify_url_to_stream(quicrq_stream_ctx_t* stream_ctx, size_t url_length, const uint8_t* url);
+int quicrq_notify_url_to_all(quicrq_ctx_t * qr_ctx, size_t url_length, const uint8_t* url);
 
 /* Quicrq context */
 struct st_quicrq_ctx_t {

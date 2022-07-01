@@ -12,6 +12,75 @@
  * structure.
  */
 
+/* Media subscribe message and media notify response.
+ * The subscribe message creates a subscription context, asking relay or
+ * origin to notify the client when matching URL become available. The response
+ * message sent on the same stream notifies the client that a new URL is
+ * available.
+ * 
+ *  quicrq_subscribe_message {
+ *     message_type(i),
+ *     url_length(i),
+ *     url(...)
+ *  }
+ * 
+ *  quicrq_notify_message {
+ *     message_type(i),
+ *     url_length(i),
+ *     url(...)
+ *  }
+ */
+
+size_t quicrq_subscribe_msg_reserve(size_t url_length)
+{
+    return 8 + 2 + url_length;
+}
+
+uint8_t* quicrq_subscribe_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL){
+        bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_subscribe_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url)
+{
+    *url = NULL;
+    *url_length = 0;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, url_length)) != NULL) {
+        *url = bytes;
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length);
+    }
+    return bytes;
+}
+
+size_t quicrq_notify_msg_reserve(size_t url_length)
+{
+    return 8 + 2 + url_length;
+}
+
+uint8_t* quicrq_notify_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL) {
+        bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url)
+{
+    *url = NULL;
+    *url_length = 0;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, url_length)) != NULL) {
+        *url = bytes;
+        bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length);
+    }
+    return bytes;
+}
+
 /* Media request message. 
  * 
  * quicrq_request_message {
@@ -387,6 +456,12 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
         case QUICRQ_ACTION_START_POINT:
             bytes = quicrq_start_point_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
             break;
+        case QUICRQ_ACTION_SUBSCRIBE:
+            bytes = quicrq_subscribe_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url);
+            break;
+        case QUICRQ_ACTION_NOTIFY:
+            bytes = quicrq_notify_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url);
+            break;
         default:
             /* Unexpected message type */
             bytes = NULL;
@@ -421,6 +496,12 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         break;
     case QUICRQ_ACTION_START_POINT:
         bytes = quicrq_start_point_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
+        break;
+    case QUICRQ_ACTION_SUBSCRIBE:
+        bytes = quicrq_subscribe_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url);
+        break;
+    case QUICRQ_ACTION_NOTIFY:
+        bytes = quicrq_notify_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url);
         break;
     default:
         /* Unexpected message type */
@@ -519,6 +600,12 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
             srce_ctx->getdata_fn = getdata_fn;
             srce_ctx->get_datagram_fn = get_datagram_fn;
             srce_ctx->delete_fn = delete_fn;
+
+            if (quicrq_notify_url_to_all(qr_ctx, url_length, url) < 0) {
+                DBG_PRINTF("%s", "Fail to notify new source");
+                quicrq_delete_source(srce_ctx, qr_ctx);
+                srce_ctx = NULL;
+            }
         }
     }
 

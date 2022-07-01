@@ -312,7 +312,12 @@ int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
+typedef int (*quicrq_media_notify_fn)(
+    void* notify_ctx, const uint8_t* url, size_t url_length);
 
+int quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx,
+    const uint8_t* url, size_t url_length, 
+    quicrq_media_notify_fn media_notify_fn, void* notify_ctx);
 
 
 /* Handling of extra repeats
