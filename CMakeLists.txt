@@ -34,13 +34,25 @@ set(QUICRQ_TEST_LIBRARY_FILES
     tests/twoways_test.c
 )
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+OPTION(FETCH_PICO_DEPS "Fetch Picoquic deps via  CMAKE Fetch Content OFF")
+if(FETCH_PICO_DEPS)
+    include(FetchContent)
+    FetchContent_Declare(picoquic
+        GIT_REPOSITORY      https://github.com/paulej/picoquic.git
+        GIT_TAG             paulej_fetch_option)
+    set(PICOQUIC_FETCH_PTLS ON)
+    FetchContent_MakeAvailable(picoquic)
+    set(Picoquic_INCLUDE_DIRS ${picoquic_SOURCE_DIR}/picoquic 
+                              ${picoquic_SOURCE_DIR}/loglib)  
+    set(Picoquic_LIBRARIES picoquic-core picoquic-log)                          
+else(FETCH_PICO_DEPS)        
+    #set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+    #find_package(Picoquic REQUIRED)
+    #find_package(PTLS REQUIRED)
+endif(FETCH_PICO_DEPS)
 
-find_package(Picoquic REQUIRED)
 message(STATUS "Picoquic/include: ${Picoquic_INCLUDE_DIRS}" )
 message(STATUS "Picoquic library: ${Picoquic_LIBRARIES}" )
-
-find_package(PTLS REQUIRED)
 message(STATUS "picotls/include: ${PTLS_INCLUDE_DIRS}" )
 message(STATUS "picotls libraries: ${PTLS_LIBRARIES}" )
 
@@ -95,6 +107,7 @@ set(TEST_EXES quicrq_t)
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
 
 # Adds clangformat as target that formats all source files
+if (NOT FETCH_PICO_DEPS)
 add_custom_target(
     clangformat
     COMMAND clang-format
@@ -102,3 +115,4 @@ add_custom_target(
     -i
     ${CLANG_FORMAT_SOURCE_FILES}
 )
+endif(FETCH_PICO_DEPS)
