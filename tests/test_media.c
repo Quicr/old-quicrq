@@ -434,6 +434,8 @@ int test_media_object_source_iterate(
 {
     int ret = 0;
     test_media_publisher_context_t* pub_ctx = object_pub_ctx->pub_ctx;
+    uint64_t published_group_id = 0;
+    uint64_t published_object_id = 0;
 
     ret = test_media_object_source_check(object_pub_ctx);
 
@@ -453,7 +455,7 @@ int test_media_object_source_iterate(
                 /* Special case of audio: small packets, group by itself. */
                 int is_new_group = (pub_ctx->media_object_size > 10000 || pub_ctx->media_object_size < 200);
                 ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, 
-                    is_new_group, NULL);
+                    is_new_group, NULL, &published_group_id, &published_object_id);
                 object_pub_ctx->object_is_published = 1;
                 *is_active |= 1;
             }
@@ -1410,6 +1412,8 @@ int quicrq_media_object_publish_test()
         NULL, 0, &simulated_time);
     quicrq_media_object_source_ctx_t* object_source_ctx = NULL;
     size_t targets[] = { 16000, 3000, 4000, 17000, 1000, 2000, 15000 };
+    uint64_t target_group_id[] = { 0, 0, 0, 1, 1, 1, 2 };
+    uint64_t target_object_id[] = { 0, 1, 2, 0, 1, 2, 0 };
     size_t target_max = 17000;
     size_t nb_targets = sizeof(targets) / sizeof(size_t);
     uint8_t* object_frame = NULL;
@@ -1418,6 +1422,8 @@ int quicrq_media_object_publish_test()
     int is_media_finished = 0;
     int is_still_active = 0;
     void* media_ctx = NULL;
+    uint64_t published_group_id = 0;
+    uint64_t published_object_id = 0;
 
     if (qr_ctx == NULL) {
         ret = -1;
@@ -1451,7 +1457,22 @@ int quicrq_media_object_publish_test()
         }
         memset(object_frame, (uint8_t)i, targets[i]);
         is_new_group = (targets[i] > 10000);
-        ret = quicrq_publish_object(object_source_ctx, object_frame, targets[i], is_new_group, NULL);
+        ret = quicrq_publish_object(object_source_ctx, object_frame, targets[i], is_new_group, NULL,
+            &published_group_id, &published_object_id);
+
+        /* Check that published ids meet expectation */
+        if (ret == 0) {
+            if (published_group_id != target_group_id[i]) {
+                DBG_PRINTF("Group id[%zu]: %" PRIu64 ", expected %" PRIu64,
+                    i, published_group_id, target_group_id[i]);
+                ret = -1;
+            }
+            if (published_object_id != target_object_id[i]) {
+                DBG_PRINTF("Object id[%zu]: %" PRIu64 ", expected %" PRIu64,
+                    published_object_id, target_object_id[i]);
+                ret = -1;
+            }
+        }
 
         if (ret == 0) {
             /* Verify that the object can be read properly */

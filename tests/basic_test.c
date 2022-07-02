@@ -190,13 +190,9 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
 
     /* Check which node has the lowest wait time */
     for (int i = 0; i < config->nb_nodes; i++) {
-        uint64_t extra_repeat_time = quicrq_handle_extra_repeat(config->nodes[i], config->simulated_time);
-        uint64_t quic_time = picoquic_get_next_wake_time(config->nodes[i]->quic, config->simulated_time);
-        if (extra_repeat_time < quic_time) {
-            quic_time = extra_repeat_time;
-        }
-        if (quic_time < next_time) {
-            next_time = quic_time;
+        uint64_t app_next_time = quicrq_time_check(config->nodes[i], config->simulated_time);
+        if (app_next_time < next_time) {
+            next_time = app_next_time;
             next_step_type = 2;
             next_step_index = i;
         }
