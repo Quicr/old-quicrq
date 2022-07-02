@@ -1794,15 +1794,35 @@ void quicrq_set_cache_duration(quicrq_ctx_t* qr_ctx, uint64_t cache_duration_max
 uint64_t quicrq_time_check(quicrq_ctx_t* qr_ctx, uint64_t current_time)
 {
     uint64_t next_time = UINT64_MAX;
-    if (qr_ctx->cache_duration_max > 0) {
-        if (current_time >= qr_ctx->cache_check_next_time) {
-            qr_ctx->cache_check_next_time = current_time + qr_ctx->cache_duration_max / 2;
-            if (qr_ctx->manage_relay_cache_fn != NULL) {
-                qr_ctx->manage_relay_cache_fn(qr_ctx, current_time);
+    uint64_t extra_repeat_time = quicrq_handle_extra_repeat(qr_ctx, current_time);
+    uint64_t quic_time = picoquic_get_next_wake_time(qr_ctx->quic, current_time);
+
+    if (extra_repeat_time < quic_time) {
+        quic_time = extra_repeat_time;
+    }
+    if (quic_time < next_time) {
+        next_time = quic_time;
+    }
+
+    if (qr_ctx->manage_relay_cache_fn != NULL) {
+        int should_manage = qr_ctx->is_cache_closing_needed;
+        if (qr_ctx->cache_duration_max > 0) {
+            if (current_time >= qr_ctx->cache_check_next_time) {
+                should_manage = 1;
+                qr_ctx->cache_check_next_time = current_time + qr_ctx->cache_duration_max / 2;
+            }
+            if (qr_ctx->cache_check_next_time < next_time) {
+                next_time = qr_ctx->cache_check_next_time;
             }
         }
-        next_time = qr_ctx->cache_check_next_time;
+        if (should_manage) {
+            uint64_t manage_time = qr_ctx->manage_relay_cache_fn(qr_ctx, current_time);
+            if (manage_time < next_time) {
+                next_time = manage_time;
+            }
+        }
     }
+
     return next_time;
 }
 
@@ -1969,6 +1989,8 @@ quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
     if (cnx != NULL) {
         quicrq_init_transport_parameters(&client_parameters, 1);
         picoquic_set_transport_parameters(cnx, &client_parameters);
+        /* Enable keep alive with period= 10 second to avoid closing connections. */
+        picoquic_enable_keep_alive(cnx, 10000000);
 
         if (picoquic_start_client_cnx(cnx) != 0) {
             picoquic_delete_cnx(cnx);

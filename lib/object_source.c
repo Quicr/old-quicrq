@@ -250,7 +250,9 @@ int quicrq_publish_object(
     uint8_t* object_data,
     size_t object_length,
     int is_new_group,
-    quicrq_media_object_properties_t* properties)
+    quicrq_media_object_properties_t* properties,
+    uint64_t * published_group_id,
+    uint64_t  * published_object_id)
 {
     int ret = 0;
     size_t allocated = sizeof(quicrq_object_source_item_t) + object_length;
@@ -269,6 +271,8 @@ int quicrq_publish_object(
         }
         source_object->group_id = object_source_ctx->next_group_id;
         source_object->object_id = object_source_ctx->next_object_id;
+        *published_group_id = source_object->group_id;
+        *published_object_id = source_object->object_id;
         object_source_ctx->next_object_id++;
         source_object->object_length = object_length;
         source_object->object_time = picoquic_get_quic_time(object_source_ctx->qr_ctx->quic);

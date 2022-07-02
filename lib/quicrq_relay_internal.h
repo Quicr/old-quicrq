@@ -65,6 +65,7 @@ typedef struct st_quicrq_relay_cached_fragment_t {
 
 typedef struct st_quicrq_relay_cached_media_t {
     quicrq_media_source_ctx_t* srce_ctx;
+    quicrq_ctx_t* qr_ctx;
     uint64_t final_group_id;
     uint64_t final_object_id;
     uint64_t nb_object_received;
@@ -78,6 +79,7 @@ typedef struct st_quicrq_relay_cached_media_t {
     quicrq_relay_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree;
     int is_closed;
+    uint64_t cache_delete_time;
 } quicrq_relay_cached_media_t;
 
 typedef struct st_quicrq_relay_publisher_context_t {
@@ -150,11 +152,11 @@ int quicrq_relay_publisher_fn(
     int* is_still_active,
     uint64_t current_time);
 
-quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx();
+quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx(quicrq_ctx_t * qr_ctx);
 void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx);
 
 /* Management of the relay cache
  */
-void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time);
+uint64_t quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time);
 
 #endif /* QUICRQ_INTERNAL_RELAY_H */

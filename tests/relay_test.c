@@ -349,7 +349,7 @@ int quicrq_relay_cache_fill_test_one(size_t fragment_max, size_t start_object, s
     int nb_skipped = 0;
     /* Create a cache */
     quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
-    quicrq_relay_cached_media_t* cached_ctx = quicrq_relay_create_cache_ctx();
+    quicrq_relay_cached_media_t* cached_ctx = quicrq_relay_create_cache_ctx(NULL);
 
     if (cached_ctx == NULL || srce_ctx == NULL) {
         ret = -1;
@@ -609,9 +609,9 @@ int quicrq_relay_cache_publish_test_one(int is_datagram)
     uint64_t sequential_object_id = 0;
     size_t sequential_offset = 0;
     quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
-    quicrq_relay_cached_media_t* cached_ctx = quicrq_relay_create_cache_ctx();
+    quicrq_relay_cached_media_t* cached_ctx = quicrq_relay_create_cache_ctx(NULL);
     quicrq_media_source_ctx_t* srce_ctx_p = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
-    quicrq_relay_cached_media_t* cached_ctx_p = quicrq_relay_create_cache_ctx();
+    quicrq_relay_cached_media_t* cached_ctx_p = quicrq_relay_create_cache_ctx(NULL);
     quicrq_relay_publisher_context_t* pub_ctx = (quicrq_relay_publisher_context_t*)malloc(sizeof(quicrq_relay_publisher_context_t));
     if (cached_ctx == NULL || srce_ctx == NULL || cached_ctx_p == NULL || srce_ctx_p == NULL || pub_ctx == NULL) {
         ret = -1;

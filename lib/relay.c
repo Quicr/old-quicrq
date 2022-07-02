@@ -495,6 +495,8 @@ int quicrq_relay_consumer_cb(
     case quicrq_media_close:
         /* Document the final object */
         if (cons_ctx->cached_ctx->final_group_id == 0 && cons_ctx->cached_ctx->final_object_id == 0) {
+            /* cache delete time set in the future to allow for reconnection. */
+            cons_ctx->cached_ctx->cache_delete_time = current_time + 30000000;
             /* Document the last group_id and object_id that were fully received. */
             if (cons_ctx->cached_ctx->next_offset == 0) {
                 cons_ctx->cached_ctx->final_group_id = cons_ctx->cached_ctx->next_group_id;
@@ -529,7 +531,13 @@ int quicrq_relay_consumer_cb(
                 }
             }
         }
+        else {
+            /* cache delete time set at short interval. */
+            cons_ctx->cached_ctx->cache_delete_time = current_time + 3000000;
+        }
         cons_ctx->cached_ctx->is_closed = 1;
+        
+        /* Set the target delete date */
         /* Notify consumers of the stream */
         quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
         /* Free the media context resource */
@@ -541,6 +549,13 @@ int quicrq_relay_consumer_cb(
         break;
     }
     return ret;
+}
+
+void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx)
+{
+    quicrq_relay_cache_media_clear(cache_ctx);
+
+    free(cache_ctx);
 }
 
 /* Server part of the relay.
@@ -558,15 +573,16 @@ int quicrq_relay_consumer_cb(
  * When the correction is available, the client is notified, and polls for the
  * missing object-id.
  */
-void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx)
-{
-    quicrq_relay_cache_media_clear(cache_ctx);
-
-    free(cache_ctx);
-}
 
 void quicrq_relay_publisher_close(quicrq_relay_publisher_context_t* media_ctx)
 {
+    quicrq_relay_cached_media_t * cached_ctx = media_ctx->cache_ctx;
+
+    if (cached_ctx->is_closed && cached_ctx->qr_ctx != NULL) {
+        /* This may be the last connection served from this cache */
+        cached_ctx->qr_ctx->is_cache_closing_needed = 1;
+    }
+
     free(media_ctx);
 }
 
@@ -855,7 +871,7 @@ int quicrq_relay_check_server_cnx(quicrq_relay_context_t* relay_ctx, quicrq_ctx_
     return ret;
 }
 
-quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx()
+quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx(quicrq_ctx_t* qr_ctx)
 {
     quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)malloc(
         sizeof(quicrq_relay_cached_media_t));
@@ -863,6 +879,7 @@ quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx()
         memset(cache_ctx, 0, sizeof(quicrq_relay_cached_media_t));
         cache_ctx->subscribe_stream_id = UINT64_MAX;
         quicrq_relay_cache_media_init(cache_ctx);
+        cache_ctx->qr_ctx = qr_ctx;
     }
     return cache_ctx;
 }
@@ -903,7 +920,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
         quicrq_set_default_source(qr_ctx, NULL, NULL);
     }
     else {
-        quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx();
+        quicrq_relay_cached_media_t* cache_ctx = quicrq_relay_create_cache_ctx(qr_ctx);
         quicrq_relay_consumer_context_t* cons_ctx = NULL;
         if (cache_ctx == NULL) {
             ret = -1;
@@ -992,7 +1009,7 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
         }
         else {
             /* Create a cache context for the URL */
-            cache_ctx = quicrq_relay_create_cache_ctx();
+            cache_ctx = quicrq_relay_create_cache_ctx(qr_ctx);
             if (cache_ctx != NULL) {
                 char buffer[256];
                 ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
@@ -1086,9 +1103,12 @@ void quicrq_disable_relay(quicrq_ctx_t* qr_ctx)
 /* Management of the relay cache.
  * Ensure that old segments are removed.
  */
-void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
+uint64_t quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
 {
-    if (qr_ctx->relay_ctx != NULL && qr_ctx->cache_duration_max > 0) {
+    uint64_t next_time = UINT64_MAX;
+
+    if (qr_ctx->relay_ctx != NULL && (qr_ctx->cache_duration_max > 0 || qr_ctx->is_cache_closing_needed)) {
+        int is_cache_closing_still_needed = 0;
         quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
 
         /* Find all the sources that are cached by the relay function */
@@ -1100,15 +1120,29 @@ void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
                 srce_ctx->delete_fn == quicrq_relay_publisher_delete) {
                 /* This is a source created by the relay */
                 quicrq_relay_cached_media_t* cache_ctx = (quicrq_relay_cached_media_t*)srce_ctx->pub_ctx;
-                /* TODO: Check the lowest value of the published object along subscribed clients;
-                 * setting the lowest value to UIN64_MAX for now */
-                /* Purge cache from old entries */
-                quicrq_relay_cache_media_purge(cache_ctx,
-                    current_time, qr_ctx->cache_duration_max, UINT64_MAX);
-                /* If the cache is empty and the source is closed, schedule it for deletion. */
-                if (cache_ctx->first_fragment == NULL &&
-                    cache_ctx->is_closed) {
-                    srce_to_delete = srce_ctx;
+
+                if (qr_ctx->cache_duration_max > 0) {
+                    /* TODO: Check the lowest value of the published object along subscribed clients;
+                     * setting the lowest value to UIN64_MAX for now */
+                     /* Purge cache from old entries */
+                    quicrq_relay_cache_media_purge(cache_ctx,
+                        current_time, qr_ctx->cache_duration_max, UINT64_MAX);
+                }
+                if (cache_ctx->is_closed) {
+                    if (cache_ctx->first_fragment == NULL) {
+                        /* If the cache is empty and the source is closed, schedule it for deletion. */
+                        srce_to_delete = srce_ctx;
+                    } else if (srce_ctx->first_stream == NULL) {
+                        /* If the source is closed and has no reader, delete at scheduled time. */
+                        if (current_time >= cache_ctx->cache_delete_time) {
+                            srce_to_delete = srce_ctx;
+                        }
+                        else if (cache_ctx->cache_delete_time < next_time) {
+                            /* Not ready to delete yet, ask for a wake up on timer */
+                            next_time = cache_ctx->cache_delete_time;
+                            is_cache_closing_still_needed = 1;
+                        }
+                    }
                 }
             }
             srce_ctx = srce_ctx->next_source;
@@ -1116,7 +1150,10 @@ void quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
                 quicrq_delete_source(srce_to_delete, qr_ctx);
             }
         }
+        qr_ctx->is_cache_closing_needed = is_cache_closing_still_needed;
     }
+
+    return next_time;
 }
 
 /* Management of subscriptions on relays. 
@@ -1174,7 +1211,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
         }
         else {
             /* Create a cache context for the URL */
-            cache_ctx = quicrq_relay_create_cache_ctx();
+            cache_ctx = quicrq_relay_create_cache_ctx(qr_ctx);
             if (cache_ctx != NULL) {
                 ret = quicrq_relay_publish_cached_media(qr_ctx, cache_ctx, url, url_length);
                 if (ret != 0) {
@@ -1226,6 +1263,8 @@ int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
         quicrq_set_media_init_callback(qr_ctx, quicrq_origin_consumer_init_callback);
         /* Remember pointer */
         qr_ctx->relay_ctx = relay_ctx;
+        /* Set the cache function */
+        qr_ctx->manage_relay_cache_fn = quicrq_manage_relay_cache;
     }
     return ret;
 }

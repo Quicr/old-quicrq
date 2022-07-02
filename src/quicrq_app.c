@@ -264,7 +264,7 @@ int quicrq_app_add_source(quicrq_app_loop_cb_t* cb_ctx, uint8_t* url, size_t url
             memset(new_test_source_ctx, 0, new_nb * sizeof(test_media_object_source_context_t*));
             if (cb_ctx->test_source_ctx != NULL) {
                 if (cb_ctx->nb_test_sources > 0) {
-                    memcpy(new_test_source_ctx, cb_ctx->test_source_ctx, cb_ctx->nb_test_sources * sizeof(quicrq_test_source_t*));
+                    memcpy(new_test_source_ctx, cb_ctx->test_source_ctx, cb_ctx->nb_test_sources * sizeof(test_media_object_source_context_t*));
                 }
                 free(cb_ctx->test_source_ctx);
             }
