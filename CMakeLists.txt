@@ -27,6 +27,7 @@ set(QUICRQ_TEST_LIBRARY_FILES
     tests/proto_test.c
     tests/pyramid_test.c
     tests/relay_test.c
+    tests/subscribe_test.c
     tests/test_media.c
     tests/threelegs_test.c
     tests/triangle_test.c

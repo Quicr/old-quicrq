@@ -207,6 +207,15 @@ int quicrq_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
     picoquic_call_back_event_t fin_or_event, void* callback_ctx, void* v_stream_ctx);
 
+/* Subscribe to pattern
+ * The function quicrq_cnx_subscribe_pattern creates a subscription
+ * to an "URL Pattern", specified as a URL prefix (url) and length
+ * (url-length). The client will be notified of sources matching
+ * the URL prefix that are currently available, or of new sources
+ * as they become available. The notification is done through a
+ * call back to "media_notify_fn"
+ */
+
 typedef int (*quicrq_media_notify_fn)(
     void* notify_ctx, const uint8_t* url, size_t url_length);
 
