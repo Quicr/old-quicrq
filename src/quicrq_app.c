@@ -342,7 +342,7 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
                 }
                 if (ret == 0) {
                     test_object_stream_ctx_t* object_stream_ctx = NULL;
-                    object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (uint8_t*)url, url_length, use_datagrams, path, log_path);
+                    object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)url, url_length, use_datagrams, path, log_path);
                     if (object_stream_ctx == NULL) {
                         ret = -1;
                     }

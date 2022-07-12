@@ -167,7 +167,7 @@ void* test_media_publisher_init(char const* media_source_path, const generation_
 
 void* test_media_consumer_init(char const* media_result_file, char const* media_result_log);
 int test_media_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length);
-test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log);
+test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log);
 int test_media_object_source_iterate(test_media_object_source_context_t* object_pub_ctx, uint64_t current_time, int * is_active);
 uint64_t test_media_object_source_next_time(test_media_object_source_context_t* object_pub_ctx, uint64_t current_time);
 void test_media_object_source_delete(test_media_object_source_context_t* object_pub_ctx);

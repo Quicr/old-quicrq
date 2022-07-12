@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 #include "picoquic_set_textlog.h"
 #include "picoquic_set_binlog.h"
 #include "quicrq.h"
@@ -170,7 +171,6 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
     char result_log_name[512];
     char text_log_name[512];
     size_t nb_log_chars = 0;
-    int partial_closure = 0;
     quicrq_stream_ctx_t* stream_ctx_subscriber = NULL;
     int stream_ctx_subscriber_is_closed = 0;
     uint64_t subscriber_close_time = UINT64_MAX;

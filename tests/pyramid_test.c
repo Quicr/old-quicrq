@@ -162,7 +162,7 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
             quicrq_cnx_ctx_t* cnx_ctx_get = (is_from_relay_client) ? cnx_ctx_server : cnx_ctx_relay;
             if (ret == 0) {
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
-                object_stream_ctx = test_object_stream_subscribe(cnx_ctx_get, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+                object_stream_ctx = test_object_stream_subscribe(cnx_ctx_get, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
                     strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;

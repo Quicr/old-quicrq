@@ -867,7 +867,7 @@ int test_object_stream_consumer_cb(
     return ret;
 }
 
-test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log)
+test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log)
 {
     int ret = 0;
     /* Open and initialize result file and log file */
@@ -1808,7 +1808,7 @@ int quicrq_object_stream_test_one(char const* media_source_name, char const* med
 
     /* Create an object stream consumer context */
     if (ret == 0) {
-        object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (uint8_t*)media_source_name, strlen(media_source_name), 1, media_result_file, media_result_log);
+        object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)media_source_name, strlen(media_source_name), 1, media_result_file, media_result_log);
         if (object_stream_ctx == NULL) {
             ret = -1;
         } else {

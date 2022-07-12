@@ -129,7 +129,7 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             /* Create a subscription to the test source on client */
             if (ret == 0) {
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
-                object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+                object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
                     strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;
