@@ -72,3 +72,4 @@ extern "C" {
 }
 #endif
 #endif /* QUICRQ_TEST_H */
+

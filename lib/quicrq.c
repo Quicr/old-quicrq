@@ -2027,3 +2027,4 @@ void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...)
         va_end(args);
     }
 }
+

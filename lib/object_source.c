@@ -321,3 +321,4 @@ void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source
     /* Free the resource */
     free(object_source_ctx);
 }
+
