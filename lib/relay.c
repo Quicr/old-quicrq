@@ -1156,6 +1156,7 @@ uint64_t quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
     return next_time;
 }
 
+#if 0
 /* Management of subscriptions on relays. 
  * At both relays and origins, the notification happen:
  * - when a new source is created
@@ -1172,13 +1173,14 @@ int quicrq_manage_relay_subscription_initial(quicrq_stream_ctx_t * stream_ctx)
     quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
 
     while (srce_ctx != NULL) {
-
+        break;
     }
-
+    return -1;
 }
+#endif
 
 /*
- * The origin server behavior is very similar to the behavior of a realy, but
+ * The origin server behavior is very similar to the behavior of a relay, but
  * there are some key differences:
  *  
  *  1) When receiving a "subscribe" request, the relay creates the media context and
