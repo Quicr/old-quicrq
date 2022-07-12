@@ -163,7 +163,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
     quicrq_test_config_t* config = quicrq_test_subscribe_config_create(simulate_losses);
-    quicrq_cnx_ctx_t* cnx_ctx_1 = NULL;
+    quicrq_cnx_ctx_t* cnx_ctx_subscriber = NULL;
     quicrq_cnx_ctx_t* cnx_ctx_2 = NULL;
     char media_source_path[512];
     char result_file_name[512];
@@ -171,6 +171,8 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
     char text_log_name[512];
     size_t nb_log_chars = 0;
     int partial_closure = 0;
+    quicrq_stream_ctx_t* stream_ctx_subscriber = NULL;
+    int stream_ctx_subscriber_is_closed = 0;
     uint64_t subscriber_close_time = UINT64_MAX;
     quicrq_subscribe_test_result_t results = { 0 };
 
@@ -226,8 +228,8 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 
     if (ret == 0) {
         /* Create connection on subscriber */
-        cnx_ctx_1 = quicrq_test_create_client_cnx(config, subscriber, (subscriber < 2)?0:5);
-        if (cnx_ctx_1 == NULL) {
+        cnx_ctx_subscriber = quicrq_test_create_client_cnx(config, subscriber, (subscriber < 2)?0:5);
+        if (cnx_ctx_subscriber == NULL) {
             ret = -1;
             DBG_PRINTF("Cannot create subscriber connection #1, ret = %d", ret);
         }
@@ -252,14 +254,15 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 
     if (ret == 0) {
         /* Create a subscription to the test source on subscriber */
-        results.cnx_ctx = cnx_ctx_1;
+        results.cnx_ctx = cnx_ctx_subscriber;
         results.result_file_name = result_file_name;
         results.result_log_name = result_log_name;
         results.use_datagrams = use_datagrams;
-        ret = quicrq_cnx_subscribe_pattern(cnx_ctx_2, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+        stream_ctx_subscriber = quicrq_cnx_subscribe_pattern(cnx_ctx_subscriber, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
             pattern_length, quicrq_subscribe_test_notify, &results);
 
-        if (ret != 0) {
+        if (stream_ctx_subscriber == 0) {
+            ret = -1;
             DBG_PRINTF("Cannot subscribe to test pattern %s, l =%d, ret = %d", QUICRQ_TEST_BASIC_SOURCE, pattern_length, ret);
         }
     }
@@ -284,6 +287,11 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
                 DBG_PRINTF("Exit loop after too many inactive: %d", nb_inactive);
             }
         }
+        /* Drop the subscribe pattern stream after 5 seconds */
+        if (stream_ctx_subscriber != NULL && config->simulated_time >= 5000000 && !stream_ctx_subscriber_is_closed) {
+            ret = quicrq_cnx_subscribe_pattern_close(cnx_ctx_subscriber, stream_ctx_subscriber);
+            stream_ctx_subscriber_is_closed = 1;
+        }
         /* if the media is sent and received, exit the loop */
         if (config->nodes[subscriber]->first_cnx == NULL &&
             (publisher == 0 ||
@@ -292,11 +300,16 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
             break;
         }
         else {
-            /* TODO: add closing condition on server */
-            int publisher_stream_closed = publisher == 0 ||
+            int publisher_stream_closed = 
                 config->nodes[publisher]->first_cnx == NULL ||
                 config->nodes[publisher]->first_cnx->first_stream == NULL;
-            int subscriber_stream_closed = config->nodes[subscriber]->first_cnx == NULL || config->nodes[subscriber]->first_cnx->first_stream == NULL;
+
+            int subscriber_stream_closed = config->nodes[subscriber]->first_cnx == NULL ||
+                config->nodes[subscriber]->first_cnx->first_stream == NULL;
+
+            if (subscriber_stream_closed) {
+                DBG_PRINTF("%s", "Done");
+            }
 
             if (subscriber_stream_closed && subscriber_close_time > config->simulated_time) {
                 subscriber_close_time = config->simulated_time;

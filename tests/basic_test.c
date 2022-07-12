@@ -180,11 +180,13 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
 
     /* Check which object source has the lowest time */
     for (int i = 0; i < config->nb_object_sources; i++) {
-        uint64_t next_source_time = test_media_object_source_next_time(config->object_sources[i], config->simulated_time);
-        if (next_source_time < next_time) {
-            next_time = next_source_time;
-            next_step_type = 1;
-            next_step_index = i;
+        if (config->object_sources[i] != NULL) {
+            uint64_t next_source_time = test_media_object_source_next_time(config->object_sources[i], config->simulated_time);
+            if (next_source_time < next_time) {
+                next_time = next_source_time;
+                next_step_type = 1;
+                next_step_index = i;
+            }
         }
     }
 

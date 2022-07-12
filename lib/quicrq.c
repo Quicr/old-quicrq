@@ -1216,26 +1216,30 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         if (stream_ctx->first_notify_url != NULL) {
             quicrq_notify_url_t* notified = stream_ctx->first_notify_url;
             quicrq_message_buffer_t* message = &stream_ctx->message_sent;
-
-            uint8_t* message_next = quicrq_notify_msg_encode(message->buffer, message->buffer + message->buffer_alloc, 
-                QUICRQ_ACTION_NOTIFY, notified->url_len, notified->url);
-            if (message_next == NULL) {
+            if (quicrq_msg_buffer_alloc(message, quicrq_notify_msg_reserve(notified->url_len), 0) != 0) {
                 ret = -1;
             }
             else {
-                /* Queue the media request message to that stream */
-                char buffer[256];
+                uint8_t* message_next = quicrq_notify_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
+                    QUICRQ_ACTION_NOTIFY, notified->url_len, notified->url);
+                if (message_next == NULL) {
+                    ret = -1;
+                }
+                else {
+                    /* Queue the media request message to that stream */
+                    char buffer[256];
 
-                message->message_size = message_next - message->buffer;
-                stream_ctx->send_state = quicrq_sending_notify;
+                    message->message_size = message_next - message->buffer;
+                    stream_ctx->send_state = quicrq_sending_notify;
 
-                quicrq_log_message(stream_ctx->cnx_ctx, "On stream %" PRIu64 ", notify URL:%s",
-                    stream_ctx->stream_id,
-                    quicrq_uint8_t_to_text(notified->url, notified->url_len, buffer, 256));
+                    quicrq_log_message(stream_ctx->cnx_ctx, "On stream %" PRIu64 ", notify URL:%s",
+                        stream_ctx->stream_id,
+                        quicrq_uint8_t_to_text(notified->url, notified->url_len, buffer, 256));
 
-                stream_ctx->first_notify_url = notified->next_notify_url;
-                /* This free assumes the url bytes were allocated with the notified struct */
-                free(notified);
+                    stream_ctx->first_notify_url = notified->next_notify_url;
+                    /* This free assumes the url bytes were allocated with the notified struct */
+                    free(notified);
+                }
             }
         }
     }
@@ -1332,7 +1336,7 @@ int quicrq_notify_url_to_stream(quicrq_stream_ctx_t* stream_ctx, size_t url_leng
             notified->url_len = url_length;
             notified->url = ((uint8_t*)notified) + sizeof(quicrq_notify_url_t);
             memcpy(notified->url, url, url_length);
-            stream_ctx->first_notify_url = notified->next_notify_url;
+            stream_ctx->first_notify_url = notified;
             quicrq_wakeup_media_stream(stream_ctx);
             ret = 1;
         }
@@ -1571,7 +1575,14 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         }
                         break;
                     case QUICRQ_ACTION_NOTIFY:
-                        ret = -1;
+                        if (stream_ctx->receive_state != quicrq_receive_notify) {
+                            quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", unexpected subscribe pattern message is stream receive state %d",
+                                stream_ctx->stream_id, stream_ctx->receive_state);
+                            ret = -1;
+                        }
+                        if (stream_ctx->media_notify_fn != NULL) {
+                            stream_ctx->media_notify_fn(stream_ctx->notify_ctx, incoming.url, incoming.url_length);
+                        }
                         break;
                     default:
                         /* Some unknown message, maybe not implemented yet */
@@ -1722,40 +1733,52 @@ int quicrq_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-int quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, quicrq_media_notify_fn media_notify_fn, void* notify_ctx)
+quicrq_stream_ctx_t* quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, quicrq_media_notify_fn media_notify_fn, void* notify_ctx)
 {
-    /* Create a stream for the media */
-    int ret = 0;
+    /* Create a stream for the subscribe pattern */
     uint64_t stream_id = picoquic_get_next_local_stream_id(cnx_ctx->cnx, 0);
     quicrq_stream_ctx_t* stream_ctx = quicrq_create_stream_context(cnx_ctx, stream_id);
     quicrq_message_buffer_t* message = &stream_ctx->message_sent;
 
-    if (stream_ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        if (quicrq_msg_buffer_alloc(message, quicrq_subscribe_msg_reserve(url_length), 0) != 0) {
-            ret = -1;
-        }
-        else {
+    if (stream_ctx != NULL) {
+        if (quicrq_msg_buffer_alloc(message, quicrq_subscribe_msg_reserve(url_length), 0) == 0) {
             /* Format the media request */
             uint8_t* message_next = quicrq_subscribe_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
                 QUICRQ_ACTION_SUBSCRIBE, url_length, url);
             if (message_next == NULL) {
-                ret = -1;
+                quicrq_delete_stream_ctx(cnx_ctx, stream_ctx);
+                stream_ctx = NULL;
             }
             else {
                 char buffer[256];
+                /* Set the call back functions */
+                stream_ctx->media_notify_fn = media_notify_fn;
+                stream_ctx->notify_ctx = notify_ctx;
                 /* Queue the media request message to that stream */
                 stream_ctx->is_client = 1;
                 message->message_size = message_next - message->buffer;
                 stream_ctx->send_state = quicrq_sending_subscribe;
                 stream_ctx->receive_state = quicrq_receive_notify;
+
                 picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
                 quicrq_log_message(cnx_ctx, "Posting subscribe to URL pattern: %s* on stream %" PRIu64,
                     quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
             }
         }
+    }
+    return stream_ctx;
+}
+
+int quicrq_cnx_subscribe_pattern_close(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx)
+{
+    int ret = 0;
+    if (stream_ctx->send_state == quicrq_waiting_notify) {
+        stream_ctx->send_state = quicrq_sending_fin;
+
+        picoquic_mark_active_stream(cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+    }
+    else if (stream_ctx->send_state != quicrq_sending_fin) {
+        ret = 1;
     }
     return ret;
 }
@@ -2053,6 +2076,7 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
 
     if (cnx_ctx->cnx != NULL) {
         (void)picoquic_mark_active_stream(cnx_ctx->cnx, stream_ctx->stream_id, 0, NULL);
+        (void)picoquic_add_to_stream(cnx_ctx->cnx, stream_ctx->stream_id, NULL, 0, 1);
     }
     if (stream_ctx->media_ctx != NULL) {
         if (stream_ctx->is_sender) {

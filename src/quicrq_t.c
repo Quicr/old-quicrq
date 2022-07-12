@@ -55,6 +55,7 @@ static const quicrq_test_def_t test_table[] =
     { "relay_datagram_loss", quicrq_relay_datagram_loss_test },
     { "relay_basic_client", quicrq_relay_basic_client_test },
     { "relay_datagram_client", quicrq_relay_datagram_client_test },
+    { "subscribe_basic", quicrq_subscribe_basic_test },
     { "triangle_basic", quicrq_triangle_basic_test },
     { "triangle_basic_loss", quicrq_triangle_basic_loss_test },
     { "triangle_datagram", quicrq_triangle_datagram_test },

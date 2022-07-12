@@ -219,10 +219,11 @@ int quicrq_callback(picoquic_cnx_t* cnx,
 typedef int (*quicrq_media_notify_fn)(
     void* notify_ctx, const uint8_t* url, size_t url_length);
 
-int quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx,
+quicrq_stream_ctx_t* quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx,
     const uint8_t* url, size_t url_length, 
     quicrq_media_notify_fn media_notify_fn, void* notify_ctx);
 
+int quicrq_cnx_subscribe_pattern_close(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx);
 
 /* Handling of extra repeats
  *

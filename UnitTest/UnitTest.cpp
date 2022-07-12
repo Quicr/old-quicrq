@@ -220,6 +220,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(subscribe_basic) {
+			int ret = quicrq_subscribe_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(triangle_basic) {
 			int ret = quicrq_triangle_basic_test();
 
