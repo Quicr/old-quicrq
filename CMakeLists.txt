@@ -34,7 +34,7 @@ set(QUICRQ_TEST_LIBRARY_FILES
     tests/twoways_test.c
 )
 # contrib
-option(GIT_SUBMODULE "Check submodules during build" ON)
+option(GIT_SUBMODULE "Check submodules during build" OFF)
 include(cmake/AddGitSubmodule.cmake)
 add_git_submodule(${CMAKE_SOURCE_DIR}/contrib/picotls)
 add_git_submodule(${CMAKE_SOURCE_DIR}/contrib/picoquic)
