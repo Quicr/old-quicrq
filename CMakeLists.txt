@@ -33,6 +33,11 @@ set(QUICRQ_TEST_LIBRARY_FILES
     tests/twomedia_test.c
     tests/twoways_test.c
 )
+# contrib
+option(GIT_SUBMODULE "Check submodules during build" ON)
+include(cmake/AddGitSubmodule.cmake)
+add_git_submodule(${CMAKE_SOURCE_DIR}/contrib/picotls)
+add_git_submodule(${CMAKE_SOURCE_DIR}/contrib/picoquic)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -95,6 +100,7 @@ set(TEST_EXES quicrq_t)
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
 
 # Adds clangformat as target that formats all source files
+if (NOT GIT_SUBMODULE)
 add_custom_target(
     clangformat
     COMMAND clang-format
@@ -102,3 +108,4 @@ add_custom_target(
     -i
     ${CLANG_FORMAT_SOURCE_FILES}
 )
+endif(NOT GIT_SUBMODULE)

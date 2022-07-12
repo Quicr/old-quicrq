@@ -445,3 +445,4 @@ int proto_msg_test()
 
     return ret;
 }
+

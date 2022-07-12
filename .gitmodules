@@ -1,0 +1,6 @@
+[submodule "contrib/picotls"]
+	path = contrib/picotls
+	url = https://github.com/h2o/picotls.git
+[submodule "contrib/picoquic"]
+	path = contrib/picoquic
+	url = https://github.com/private-octopus/picoquic.git

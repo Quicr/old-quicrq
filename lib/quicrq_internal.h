@@ -552,3 +552,4 @@ void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...);
 #endif
 
 #endif /* quicrq_internal_H */
+
