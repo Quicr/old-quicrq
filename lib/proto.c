@@ -601,7 +601,7 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
             srce_ctx->get_datagram_fn = get_datagram_fn;
             srce_ctx->delete_fn = delete_fn;
 
-            if (quicrq_notify_url_to_all(qr_ctx, url_length, url) < 0) {
+            if (quicrq_notify_url_to_all(qr_ctx, url, url_length) < 0) {
                 DBG_PRINTF("%s", "Fail to notify new source");
                 quicrq_delete_source(srce_ctx, qr_ctx);
                 srce_ctx = NULL;

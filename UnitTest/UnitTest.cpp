@@ -232,6 +232,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(subscribe_relay1) {
+			int ret = quicrq_subscribe_relay1_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(subscribe_client) {
 			int ret = quicrq_subscribe_client_test();
 

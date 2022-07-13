@@ -493,8 +493,16 @@ typedef uint64_t (*quicrq_manage_relay_cache_fn)(quicrq_ctx_t* qr_ctx, uint64_t 
 /* Management of notifications
  */
 
-int quicrq_notify_url_to_stream(quicrq_stream_ctx_t* stream_ctx, size_t url_length, const uint8_t* url);
-int quicrq_notify_url_to_all(quicrq_ctx_t * qr_ctx, size_t url_length, const uint8_t* url);
+int quicrq_notify_url_to_stream(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length);
+int quicrq_notify_url_to_all(quicrq_ctx_t * qr_ctx, const uint8_t* url, size_t url_length);
+
+/* Prototype function for managing cache at relay. */
+typedef enum {
+    quicrq_subscribe_action_subscribe,
+    quicrq_subscribe_action_unsubscribe
+} quicrq_subscribe_action_enum;
+
+typedef void (*quicrq_manage_relay_subscribe_fn)(quicrq_ctx_t* qr_ctx, quicrq_subscribe_action_enum action, const uint8_t* url, size_t url_length);
 
 /* Quicrq context */
 struct st_quicrq_ctx_t {
@@ -526,6 +534,7 @@ struct st_quicrq_ctx_t {
     uint64_t cache_duration_max;
     uint64_t cache_check_next_time;
     quicrq_manage_relay_cache_fn manage_relay_cache_fn;
+    quicrq_manage_relay_subscribe_fn manage_relay_subscribe_fn;
     /* Extra repeat option */
     int extra_repeat_on_nack : 1;
     int extra_repeat_after_received_delayed : 1;

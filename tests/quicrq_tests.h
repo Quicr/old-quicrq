@@ -42,6 +42,7 @@ extern "C" {
     int quicrq_relay_basic_client_test();
     int quicrq_relay_datagram_client_test();
     int quicrq_subscribe_basic_test();
+    int quicrq_subscribe_relay1_test();
     int quicrq_subscribe_datagram_test();
     int quicrq_subscribe_client_test();
     int quicrq_triangle_basic_test();

@@ -211,7 +211,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
         /* Configure the relay: joint client-server as default source and default consumer */
         /* Configure the relay: set the server address */
         struct sockaddr* addr_to = quicrq_test_find_send_addr(config, 5, 0);
-        ret = quicrq_enable_relay(config->nodes[1], NULL, addr_to, use_datagrams);
+        ret = quicrq_enable_relay(config->nodes[5], NULL, addr_to, use_datagrams);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable relay, ret = %d", ret);
         }
@@ -237,7 +237,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 
     if (ret == 0 && publisher != 0) {
         /* Create a quicrq connection context on publisher */
-        cnx_ctx_2 = quicrq_test_create_client_cnx(config, 2, 0);
+        cnx_ctx_2 = quicrq_test_create_client_cnx(config, publisher, (publisher < 2) ? 0 : 5);
         if (cnx_ctx_2 == NULL) {
             ret = -1;
             DBG_PRINTF("Cannot create client connection #2, ret = %d", ret);

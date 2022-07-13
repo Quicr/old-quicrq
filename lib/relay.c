@@ -1051,6 +1051,116 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
     return ret;
 }
 
+
+
+/* Management of subscriptions on relays.
+ *
+ * Every subscription managed from a client should have a corresponding subscription
+ * request from the relay to the origin.
+ */
+
+int quicrq_relay_subscribe_notify(void* notify_ctx, const uint8_t* url, size_t url_length)
+{
+    int ret = 0;
+    /* Retrieve the relay context */
+    quicrq_ctx_t* qr_ctx = (quicrq_ctx_t*)notify_ctx;
+    /* Find whether there is already a source with that name */
+    quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
+
+    while (srce_ctx != NULL) {
+        if (srce_ctx->media_url_length == url_length &&
+            memcmp(srce_ctx->media_url, url, url_length) == 0) {
+            break;
+        }
+        srce_ctx = srce_ctx->next_source;
+    }
+    if (srce_ctx == NULL) {
+        /* If there is not, add the corresponding file to the catch, as
+         * if a subscribe to a file had been received. */
+        ret = quicrq_relay_default_source_fn(qr_ctx->relay_ctx, qr_ctx, url, url_length);
+    }
+
+    return ret;
+}
+
+quicrq_stream_ctx_t* quicrq_relay_find_subscription(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length)
+{
+    quicrq_stream_ctx_t* stream_ctx = NULL;
+    /* Locate the connection to the origin */
+    if (qr_ctx->relay_ctx->cnx_ctx != NULL) {
+        stream_ctx = qr_ctx->relay_ctx->cnx_ctx->first_stream;
+        while (stream_ctx != NULL) {
+            if (stream_ctx->subscribe_prefix != NULL &&
+                stream_ctx->subscribe_prefix_length == url_length &&
+                memcmp(stream_ctx->subscribe_prefix, url, url_length) == 0) {
+                break;
+            }
+            stream_ctx = stream_ctx->next_stream;
+        }
+    }
+    return stream_ctx;
+}
+
+void quicrq_relay_subscribe_pattern(quicrq_ctx_t* qr_ctx, quicrq_subscribe_action_enum action, const uint8_t* url, size_t url_length)
+{
+    if (action == quicrq_subscribe_action_unsubscribe) {
+        if (qr_ctx->relay_ctx->cnx_ctx != NULL) {
+            /* Check whether there is still a client connection subscribed to this pattern */
+            quicrq_cnx_ctx_t* cnx_ctx = qr_ctx->first_cnx;
+            int is_subscribed = 0;
+            while (cnx_ctx != NULL && !is_subscribed) {
+                /* Only examine the connections to this relay */
+                if (cnx_ctx->is_server) {
+                    quicrq_stream_ctx_t* stream_ctx = cnx_ctx->first_stream;
+                    while (stream_ctx != NULL) {
+                        if (stream_ctx->send_state == quicrq_notify_ready &&
+                            stream_ctx->subscribe_prefix_length == url_length &&
+                            memcmp(stream_ctx->subscribe_prefix, url, url_length) == 0) {
+                            is_subscribed = 1;
+                            break;
+                        }
+                        stream_ctx = stream_ctx->next_stream;
+                    }
+                }
+            }
+            /* Find the outgoing stream for that pattern and close it. */
+            if (is_subscribed) {
+                quicrq_stream_ctx_t* stream_ctx = quicrq_relay_find_subscription(qr_ctx, url, url_length);
+                if (stream_ctx != NULL) {
+                    int ret = quicrq_cnx_subscribe_pattern_close(qr_ctx->relay_ctx->cnx_ctx, stream_ctx);
+                    if (ret != 0) {
+                        char buffer[256];
+                        quicrq_log_message(qr_ctx->relay_ctx->cnx_ctx, "Cannot unsubscribe relay from origin for %s*",
+                            quicrq_uint8_t_to_text(url, url_length, buffer, 256));
+                    }
+                }
+            }
+        }
+    }
+    else if (action == quicrq_subscribe_action_subscribe) {
+        /* new subscription from a client. Check the current connection to
+         * see whether a matching subscription exists.*/
+         /* If no connection to the server yet, create one */
+        if (quicrq_relay_check_server_cnx(qr_ctx->relay_ctx, qr_ctx) != 0) {
+            DBG_PRINTF("%s", "Cannot create a connection to the origin");
+        }
+        else {
+            quicrq_stream_ctx_t* stream_ctx = quicrq_relay_find_subscription(qr_ctx, url, url_length);
+            if (stream_ctx == NULL) {
+                /* No subscription, create one. */
+                stream_ctx = quicrq_cnx_subscribe_pattern(qr_ctx->relay_ctx->cnx_ctx, url, url_length,
+                    quicrq_relay_subscribe_notify, qr_ctx);
+            }
+
+            if (stream_ctx == NULL) {
+                char buffer[256];
+                quicrq_log_message(qr_ctx->relay_ctx->cnx_ctx, "Cannot subscribe from relay to origin for %s*",
+                    quicrq_uint8_t_to_text(url, url_length, buffer, 256));
+            }
+        }
+    }
+}
+
 /* The relay functionality has to be established to add the relay
  * function to a QUICRQ node.
  */
@@ -1086,6 +1196,7 @@ int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sock
             quicrq_set_media_init_callback(qr_ctx, quicrq_relay_consumer_init_callback);
             qr_ctx->relay_ctx = relay_ctx;
             qr_ctx->manage_relay_cache_fn = quicrq_manage_relay_cache;
+            qr_ctx->manage_relay_subscribe_fn = quicrq_relay_subscribe_pattern;
         }
     }
     return ret;
@@ -1155,29 +1266,6 @@ uint64_t quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
 
     return next_time;
 }
-
-#if 0
-/* Management of subscriptions on relays. 
- * At both relays and origins, the notification happen:
- * - when a new source is created
- * - when a new subscription arrives
- * At relays, we get extra processing: the relay will also create matching subscriptions
- * to the origin. When the relay is notifoed of a new URL, it automatically
- * creates an empty source, and requests it from the origin. If a new source is
- * created, the relay will post the corresponding notifications.
- */
-int quicrq_manage_relay_subscription_initial(quicrq_stream_ctx_t * stream_ctx)
-{
-    /* On initial subscription, notify all the locally managed sources */
-    quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
-    quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
-
-    while (srce_ctx != NULL) {
-        break;
-    }
-    return -1;
-}
-#endif
 
 /*
  * The origin server behavior is very similar to the behavior of a relay, but

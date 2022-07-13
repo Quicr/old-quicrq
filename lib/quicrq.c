@@ -1318,7 +1318,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
 
 /* Processing of subscribe and notify messages */
 
-int quicrq_notify_url_to_stream(quicrq_stream_ctx_t* stream_ctx, size_t url_length, const uint8_t* url)
+int quicrq_notify_url_to_stream(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length)
 {
     int ret = 0;
     /* Store the subscribe parameters */
@@ -1344,7 +1344,7 @@ int quicrq_notify_url_to_stream(quicrq_stream_ctx_t* stream_ctx, size_t url_leng
     return ret;
 }
 
-int quicrq_notify_url_to_all(quicrq_ctx_t* qr_ctx, size_t url_length, const uint8_t* url)
+int quicrq_notify_url_to_all(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length)
 {
     int ret = 0;
     quicrq_cnx_ctx_t* cnx_ctx = qr_ctx->first_cnx;
@@ -1354,7 +1354,7 @@ int quicrq_notify_url_to_all(quicrq_ctx_t* qr_ctx, size_t url_length, const uint
 
         while (stream_ctx != NULL) {
             if (stream_ctx->send_state == quicrq_notify_ready) {
-                if ((ret = quicrq_notify_url_to_stream(stream_ctx, url_length, url)) > 0) {
+                if ((ret = quicrq_notify_url_to_stream(stream_ctx, url, url_length)) > 0) {
                     ret = 0;
                     break;
                 }
@@ -1370,6 +1370,7 @@ int quicrq_notify_url_to_all(quicrq_ctx_t* qr_ctx, size_t url_length, const uint
 int quicrq_process_incoming_subscribe(quicrq_stream_ctx_t* stream_ctx, size_t url_length, const uint8_t* url)
 {
     int ret = 0;
+    quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
     /* Store the subscribe parameters */
     stream_ctx->subscribe_prefix = malloc(url_length + 1);
     if (stream_ctx->subscribe_prefix == NULL) {
@@ -1383,11 +1384,10 @@ int quicrq_process_incoming_subscribe(quicrq_stream_ctx_t* stream_ctx, size_t ur
     }
     if (ret == 0) {
         /* Check all the known media source, see whether they match */
-        quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
         quicrq_media_source_ctx_t* srce_ctx = qr_ctx->first_source;
 
         while (srce_ctx != NULL) {
-            if (quicrq_notify_url_to_stream(stream_ctx, srce_ctx->media_url_length, srce_ctx->media_url) < 0) {
+            if (quicrq_notify_url_to_stream(stream_ctx, srce_ctx->media_url, srce_ctx->media_url_length) < 0) {
                 ret = -1;
                 break;
             }
@@ -1572,6 +1572,11 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->stream_id, quicrq_uint8_t_to_text(incoming.url, incoming.url_length, url_text, 256));
                             /* Create the subscription state */
                             ret = quicrq_process_incoming_subscribe(stream_ctx, incoming.url_length, incoming.url);
+                            /* If relay, create source and forward the request */
+                            if (stream_ctx->cnx_ctx->qr_ctx->manage_relay_subscribe_fn != NULL) {
+                                stream_ctx->cnx_ctx->qr_ctx->manage_relay_subscribe_fn(stream_ctx->cnx_ctx->qr_ctx,
+                                    quicrq_subscribe_action_subscribe, incoming.url, incoming.url_length);
+                            }
                         }
                         break;
                     case QUICRQ_ACTION_NOTIFY:
