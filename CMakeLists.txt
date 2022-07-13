@@ -108,7 +108,7 @@ set(TEST_EXES quicrq_t)
 file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
 
 # Adds clangformat as target that formats all source files
-if (NOT ADD_MODULES_RECURSIVELY)
+if (ADD_MODULES_RECURSIVELY)
 add_custom_target(
     clangformat
     COMMAND clang-format
