@@ -157,7 +157,7 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
                         /* Create a subscription to the test source on other client*/
                         if (ret == 0) {
                             test_object_stream_ctx_t* object_stream_ctx = NULL;
-                            object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (uint8_t*)target[i]->url,
+                            object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (const uint8_t*)target[i]->url,
                                 target[i]->url_length, use_datagrams, target[i]->target_bin, target[i]->target_csv);
                             if (object_stream_ctx == NULL) {
                                 ret = -1;
