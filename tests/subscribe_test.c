@@ -366,13 +366,13 @@ int quicrq_subscribe_basic_test()
     return ret;
 }
 
-int quicrq_subscribe_datagram_test()
+int quicrq_subscribe_client_test()
 {
     int is_real_time = 1;
     int use_datagrams = 1;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
-    int publisher = 0;
+    int publisher = 2;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
@@ -382,14 +382,14 @@ int quicrq_subscribe_datagram_test()
     return ret;
 }
 
-int quicrq_subscribe_client_test()
+int quicrq_subscribe_datagram_test()
 {
     int is_real_time = 1;
     int use_datagrams = 1;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
-    int publisher = 2;
-    int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
+    int publisher = 0;
+    int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE) - 5;
 
     int ret = quicrq_subscribe_test_one(is_real_time,
         use_datagrams, simulate_losses,
