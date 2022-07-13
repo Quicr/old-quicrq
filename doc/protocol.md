@@ -19,10 +19,11 @@ the architecture concepts to QUIC. These decisions include:
 * use a "media id" in datagram format instead of hashes
 * add messages to indicate start and end points of media streams
 * use local feedback from QUIC stack to detect datagram losses
+* use a "subscribe" message to request notification of available media URL, which tcan then be used to request that specific media.
 
 ## Control stream
 
-QUICRQ maps a "subscribe" or "post" request to a control stream. When
+QUICRQ maps a "request" or "post" actions to a control stream. When
 a client or relay begins a transaction with the relay, the client starts
 by opening a new bilateral stream. This stream will act as the "control
 channel" for the exchange of data, carrying a series of control messages
@@ -36,6 +37,8 @@ associated with the media transfer.
 
 Streams are "one way". If a peer both sends and receive media, there will
 be different control streams for sending and receiving.
+
+QUICRQ also maps the "subscribe" action 
 
 ## Sending control messages on streams
 
@@ -58,6 +61,9 @@ The prototype uses the following control messages:
 * POST: publish a media stream towards the origin
 * ACCEPT: indicates that the POST requests has been accepted by the next relay or by the origin
 * START_POINT: indicates group_id and object_id of first object sent on stream
+* FIN: indicates the last group_id and object_id for a media
+* SUBSCRIBE: subscribe to an URL prefix
+* NOTIFY: in response to a SUBSCRIBE, signal that a pattern matching URL is available
 
 The description of messages in the following subsections use the same conventions as RFC 9000.
 
@@ -67,11 +73,11 @@ The Request message specifies the media requested by a node:
 
 ```
 quicrq_request_message {
- *     message_type(i),
- *     url_length(i),
- *     url(...),
- *     [datagram_stream_id(i)]
- * }
+    message_type(i),
+    url_length(i),
+    url(...),
+    [datagram_stream_id(i)]
+}
 ```
 
 The message type will be set to REQUEST_STREAM (1) if the client wants to receive the media in
@@ -84,11 +90,11 @@ The POST message is used to indicate intent to publish a media stream:
 
 ```
 quicrq_post_message { 
- *     message_type(i),
- *     url_length(i),
- *     url(...)
- *     datagram_capable(i)
- * }
+    message_type(i),
+    url_length(i),
+    url(...)
+    datagram_capable(i)
+}
 ```
 
 The message type will be set to POST (6).
@@ -102,9 +108,9 @@ the QUIC control stream.
 
 ```
 quicrq_accept_message { 
-  *     message_type(i),
-  *     use_datagram(i),
-  *     [datagram_stream_id(i)]
+     message_type(i),
+     use_datagram(i),
+     [datagram_stream_id(i)]
 }
 ```
 
@@ -122,11 +128,11 @@ client that sent a Post message. This message is optional: by default,
 media streams start with Group ID and Object ID set to 0.
 
 ```
- * quicrq_start_point_message {
- *     message_type(i),
- *     start_group_id(i),
- *     start_object_id(i)
- * }
+quicrq_start_point_message {
+    message_type(i),
+    start_group_id(i),
+    start_object_id(i)
+}
 ```
 The message id is set to START POINT (8). 
 
@@ -137,12 +143,12 @@ of fragments:
 
 ```
 quicrq_fragment_message {
- *     message_type(i),
- *     group_id(i),
- *     object_id(i),
- *     offset_and_fin(i),
- *     length(i),
- *     data(...)
+    message_type(i),
+    group_id(i),
+    object_id(i),
+    offset_and_fin(i),
+    length(i),
+    data(...)
  }
 ```
 
@@ -179,16 +185,51 @@ NOTE: should update this format to carry a "flag".
 The Fragment message indicates the final point of a media stream. 
 
 ```
- * quicrq_fin_message {
- *     message_type(i),
- *     final_group_id(i),
- *     final_object_id(i)
- * }
+quicrq_fin_message {
+    message_type(i),
+    final_group_id(i),
+    final_object_id(i)
+}
 ```
 
 The message type will be set to FIN (3). The final `group_id` is set to the `group_id`
 of the last fragment sent. The final `object_id` is set to the object_id of the last
 fragment sent, plus 1. This message is not sent when fragments are sent on stream.
+
+### Subscribe Message
+
+The subscribe message creates a subscription context, asking relay or
+origin to notify the client when matching URL become available. 
+
+```
+ quicrq_subscribe_message {
+    message_type(i),
+    url_length(i),
+    url(...)
+ }
+```
+
+The message type will be set to SUBSCRIBE (9).
+
+The message is sent on a newly opened bidirectional stream. The reverse
+direction of the stream will be used to receive Notify message. Closing
+the subscribe stream cancels the subscription.
+
+### Notify Message
+
+The Notify notifies the client that a new URL is available. It is sent by the
+Origin or Relay in response to a Subscribe message. There will be a separate
+message for each separate URL that matches the requested prefix.
+
+```
+ quicrq_notify_message {
+    message_type(i),
+    url_length(i),
+    url(...)
+ }
+```
+
+The message type will be set to NOTIFY (10).
 
 ## Sending Datagrams
 
@@ -210,15 +251,15 @@ datagram_frame_content {
 The datagram header is defined as:
 
 ```
- * quicrq_datagram_header { 
- *     datagram_stream_id (i)
- *     group_id (i)
- *     object_id (i)
- *     offset_and_fin (i)
- *     queue_delay (i)
- *     flags (8)
- *     [nb_objects_previous_group (i)]
- * }
+quicrq_datagram_header { 
+    datagram_stream_id (i)
+    group_id (i)
+    object_id (i)
+    offset_and_fin (i)
+    queue_delay (i)
+    flags (8)
+    [nb_objects_previous_group (i)]
+}
 ```
 
 The datagram_stream_id identifies a specific media stream. The ID is chosen by the receiver of the media stream,
