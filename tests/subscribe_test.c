@@ -228,7 +228,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 
     if (ret == 0) {
         /* Create connection on subscriber */
-        cnx_ctx_subscriber = quicrq_test_create_client_cnx(config, subscriber, (subscriber < 2)?0:5);
+        cnx_ctx_subscriber = quicrq_test_create_client_cnx(config, subscriber, (subscriber < 3)?0:5);
         if (cnx_ctx_subscriber == NULL) {
             ret = -1;
             DBG_PRINTF("Cannot create subscriber connection #1, ret = %d", ret);
@@ -237,7 +237,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 
     if (ret == 0 && publisher != 0) {
         /* Create a quicrq connection context on publisher */
-        cnx_ctx_2 = quicrq_test_create_client_cnx(config, publisher, (publisher < 2) ? 0 : 5);
+        cnx_ctx_2 = quicrq_test_create_client_cnx(config, publisher, (publisher < 3) ? 0 : 5);
         if (cnx_ctx_2 == NULL) {
             ret = -1;
             DBG_PRINTF("Cannot create client connection #2, ret = %d", ret);

@@ -57,6 +57,7 @@ static const quicrq_test_def_t test_table[] =
     { "relay_datagram_client", quicrq_relay_datagram_client_test },
     { "subscribe_basic", quicrq_subscribe_basic_test },
     { "subscribe_relay1", quicrq_subscribe_relay1_test },
+    { "subscribe_relay2", quicrq_subscribe_relay2_test },
     { "subscribe_datagram", quicrq_subscribe_datagram_test },
     { "subscribe_client", quicrq_subscribe_client_test },
     { "triangle_basic", quicrq_triangle_basic_test },
