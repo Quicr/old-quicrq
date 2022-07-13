@@ -110,7 +110,7 @@ file(GLOB_RECURSE CLANG_FORMAT_SOURCE_FILES *.c *.h)
 # Adds clangformat as target that formats all source files
 if (ADD_MODULES_RECURSIVELY)
 add_custom_target(
-    clangformat
+    quicrq_clangformat
     COMMAND clang-format
     -style=Webkit
     -i
