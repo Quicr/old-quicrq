@@ -38,7 +38,10 @@ associated with the media transfer.
 Streams are "one way". If a peer both sends and receive media, there will
 be different control streams for sending and receiving.
 
-QUICRQ also maps the "subscribe" action 
+QUICRQ also maps each "subscribe" action to a separate stream. The relay or
+origin server that receives a new stream parses the first message on that
+stream to determine whether this is a control stream for managing media
+transmission or a subscription stream.
 
 ## Sending control messages on streams
 
