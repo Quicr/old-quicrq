@@ -35,10 +35,16 @@ set(QUICRQ_TEST_LIBRARY_FILES
 )
 # contrib
 option(GIT_SUBMODULE "Check submodules during build" OFF)
+# for top level integrated builds, adding these causes
+# issues for submodules not considering deps as subdirectories
+# this is hack, but will get things going
+option(ADD_MODULES_RECURSIVELY "Check to add sub-modules recursively" OFF)
 if (GIT_SUBMODULE)
-  include(cmake/AddGitSubmodule.cmake)
-  add_git_submodule(${CMAKE_SOURCE_DIR}/contrib/picotls)
-  add_git_submodule(${CMAKE_SOURCE_DIR}/contrib/picoquic)
+  if (ADD_MODULES_RECURSIVELY)
+    include(cmake/AddGitSubmodule.cmake)
+    add_git_submodule(${CMAKE_SOURCE_DIR}/contrib/picotls)
+    add_git_submodule(${CMAKE_SOURCE_DIR}/contrib/picoquic)
+  endif(ADD_MODULES_RECURSIVELY)
 endif(GIT_SUBMODULE)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
