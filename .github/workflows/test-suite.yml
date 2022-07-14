@@ -21,28 +21,17 @@ jobs:
           # We must fetch at least the immediate parents so that if this is
           # a pull request then we can checkout the head.
           fetch-depth: 2
-          submodules: 'recursive'
 
-      - name: Build picotls and picoquic.
-        run: |
-          sudo apt-get install -y libssl-dev
-          ./ci/build_picotls.sh
-          ./ci/build_picoquic.sh
-     
       - name: Build quicrq
         run: |
-          mkdir build
-          cd build
-          cmake ..
-          cmake --build .
-          make
+          cmake -S . -B build
+          cmake --build build
 
       - name: Perform Unit tests
         run: |
-          cd build
           ulimit -c unlimited -S
-          pwd
-          ./quicrq_t -S .. -P ../../picoquic && QRQRESULT=$? 
+          cd build
+          make test && QRQRESULT=$?
           if [ ${QRQRESULT} == 0 ]; then exit 0; fi;
           exit 1
 
