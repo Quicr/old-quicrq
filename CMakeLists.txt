@@ -125,7 +125,7 @@ if(BUILD_TESTING AND quicrq_BUILD_TESTS)
         $<$<C_COMPILER_ID:MSVC>: >)
 
     add_test(NAME quicrq_t
-             COMMAND quicrq_t -S ${PROJECT_SOURCE_DIR} -P ${picoquic_SOURCE_DIR})
+             COMMAND quicrq_t -S ${PROJECT_SOURCE_DIR})
 
 endif()
 

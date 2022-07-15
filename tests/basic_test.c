@@ -13,18 +13,20 @@
 
 #ifdef _WINDOWS
 #ifdef _WINDOWS64
-#define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\..\\picoquic\\"
 #define QUICRQ_DEFAULT_SOLUTION_DIR "..\\..\\"
 #else
-#define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "..\\..\\picoquic\\"
 #define QUICRQ_DEFAULT_SOLUTION_DIR "..\\"
 #endif
+#define QUICRQ_TEST_FILE_SERVER_CERT "certs\\cert.pem"
+#define QUICRQ_TEST_FILE_SERVER_KEY "certs\\key.pem"
+#define QUICRQ_TEST_FILE_CERT_STORE "certs/test-ca.crt"
 #else
-#define QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR "../picoquic/"
 #define QUICRQ_DEFAULT_SOLUTION_DIR "./"
+#define QUICRQ_TEST_FILE_SERVER_CERT "certs/cert.pem"
+#define QUICRQ_TEST_FILE_SERVER_KEY "certs/key.pem"
+#define QUICRQ_TEST_FILE_CERT_STORE "certs/test-ca.crt"
 #endif
 
-char const* quicrq_test_picoquic_solution_dir = QUICRQ_PICOQUIC_DEFAULT_SOLUTION_DIR;
 char const* quicrq_test_solution_dir = QUICRQ_DEFAULT_SOLUTION_DIR;
 
 
@@ -341,13 +343,13 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
         memset(config, 0, sizeof(quicrq_test_config_t));
         memset(config->ticket_encryption_key, 0x55, sizeof(config->ticket_encryption_key));
 
-        /* Locate the default cert, key and root in the Picoquic solution*/
+        /* Locate the default cert, key and root in the certs folder */
         if (picoquic_get_input_path(config->test_server_cert_file, sizeof(config->test_server_cert_file),
-            quicrq_test_picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_CERT) != 0 ||
+            quicrq_test_solution_dir, QUICRQ_TEST_FILE_SERVER_CERT) != 0 ||
             picoquic_get_input_path(config->test_server_key_file, sizeof(config->test_server_key_file),
-                quicrq_test_picoquic_solution_dir, PICOQUIC_TEST_FILE_SERVER_KEY) != 0 ||
+                quicrq_test_solution_dir, QUICRQ_TEST_FILE_SERVER_KEY) != 0 ||
             picoquic_get_input_path(config->test_server_cert_store_file, sizeof(config->test_server_cert_store_file),
-                quicrq_test_picoquic_solution_dir, PICOQUIC_TEST_FILE_CERT_STORE) != 0) {
+                quicrq_test_solution_dir, QUICRQ_TEST_FILE_CERT_STORE) != 0) {
             success = 0;
         }
 

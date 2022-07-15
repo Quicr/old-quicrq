@@ -119,7 +119,6 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
 #define QUICRQ_TEST_BASIC_SOURCE "tests/video1_source.bin"
 #define QUICRQ_TEST_AUDIO_SOURCE "tests/audio1_source.bin"
 #endif
-extern char const* quicrq_test_picoquic_solution_dir;
 extern char const* quicrq_test_solution_dir;
 
 /* Definition of a client target */

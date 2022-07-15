@@ -6,7 +6,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-    extern char const* quicrq_test_picoquic_solution_dir;
     extern char const* quicrq_test_solution_dir;
 
     int quicrq_basic_test();
