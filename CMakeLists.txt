@@ -9,7 +9,7 @@ endif()
 
 project(quicrq
         VERSION 1.0.0.0
-        DESCRIPTION "quicr library"
+        DESCRIPTION "quicrq library"
         LANGUAGES C CXX)
 
 
