@@ -1,7 +1,4 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
-################################################################################
-
+﻿/build/
 /.vs/quicrq_vs/v16
 *.user
 /quicrq_lib/x64
