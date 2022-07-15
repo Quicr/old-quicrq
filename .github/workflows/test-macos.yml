@@ -39,7 +39,7 @@ jobs:
           make
           ulimit -c unlimited -S
           pwd
-          ./quicrq_t -S .. -P ../../picoquic && QRQRESULT=$? 
+          ./quicrq_t -S .. && QRQRESULT=$? 
           if [ ${QRQRESULT} == 0 ]; then exit 0; fi;
           exit 1
 

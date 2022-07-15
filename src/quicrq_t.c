@@ -138,7 +138,7 @@ int usage(char const* argv0)
     fprintf(stderr, "  -r                Retry failed tests with debug print enabled.\n");
     fprintf(stderr, "  -h                Print this help message\n");
     fprintf(stderr, "  -S solution_dir   Set the path to the source files to find the default files\n");
-    fprintf(stderr, "  -P picoquic_dir   Set the path to the picoquic sources to find the cert files\n");
+    fprintf(stderr, "  -P picoquic_dir   Obsolete, not used anymore.\n");
 
     return -1;
 }
@@ -190,7 +190,6 @@ int main(int argc, char** argv)
                 break;
             }
             case 'P':
-                quicrq_test_picoquic_solution_dir = optarg;
                 break;
             case 'S':
                 quicrq_test_solution_dir = optarg;
