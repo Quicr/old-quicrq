@@ -127,9 +127,12 @@ const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_
 size_t quicrq_repair_request_reserve(uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length);
-size_t quicrq_fragment_msg_reserve(uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
-uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t* repair_data);
-const uint8_t* quicrq_fragment_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t *repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length, const uint8_t** repair_data);
+size_t quicrq_fragment_msg_reserve(uint64_t group_id, uint64_t object_id, uint64_t offset, int is_last_fragment, uint8_t flags, size_t repair_length);
+uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type,
+    uint64_t group_id, uint64_t object_id,
+    uint64_t offset, int is_last_fragment, uint8_t flags, size_t length, const uint8_t* data);
+const uint8_t* quicrq_fragment_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+    uint64_t* group_id, uint64_t* object_id, uint64_t* offset, int* is_last_fragment, uint8_t* flags, size_t* length, const uint8_t** data);
 size_t quicrq_start_point_msg_reserve(uint64_t start_group, uint64_t start_object);
 uint8_t* quicrq_start_point_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object);
 const uint8_t* quicrq_start_point_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);

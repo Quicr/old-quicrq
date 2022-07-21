@@ -114,7 +114,7 @@ static quicrq_message_t fragment_msg = {
     0,
     123456,
     1234,
-    0,
+    0x17,
     1,
     sizeof(repair_bytes),
     repair_bytes,
@@ -126,6 +126,7 @@ static uint8_t fragment_msg_bytes[] = {
     0x00,
     0x80, 0x01, 0xe2, 0x40,
     0x49, 0xa5,
+    0x17,
     (uint8_t)sizeof(repair_bytes),
     REPAIR_BYTES
 };

@@ -185,13 +185,15 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     size_t available = 0;
     size_t data_length = 0;
     uint8_t stream_header[QUICRQ_STREAM_HEADER_MAX];
+    uint8_t flags = 0;
     size_t h_size;
     int ret = 0;
 
     /* First, create a "mock" buffer based on the available space instead of the actual number of bytes.
-     * By design, we are creating a "repair" object, but using the "repair request" encoding. */
-    uint8_t* h_byte = quicrq_repair_request_encode(stream_header+2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
-        stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, space);
+     * By design, we are encoding the fragment with the "data" parameter set to NULL. */
+    uint8_t* h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
+        stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, 0, flags, space, NULL);
+
     if (h_byte == NULL) {
         /* That should not happen, unless the stream_header size is way too small */
         ret = -1;
@@ -248,8 +250,8 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         }
         else {
             /* Encode the actual header, instead of a prediction */
-            h_byte = quicrq_repair_request_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
-                stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, is_last_fragment, available);
+            h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
+                stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset, is_last_fragment, flags, available, NULL);
             if (is_last_fragment) {
                 picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final fragment of object %" PRIu64 ",%" PRIu64 " on stream % " PRIu64,
                     stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->stream_id);
