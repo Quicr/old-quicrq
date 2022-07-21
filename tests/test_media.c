@@ -269,6 +269,7 @@ int test_media_object_publisher_fn(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    uint8_t * flags,
     int * is_new_group,
     int* is_last_fragment,
     int* is_media_finished,
@@ -291,6 +292,7 @@ int test_media_object_publisher_fn(
             *is_media_finished = 0;
             *is_last_fragment = 0;
             *data_length = 0;
+            *flags = 0;
             ret = test_media_publisher_check_object(pub_ctx);
 
             if (ret == 0) {
@@ -1073,7 +1075,7 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     while (ret == 0 && !is_media_finished && inactive < 32) {
         ret = test_media_object_publisher_fn(quicrq_media_source_get_data,
             pub_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+            &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret != 0) {
             DBG_PRINTF("Publisher, ret=%d", ret);
         }
@@ -1308,7 +1310,7 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
     while (ret == 0 && !is_media_finished && inactive < 32) {
         ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+            &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret == 0) {
             uint64_t nb_objects_previous_group = 0;
             if (is_new_group) {
@@ -1417,6 +1419,7 @@ int quicrq_media_object_publish_test()
     size_t target_max = 17000;
     size_t nb_targets = sizeof(targets) / sizeof(size_t);
     uint8_t* object_frame = NULL;
+    uint8_t flags = 0;
     int is_new_group = 0;
     int is_last_fragment = 0; 
     int is_media_finished = 0;
@@ -1483,7 +1486,7 @@ int quicrq_media_object_publish_test()
                 size_t data_length = 0;
                 ret = quicrq_media_object_publisher(quicrq_media_source_get_data,
                     media_ctx, media_buffer, sizeof(media_buffer),
-                    &data_length, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, simulated_time);
+                    &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, simulated_time);
 
                 if (ret == 0) {
                     for (int x = 0; x < data_length; x++) {
@@ -1517,7 +1520,7 @@ int quicrq_media_object_publish_test()
 
         ret = quicrq_media_object_publisher(quicrq_media_source_get_data,
             media_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, simulated_time);
+            &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, simulated_time);
 
         if (!is_media_finished) {
             ret = -1;
@@ -1635,7 +1638,7 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
             /* Call the object oriented publisher function, to simulate publishing */
             ret = quicrq_media_object_publisher(quicrq_media_source_get_data,
                 stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
-                &data_length, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
             object_source_pub->pub_ctx->media_object_read += data_length;
         }
 
@@ -1821,7 +1824,7 @@ int quicrq_object_stream_test_one(char const* media_source_name, char const* med
         uint64_t nb_objects_previous_group = 0;
         ret = stream_ctx->publisher_fn(quicrq_media_source_get_data,
             stream_ctx->media_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+            &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         if (ret == 0) {
             if (is_new_group) {
                 if (group_id > 0) {
@@ -1979,7 +1982,7 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
         /* Get the next object from the publisher */
         ret = test_media_object_publisher_fn(
             quicrq_media_source_get_data, pub_ctx, media_buffer, sizeof(media_buffer),
-            &data_length, &is_new_group, &is_last_fragment,  &is_media_finished, &is_still_active, current_time);
+            &data_length, &flags, &is_new_group, &is_last_fragment,  &is_media_finished, &is_still_active, current_time);
         /* TODO: manage the new group transitions */
         if (ret != 0) {
             DBG_PRINTF("Media published function: ret = %d", ret);

@@ -113,6 +113,7 @@ int quicrq_media_object_publisher(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    uint8_t* flags,
     int* is_new_group,
     int* is_last_fragment,
     int* is_media_finished,
@@ -123,6 +124,7 @@ int quicrq_media_object_publisher(
     quicrq_object_source_publisher_ctx_t* media_ctx = (quicrq_object_source_publisher_ctx_t*)v_media_ctx;
     quicrq_object_source_item_t* object_source_item = NULL;
     if (action == quicrq_media_source_get_data) {
+        *flags = 0;
         *is_new_group = 0;
         *is_media_finished = 0;
         *is_last_fragment = 0;
@@ -159,6 +161,7 @@ int quicrq_media_object_publisher(
             size_t available = object_source_item->object_length - media_ctx->next_object_offset;
             size_t copied = data_max_size;
 
+            *flags = object_source_item->properties.flags;
             *is_still_active = 1;
             if (data_max_size >= available) {
                 *is_last_fragment = 1;
@@ -278,6 +281,10 @@ int quicrq_publish_object(
         source_object->object_time = picoquic_get_quic_time(object_source_ctx->qr_ctx->quic);
         source_object->object = ((uint8_t *)source_object) + sizeof(quicrq_object_source_item_t);
         source_object->nb_objects_previous_group = nb_objects_previous_group;
+        /* Copy the properties */
+        if (properties != NULL) {
+            memcpy(&source_object->properties, properties, sizeof(quicrq_media_object_properties_t));
+        }
         memcpy(source_object->object, object_data, object_length);
         (void)picosplay_insert(&object_source_ctx->object_source_tree, source_object);
         /* Signal to the quic context that the source is now active. */

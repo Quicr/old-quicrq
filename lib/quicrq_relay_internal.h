@@ -146,6 +146,7 @@ int quicrq_relay_publisher_fn(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    uint8_t* flags,
     int * is_new_group,
     int* is_last_fragment,
     int* is_media_finished,

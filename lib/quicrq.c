@@ -206,7 +206,8 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         }
         else {
             /* Find how much data is actually available */
-            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+            ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, 
+                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
         }
     }
 
@@ -271,7 +272,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                     /* copy the stream header to the packet */
                     memcpy(buffer, stream_header, h_size);
                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, buffer + h_size, available, &data_length,
-                        &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                        &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
                     if (ret == 0 && available != data_length) {
                         ret = -1;
                     }
@@ -1001,7 +1002,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 uint8_t* buffer = NULL;
 
                 ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL,
-                    space - h_size, &available, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                    space - h_size, &available, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
                 if (ret < 0) {
                     quicrq_log_message(stream_ctx->cnx_ctx, "Error, first publisher function call returns %d, space = %zu, available = %zu", ret, space - h_size, available);
                     DBG_PRINTF("Error, first publisher function call returns %d, space = %zu, available = %zu", ret, space - h_size, available);
@@ -1070,7 +1071,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 }
                                 /* Get the media */
                                 ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, h_byte, available, &data_length,
-                                    &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                                    &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
                                 if (ret == 0 && available != data_length) {
                                     /* Application returned different size on second call */
                                     quicrq_log_message(stream_ctx->cnx_ctx, "Error,  application datagram provided %zu, expected %zu", data_length, available);
@@ -2088,7 +2089,7 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
     if (stream_ctx->media_ctx != NULL) {
         if (stream_ctx->is_sender) {
             if (stream_ctx->publisher_fn != NULL) {
-                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0);
+                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0);
             }
         }
         else {
