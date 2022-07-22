@@ -51,6 +51,7 @@ void* test_media_publisher_init(char const* media_source_path, const generation_
         media_ctx->start_time = start_time;
         media_ctx->is_real_time = (is_real_time != 0);
         media_ctx->F = picoquic_file_open(media_source_path, "rb");
+        media_ctx->is_audio = test_media_is_audio((const uint8_t*)media_source_path, strlen(media_source_path));
 
         if (media_ctx->F == NULL) {
             if (generation_model != NULL) {
@@ -79,6 +80,7 @@ void* test_media_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t* stre
 #endif
 
     if (media_ctx != NULL) {
+        media_ctx->is_audio = test_media_is_audio((const uint8_t*)srce_ctx->file_path, strlen(srce_ctx->file_path));
         media_ctx->p_next_time = srce_ctx->p_next_time;
         media_ctx->min_packet_size = srce_ctx->min_packet_size;
     }
@@ -263,6 +265,27 @@ static int test_media_publisher_check_object(test_media_publisher_context_t* pub
     return ret;
 }
 
+uint8_t test_media_set_flags(int is_real_time, int is_audio, size_t media_object_size)
+{
+    uint8_t flags = 0;
+
+    if (is_real_time) {
+        if (is_audio) {
+            flags = 0x80;
+        }
+        else {
+            if (media_object_size > 10000) {
+                flags = 0x81;
+            }
+            else {
+                flags = 0x82;
+            }
+        }
+    }
+
+    return flags;
+}
+
 int test_media_object_publisher_fn(
     quicrq_media_source_action_enum action,
     void* media_ctx,
@@ -292,7 +315,7 @@ int test_media_object_publisher_fn(
             *is_media_finished = 0;
             *is_last_fragment = 0;
             *data_length = 0;
-            *flags = 0;
+            *flags = test_media_set_flags(pub_ctx->is_real_time, pub_ctx->is_audio, pub_ctx->media_object_size);
             ret = test_media_publisher_check_object(pub_ctx);
 
             if (ret == 0) {
@@ -456,8 +479,10 @@ int test_media_object_source_iterate(
                 /* For test purpose, we consider objects larger than 10000 bytes as starting a new group */
                 /* Special case of audio: small packets, group by itself. */
                 int is_new_group = (pub_ctx->media_object_size > 10000 || pub_ctx->media_object_size < 200);
+                quicrq_media_object_properties_t properties = { 0 };
+                properties.flags = test_media_set_flags(pub_ctx->is_real_time, pub_ctx->is_audio, pub_ctx->media_object_size);
                 ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, 
-                    is_new_group, NULL, &published_group_id, &published_object_id);
+                    is_new_group, &properties, &published_group_id, &published_object_id);
                 object_pub_ctx->object_is_published = 1;
                 *is_active |= 1;
             }
@@ -510,6 +535,23 @@ void test_media_object_source_delete(test_media_object_source_context_t* object_
     }
 }
 
+int test_media_is_audio(const uint8_t* url, size_t url_length)
+{
+    /* Mark stream as "audio" if the url says so */
+    int is_audio = 0;
+    for (size_t i = 0; i + 4 < url_length; i++) {
+        if (url[i] == (uint8_t)'a' &&
+            url[i + 1] == (uint8_t)'u' &&
+            url[i + 2] == (uint8_t)'d' &&
+            url[i + 3] == (uint8_t)'i' &&
+            url[i + 4] == (uint8_t)'o') {
+            is_audio = 1;
+            break;
+        }
+    }
+    return is_audio;
+}
+
 test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
     uint64_t start_time)
@@ -524,6 +566,12 @@ test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_
 
         if (object_pub_ctx->pub_ctx == NULL || object_pub_ctx->object_source_ctx == NULL) {
             test_media_object_source_delete(object_pub_ctx);
+            object_pub_ctx = NULL;
+        }
+        else {
+            /* Mark stream as "audio" if the url says so */
+            test_media_publisher_context_t* media_ctx = (test_media_publisher_context_t*)object_pub_ctx->pub_ctx;
+            media_ctx->is_audio = test_media_is_audio(url, url_length);
         }
     }
     return object_pub_ctx;
@@ -705,8 +753,8 @@ int test_media_consumer_object_ready(
         if (ret == 0) {
             /* if first time seen, document the delivery in the log */
             if (object_mode != quicrq_reassembly_object_repair) {
-                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu\n",
-                    current_time, current_header.timestamp, current_header.number, current_header.length) <= 0) {
+                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
+                    current_time, current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
                     ret = -1;
                 }
             }
@@ -843,8 +891,9 @@ int test_object_stream_consumer_cb(
             }
             if (ret == 0) {
                 /* in sequence, document the delivery in the log */
-                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu\n",
-                    current_time, current_header.timestamp, current_header.number, current_header.length) <= 0) {
+                uint8_t flags = (properties == NULL) ? 0 : properties->flags;
+                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
+                    current_time, current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
                     ret = -1;
                 }
             }

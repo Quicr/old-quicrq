@@ -37,6 +37,7 @@ typedef struct st_test_media_publisher_context_t {
     size_t media_object_size;
     size_t media_object_read;
     size_t min_packet_size;
+    int is_audio : 1;
     unsigned int is_real_time : 1;
     unsigned int is_finished : 1;
 } test_media_publisher_context_t;

@@ -45,11 +45,13 @@ int quicrq_media_object_bridge_ready(
     if ((bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_peek) ||
         (!bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_repair)){
         /* Deliver to the application */
+        quicrq_object_stream_consumer_properties_t properties = { 0 };
+        properties.flags = flags;
         ret = bridge_ctx->object_stream_consumer_fn(
             quicrq_media_datagram_ready,
             bridge_ctx->object_stream_consumer_ctx,
             current_time, group_id, object_id,
-            data, data_length,  NULL);
+            data, data_length,  &properties);
     }
        
     return ret;
