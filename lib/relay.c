@@ -597,6 +597,7 @@ int quicrq_relay_publisher_fn(
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time)
 {
     int ret = 0;
@@ -608,6 +609,7 @@ int quicrq_relay_publisher_fn(
         *is_last_fragment = 0;
         *is_still_active = 0;
         *data_length = 0;
+        *has_backlog = 0;
         /* In sequence access to objects
          * variable current_object_id = in sequence.
          * variable current_offset = current_offset sent.
@@ -619,11 +621,38 @@ int quicrq_relay_publisher_fn(
             *is_media_finished = 1;
         }
         else {
-            if (media_ctx->current_fragment == NULL) {
+            /* If skipping the current objet, check that the next object is available */
+            if (media_ctx->is_current_object_skipped) {
+                /* If the exact next object is present, then life if good. */
+                media_ctx->current_fragment = quicrq_relay_cache_get_fragment(media_ctx->cache_ctx,
+                    media_ctx->current_group_id, media_ctx->current_object_id + 1, 0);
+                if (media_ctx->current_fragment != NULL) {
+                    media_ctx->current_object_id += 1;
+                    media_ctx->current_offset = 0;
+                    media_ctx->is_current_object_skipped = 0;
+                }
+                else {
+                    /* If the next group is present & this is as expected, life is also good. */
+                    quicrq_relay_cached_fragment_t* next_group_fragment =
+                    next_group_fragment = quicrq_relay_cache_get_fragment(media_ctx->cache_ctx,
+                        media_ctx->current_group_id + 1, 0, 0);
+                    if (next_group_fragment != NULL && 
+                        media_ctx->current_object_id + 1 >= next_group_fragment->nb_objects_previous_group) {
+                        /* The next group begins just after the skipped object, so life is good here too */
+                        media_ctx->current_group_id += 1;
+                        media_ctx->current_object_id = 0;
+                        media_ctx->current_offset = 0;
+                        media_ctx->is_current_object_skipped = 0;
+                        media_ctx->current_fragment = next_group_fragment;
+                        *is_new_group = 1;
+                    }
+                }
+            } else if (media_ctx->current_fragment == NULL) {
                 /* Find the fragment with the expected offset */
                 media_ctx->current_fragment = quicrq_relay_cache_get_fragment(media_ctx->cache_ctx, 
                     media_ctx->current_group_id, media_ctx->current_object_id, media_ctx->current_offset);
-                if (media_ctx->current_fragment == NULL) {
+                /* if there is no such fragment and this is the beginning of a new object, try the next group */
+                if (media_ctx->current_fragment == NULL && media_ctx->current_offset == 0) {
                     quicrq_relay_cached_fragment_t* next_group_fragment = quicrq_relay_cache_get_fragment(media_ctx->cache_ctx,
                         media_ctx->current_group_id + 1, 0, 0);
                     if (next_group_fragment != NULL) {
@@ -659,6 +688,18 @@ int quicrq_relay_publisher_fn(
                 }
                 *data_length = copied;
                 *is_still_active = 1;
+                if (media_ctx->current_offset > 0) {
+                    *has_backlog = media_ctx->has_backlog;
+                } else if (media_ctx->current_group_id < media_ctx->cache_ctx->next_group_id ||
+                    (media_ctx->current_group_id == media_ctx->cache_ctx->next_group_id &&
+                        media_ctx->current_object_id < media_ctx->cache_ctx->next_object_id)) {
+                    *has_backlog = 1;
+                    media_ctx->has_backlog = 1;
+                }
+                else {
+                    *has_backlog = 0;
+                    media_ctx->has_backlog = 0;
+                }
                 if (data != NULL) {
                     /* If data is set to NULL, return the available size but do not copy anything */
                     memcpy(data, media_ctx->current_fragment->data + media_ctx->length_sent, copied);
@@ -678,6 +719,10 @@ int quicrq_relay_publisher_fn(
                 }
             }
         }
+    }
+    /* Skip object: if the logic has decided to skip this object, look at the next one */
+    else if (action == quicrq_media_source_skip_object) {
+        media_ctx->is_current_object_skipped = 1;
     }
     else if (action == quicrq_media_source_close) {
         /* close the context */

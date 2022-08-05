@@ -35,6 +35,61 @@
 #include "quicrq_internal.h"
 #include "quicrq_relay.h"
 
+/* Handle congestion. This should be done per connection, at least once per RTT.
+ * Check whether there is congestion, and also check the highest (least urgent)
+ * priority level among the streams.
+ * 
+ * When transitioning into congestion, set the priority level to the highest
+ * level in all streams.
+ * If congestion persists for 2 RTT after setting the priority level, increment it.
+ * If congestion recedes, decrement it.
+ * 
+ * This needs indication by stream -- or control stream for the datagram sources:
+ * - highest priority observed.
+ * - is congested
+ * This also needs connection level information:
+ * - last time congestion assessed
+ * - priority threshold
+ */
+int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint64_t current_time)
+{
+    if (current_time >= cnx_ctx->congestion_check_time) {
+        if (!cnx_ctx->is_congested) {
+            int is_congested = 0;
+            uint8_t threshold_max = 0;
+            quicrq_stream_ctx_t* next_stream = cnx_ctx->first_stream;
+
+            while (next_stream != NULL) {
+                /* TO DO: find lowest priority encountered */
+                next_stream = next_stream->next_stream;
+            }
+            /* Todo: if congested, set threshold priority to lowest value */
+            /* Set evaluation period to some fixed value*/
+        }
+        else {
+            /* Was congested already. If not, ease the threshold. If persist,
+             * decrease the threshold. */
+            quicrq_stream_ctx_t* next_stream = cnx_ctx->first_stream;
+
+            while (next_stream != NULL) {
+                /* TO DO: check whether congestion persisted  */
+
+                next_stream = next_stream->next_stream;
+            }
+        }
+    }
+    return -1;
+}
+
+/* Congestion check per stream.
+ * This is done when the stream is ready to send a message.
+ */
+
+int quicrq_congestion_check_per_stream(quicrq_stream_ctx_t* stream_ctx, uint64_t current_time)
+{
+    return -1;
+}
+
 /* Allocate space in the message buffer */
 int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, size_t bytes_stored)
 {
@@ -182,12 +237,19 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     int is_new_group = 0;
     int is_last_fragment = 0;
     int is_still_active = 0;
+    int is_object_skipped = 0;
+    int has_backlog = 0;
     size_t available = 0;
     size_t data_length = 0;
     uint8_t stream_header[QUICRQ_STREAM_HEADER_MAX];
     uint8_t flags = 0;
     size_t h_size;
     int ret = 0;
+
+    /* TODO: maintain a priority threshold per connection. If a stream is congested,
+     * check the priority for that stream. Do not commit resource on a low priority
+     * stream if another stream is waiting. 
+     */
 
     /* First, create a "mock" buffer based on the available space instead of the actual number of bytes.
      * By design, we are encoding the fragment with the "data" parameter set to NULL. */
@@ -207,12 +269,51 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         else {
             /* Find how much data is actually available */
             ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, 
-                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
+#if 1
+            /* Update the 'worst flag for the stream' */
+            /* Check the cache time, compare to current time, determine congestion */
+            /* If the flag should be skipped, mark the current object as "to skip". */
+#endif
         }
     }
 
     if (ret == 0) {
-        if (available == 0) {
+        if (is_object_skipped) {
+            /* Prepare and a place holder for the object, pretending 0 length, setting the flags to 0xFF
+             * Call the publisher APi to signal that the object should be skipped. 
+             */
+            h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
+                stream_ctx->next_group_id, stream_ctx->next_object_id, 0, 1, 0xFF, 0, NULL);
+            h_size = h_byte - stream_header;
+
+            ret = stream_ctx->publisher_fn(quicrq_media_source_skip_object, stream_ctx->media_ctx, NULL, 0, &data_length,
+                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
+            if (ret == 0) {
+                uint8_t* buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, h_size, 0, 1);
+                if (buffer == NULL) {
+                    ret = -1;
+                }
+                else {
+                    /* copy the stream header to the packet */
+                    memcpy(buffer, stream_header, h_size);
+                    /* Set the message length */
+                    size_t message_length = h_size - 2 + available;
+                    buffer[0] = (uint8_t)(message_length >> 8);
+                    buffer[1] = (uint8_t)(message_length & 0xff);
+
+                    stream_ctx->next_object_id++;
+                    stream_ctx->next_object_offset = 0;
+
+                    if (is_media_finished) {
+                        stream_ctx->final_group_id = stream_ctx->next_group_id;
+                        stream_ctx->final_object_id = stream_ctx->next_object_id;
+                        stream_ctx->send_state = quicrq_sending_ready;
+                    }
+                }
+            }
+        }
+        else if (available == 0) {
             if (is_media_finished) {
                 /* Send the fin object immediately, because it would be very hard to get
                  * a new "prepare to send" callback after an empty response.
@@ -245,7 +346,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                 }
             }
             else {
-                /* Mark stream as not ready. It will be awakened when data becomse available */
+                /* Mark stream as not ready. It will be awakened when data becomes available */
                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
             }
         }
@@ -272,7 +373,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                     /* copy the stream header to the packet */
                     memcpy(buffer, stream_header, h_size);
                     ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, buffer + h_size, available, &data_length,
-                        &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                        &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
                     if (ret == 0 && available != data_length) {
                         ret = -1;
                     }
@@ -965,6 +1066,10 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
     int at_least_one_active = 0;
     quicrq_stream_ctx_t* stream_ctx = cnx_ctx->first_stream;
 
+    /* TODO: handle congestion. Check whether one stream is congested. 
+     * look at priority levels, etc.
+     */
+
     while (stream_ctx != NULL) {
         if (stream_ctx->is_datagram && stream_ctx->is_sender && stream_ctx->is_active_datagram) {
             if (stream_ctx->get_datagram_fn != NULL) {
@@ -996,13 +1101,14 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                 int is_last_fragment = 0;
                 int is_media_finished = 0;
                 int is_still_active = 0;
+                int has_backlog = 0;
                 uint8_t flags = 0;
                 size_t h_size = 0; /* TODO: encode the minimal value */
                 uint8_t* h_byte = NULL;
                 uint8_t* buffer = NULL;
 
                 ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL,
-                    space - h_size, &available, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                    space - h_size, &available, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
                 if (ret < 0) {
                     quicrq_log_message(stream_ctx->cnx_ctx, "Error, first publisher function call returns %d, space = %zu, available = %zu", ret, space - h_size, available);
                     DBG_PRINTF("Error, first publisher function call returns %d, space = %zu, available = %zu", ret, space - h_size, available);
@@ -1071,7 +1177,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 }
                                 /* Get the media */
                                 ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, h_byte, available, &data_length,
-                                    &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                                    &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
                                 if (ret == 0 && available != data_length) {
                                     /* Application returned different size on second call */
                                     quicrq_log_message(stream_ctx->cnx_ctx, "Error,  application datagram provided %zu, expected %zu", data_length, available);
@@ -2089,7 +2195,7 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
     if (stream_ctx->media_ctx != NULL) {
         if (stream_ctx->is_sender) {
             if (stream_ctx->publisher_fn != NULL) {
-                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 0);
+                stream_ctx->publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0);
             }
         }
         else {

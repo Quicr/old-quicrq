@@ -467,6 +467,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
     int is_last_fragment;
     int is_media_finished;
     int is_still_active;
+    int has_backlog;
     uint64_t group_id = 0;
     uint64_t object_id;
     uint8_t flags = 0;
@@ -543,7 +544,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
             /* The first call to the publisher functions positions to the current group id, objectid, offset, etc. */
             nb_objects_previous_group = 0;
             ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, NULL, 1024, &fragment_length,
-               &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+               &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
             if (ret == 0 && fragment_length > 0) {
                 group_id = pub_ctx->current_group_id;
                 object_id = pub_ctx->current_object_id;
@@ -566,7 +567,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                 if (ret == 0) {
                     /* The second call to the media function copies the data at the required space. */
                     ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, data, 1024, &fragment_length,
-                        &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                        &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
                 }
                 if (ret == 0){
                     fragment = data;

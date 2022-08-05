@@ -79,6 +79,7 @@ typedef struct st_quicrq_object_source_publisher_ctx_t {
     uint64_t next_object_id;
     size_t next_object_offset;
     int next_was_sent;
+    int has_backlog;
 } quicrq_object_source_publisher_ctx_t;
 
 void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t * stream_ctx)
@@ -118,6 +119,7 @@ int quicrq_media_object_publisher(
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time)
 {
     int ret = 0;
@@ -130,6 +132,7 @@ int quicrq_media_object_publisher(
         *is_last_fragment = 0;
         *is_still_active = 0;
         *data_length = 0;
+        *has_backlog = 0;
         /* if the current object ID is already published, find the next one */
         if (media_ctx->next_was_sent) {
             media_ctx->next_object_id++;
@@ -163,6 +166,21 @@ int quicrq_media_object_publisher(
 
             *flags = object_source_item->properties.flags;
             *is_still_active = 1;
+
+            /* Estimate whether the media source is backlogged */
+            if (media_ctx->next_object_offset > 0) {
+                *has_backlog = media_ctx->has_backlog;
+            } else if (object_source_item->group_id < media_ctx->object_source_ctx->next_group_id ||
+                (object_source_item->group_id == media_ctx->object_source_ctx->next_group_id &&
+                    object_source_item->object_id < media_ctx->object_source_ctx->next_object_id)) {
+                *has_backlog = 1;
+                media_ctx->has_backlog = 1;
+            }
+            else {
+                *has_backlog = 0;
+                media_ctx->has_backlog = 0;
+            }
+
             if (data_max_size >= available) {
                 *is_last_fragment = 1;
                 copied = available;
@@ -177,6 +195,10 @@ int quicrq_media_object_publisher(
                 }
             }
         }
+    }
+    else if (action == quicrq_media_source_skip_object)
+    {
+        media_ctx->next_was_sent = 0;
     }
     else if (action == quicrq_media_source_close) {
         /* close the context */

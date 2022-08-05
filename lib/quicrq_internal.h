@@ -215,6 +215,7 @@ typedef int (*quicrq_datagram_publisher_fn)(
 
 typedef enum {
     quicrq_media_source_get_data = 0,
+    quicrq_media_source_skip_object,
     quicrq_media_source_close
 } quicrq_media_source_action_enum;
 
@@ -230,6 +231,7 @@ typedef int (*quicrq_media_publisher_fn)(
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time);
 typedef void (*quicrq_media_publisher_delete_fn)(void* pub_ctx);
 
@@ -291,7 +293,9 @@ int quicrq_media_object_publisher(
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time);
+
 void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t* stream_ctx);
 
 /* Quic media consumer. Old definition, moved to internal only.
@@ -481,6 +485,9 @@ struct st_quicrq_cnx_ctx_t {
     struct sockaddr_storage addr;
     picoquic_cnx_t* cnx;
     int is_server;
+    int is_congested; /* Indicates whether at least on flow is congested. */
+    uint8_t priority_threshold; /* Indicates the highest priority level that may be dropped. */
+    uint64_t congestion_check_time;
 
     uint64_t next_datagram_stream_id; /* only used for receiving */
     uint64_t next_abandon_datagram_id; /* used to test whether unexpected datagrams are OK */

@@ -91,6 +91,8 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int is_media_complete;
     int is_sending_object;
     int is_start_point_sent;
+    int is_current_object_skipped;
+    int has_backlog;
     quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
 } quicrq_relay_publisher_context_t;
@@ -151,6 +153,7 @@ int quicrq_relay_publisher_fn(
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time);
 
 quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx(quicrq_ctx_t * qr_ctx);
