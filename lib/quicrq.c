@@ -302,15 +302,9 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
             ret = -1;
         }
         else {
-#if 1
-            if (stream_ctx->next_object_id > 64) {
-                DBG_PRINTF("%s", "Bug");
-            }
-#endif
             /* Find how much data is actually available */
             ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, 
                 &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
-#if 1
             if (is_new_group) {
                 stream_ctx->next_group_id += 1;
                 stream_ctx->next_object_id = 0;
@@ -321,7 +315,6 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                 /* Check the cache time, compare to current time, determine congestion */
                 is_object_skipped = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx, flags, has_backlog, current_time);
             }
-#endif
         }
     }
 
@@ -512,6 +505,11 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
                 picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
                     object_id, datagram_stream_id, stream_ctx->stream_id);
             }
+#if 1
+            if (group_id == 3 && object_id == 59) {
+                DBG_PRINTF("%s", "Bug");
+            }
+#endif
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, group_id, object_id, object_offset, 
                 queue_delay, flags, nb_objects_previous_group, is_last_fragment, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
@@ -1582,11 +1580,6 @@ int quicrq_process_incoming_subscribe(quicrq_stream_ctx_t* stream_ctx, size_t ur
 int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, size_t length, int is_fin)
 {
     int ret = 0;
-#if 1
-    if (is_fin) {
-        DBG_PRINTF("%s", "Bug");
-    }
-#endif
 
     while (ret == 0 && length > 0) {
         /* There may be a set of messages back to back, and all have to be received. */

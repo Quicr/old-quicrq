@@ -595,12 +595,6 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             int client_stream_closed = config->nodes[1]->first_cnx->first_stream == NULL;
             int server_stream_closed = config->nodes[0]->first_cnx != NULL && config->nodes[0]->first_cnx->first_stream == NULL;
 
-#if 1
-            if (!is_closed &&(server_stream_closed || client_stream_closed)) {
-                DBG_PRINTF("%s", "Bug");
-            }
-#endif
-
             if (!is_closed && client_stream_closed && server_stream_closed){
                 /* Client is done. Close connection without waiting for timer */
                 ret = picoquic_close(config->nodes[1]->first_cnx->cnx, 0);

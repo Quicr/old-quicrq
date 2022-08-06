@@ -50,7 +50,13 @@ static void* quicrq_object_node_value(picosplay_node_t* object_node)
 }
 
 static int64_t quicrq_object_node_compare(void* l, void* r) {
-    return (int64_t)((quicrq_reassembly_object_t*)l)->object_id - ((quicrq_reassembly_object_t*)r)->object_id;
+    quicrq_reassembly_object_t* left = (quicrq_reassembly_object_t*)l;
+    quicrq_reassembly_object_t* right = (quicrq_reassembly_object_t*)r;
+    int64_t ret = left->group_id - right->group_id;
+    if (ret == 0) {
+        ret = left->object_id - right->object_id;
+    }
+    return ret;
 }
 
 static picosplay_node_t* quicrq_object_node_create(void* v_media_object)
@@ -340,11 +346,7 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
 
     while (ret == 0){
         object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_group_id, reassembly_ctx->next_object_id);
-        if (object != NULL) {
-            if (object->reassembled == NULL) {
-                object = NULL;
-            }
-        } else {
+        if (object == NULL) {
             object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_group_id + 1, 0);
             if (object != NULL && object->reassembled != NULL &&
                 object->nb_objects_previous_group == reassembly_ctx->next_object_id) {
@@ -352,10 +354,15 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
                 reassembly_ctx->next_object_id = 0;
             }
         }
-        if (object == NULL) {
+        if (object == NULL || object->reassembled == NULL) {
             break;
         } 
         /* Submit the object in order */
+#if 1
+        if (reassembly_ctx->next_object_id == 59 && reassembly_ctx->next_group_id == 3) {
+            DBG_PRINTF("%s", "Bug");
+        }
+#endif
         ret = ready_fn(app_media_ctx, current_time, object->group_id, object->object_id, object->flags, object->reassembled,
             (size_t)object->final_offset, quicrq_reassembly_object_repair);
         /* delete the object that was just repaired. */

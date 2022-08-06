@@ -986,10 +986,12 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
     }
     else {
         int is_audio = test_media_is_audio((const uint8_t*)media_reference_file, strlen(media_reference_file));
+        int nb_object = 0;
 
         /* Read the objects on both. They should match, or both should come to an end */
         while (ret == 0 && !result_ctx->is_finished && !ref_ctx->is_finished) {
             ret = test_media_read_object_from_file(result_ctx);
+            nb_object++;
             if (ret != 0) {
                 DBG_PRINTF("Could not read object from results, ret=%d", ret);
             } else {
@@ -1046,7 +1048,16 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
                     }
                     else if (memcmp(ref_ctx->media_object, result_ctx->media_object, ref_ctx->media_object_size) != 0) {
                         ret = -1;
-                        DBG_PRINTF("object contents differ: ret=%d", ret);
+                        DBG_PRINTF("Contents object #%d differ: ret=%d", nb_object, ret);
+#if 1
+                        FILE* F = picoquic_file_open("open_diff.csv", "wt");
+                        for (int x = 0; x < ref_ctx->media_object_size; x++) {
+                            if (ref_ctx->media_object[x] != result_ctx->media_object[x]) {
+                                fprintf(F, "%d, %d, %d\n", x, ref_ctx->media_object[x], result_ctx->media_object[x]);
+                            }
+                        }
+                        picoquic_file_close(F);
+#endif
                     }
                 }
             }
