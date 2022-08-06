@@ -145,7 +145,7 @@ int quicrq_media_object_publisher(
         if (object_source_item == NULL && media_ctx->next_object_id > 0) {
             object_source_item = quicrq_get_object_source_item(media_ctx->object_source_ctx,
                 media_ctx->next_group_id + 1, 0);
-            if (object_source_item != NULL && object_source_item->nb_objects_previous_group <= media_ctx->next_object_id) {
+            if (object_source_item != NULL && object_source_item->nb_objects_previous_group <= media_ctx->next_object_id + 1) {
                 media_ctx->next_group_id++;
                 media_ctx->next_object_id = 0;
                 media_ctx->next_object_offset = 0;

@@ -393,7 +393,7 @@ int quicrq_reassembly_input(
     if (group_id == reassembly_ctx->next_group_id + 1 &&
         object_id == 0 &&
         nb_objects_previous_group == UINT64_MAX) {
-        nb_objects_previous_group = reassembly_ctx->next_object_id;
+        nb_objects_previous_group = reassembly_ctx->next_object_id + 1;
     }
 
     if (group_id == reassembly_ctx->next_group_id &&
@@ -434,7 +434,7 @@ int quicrq_reassembly_input(
                 /* If the object is complete, verify and submit */
                 quicrq_reassembly_object_mode_enum object_mode;
                 if (group_id == reassembly_ctx->next_group_id + 1 &&
-                    object_id == 0 && object->nb_objects_previous_group == reassembly_ctx->next_object_id) {
+                    object_id == 0 && object->nb_objects_previous_group <= reassembly_ctx->next_object_id + 1) {
                     /* This is the first object of a new group, and all objects of the previous group
                      * have been received */
                     reassembly_ctx->next_group_id += 1;
