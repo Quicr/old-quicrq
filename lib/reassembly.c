@@ -358,11 +358,6 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
             break;
         } 
         /* Submit the object in order */
-#if 1
-        if (reassembly_ctx->next_object_id == 59 && reassembly_ctx->next_group_id == 3) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
         ret = ready_fn(app_media_ctx, current_time, object->group_id, object->object_id, object->flags, object->reassembled,
             (size_t)object->final_offset, quicrq_reassembly_object_repair);
         /* delete the object that was just repaired. */

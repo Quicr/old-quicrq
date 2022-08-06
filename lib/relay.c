@@ -230,6 +230,12 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
     quicrq_relay_cached_fragment_t * first_fragment_state = NULL;
     quicrq_relay_cached_fragment_t key = { 0 };
 
+#if 1
+    if (group_id == 1 && object_id == 0 && offset == 0) {
+        DBG_PRINTF("%S", "Bug");
+    }
+#endif
+
     if (group_id < cached_ctx->first_group_id ||
         (group_id == cached_ctx->first_group_id &&
             object_id < cached_ctx->first_object_id)) {
@@ -246,6 +252,14 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
             first_fragment_state->group_id != group_id ||
             first_fragment_state->object_id != object_id ||
             first_fragment_state->offset + first_fragment_state->data_length < offset) {
+            /* Special cas for stream data. */
+            if (first_fragment_state != NULL &&
+                first_fragment_state->group_id + 1 == group_id &&
+                object_id == 0 && offset == 0 &&
+                nb_objects_previous_group == UINT64_MAX) {
+                nb_objects_previous_group = first_fragment_state->object_id;
+            }
+            
             /* Insert the whole fragment */
             ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, 
                 group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
@@ -763,6 +777,12 @@ int quicrq_relay_datagram_publisher_prepare(
         /* TODO: how to assess that the media is finished? */
         size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
         uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
+
+#if 1
+        if (media_ctx->current_fragment->group_id == 1 && media_ctx->current_fragment->object_id == 0 && offset == 0) {
+            DBG_PRINTF("%s", "Bug");
+        }
+#endif
         uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
             datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
             media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, media_ctx->current_fragment->nb_objects_previous_group, 0);
@@ -810,6 +830,13 @@ int quicrq_relay_datagram_publisher_prepare(
                             media_ctx->length_sent += copied;
                             *media_was_sent = 1;
                             *at_least_one_active = 1;
+#if 1
+                            if (media_ctx->current_fragment->group_id == 0 && media_ctx->current_fragment->object_id == 59 &&
+                                media_ctx->current_fragment->data_length <= media_ctx->length_sent && 
+                                media_ctx->current_fragment->is_last_fragment) {
+                                DBG_PRINTF("%s", "Bug");
+                            }
+#endif
                             if (stream_ctx != NULL) {
                                 /* Keep track in stream context */
                                 ret = quicrq_datagram_ack_init(stream_ctx,

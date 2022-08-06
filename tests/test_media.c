@@ -1049,15 +1049,6 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
                     else if (memcmp(ref_ctx->media_object, result_ctx->media_object, ref_ctx->media_object_size) != 0) {
                         ret = -1;
                         DBG_PRINTF("Contents object #%d differ: ret=%d", nb_object, ret);
-#if 1
-                        FILE* F = picoquic_file_open("open_diff.csv", "wt");
-                        for (int x = 0; x < ref_ctx->media_object_size; x++) {
-                            if (ref_ctx->media_object[x] != result_ctx->media_object[x]) {
-                                fprintf(F, "%d, %d, %d\n", x, ref_ctx->media_object[x], result_ctx->media_object[x]);
-                            }
-                        }
-                        picoquic_file_close(F);
-#endif
                     }
                 }
             }

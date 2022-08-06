@@ -505,11 +505,6 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
                 picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
                     object_id, datagram_stream_id, stream_ctx->stream_id);
             }
-#if 1
-            if (group_id == 3 && object_id == 59) {
-                DBG_PRINTF("%s", "Bug");
-            }
-#endif
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, group_id, object_id, object_offset, 
                 queue_delay, flags, nb_objects_previous_group, is_last_fragment, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
