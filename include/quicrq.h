@@ -259,6 +259,11 @@ void quicrq_set_extra_repeat(quicrq_ctx_t* qr, int on_nack, int after_delayed);
 void quicrq_set_extra_repeat_delay(quicrq_ctx_t* qr, uint64_t delay_in_microseconds);
 uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time);
 
+/* Enable of disable congestion control.
+ * Default to disable.
+ */
+void quicrq_enable_congestion_control(quicrq_ctx_t* qr, int enable_congestion_control);
+
 #ifdef __cplusplus
 }
 #endif

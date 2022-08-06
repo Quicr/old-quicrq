@@ -150,6 +150,7 @@ int quicrq_media_object_publisher(
                 media_ctx->next_object_id = 0;
                 media_ctx->next_object_offset = 0;
                 media_ctx->next_was_sent = 0;
+                *is_new_group = 1;
             }
             else {
                 object_source_item = NULL;
@@ -198,7 +199,7 @@ int quicrq_media_object_publisher(
     }
     else if (action == quicrq_media_source_skip_object)
     {
-        media_ctx->next_was_sent = 0;
+        media_ctx->next_was_sent = 1;
     }
     else if (action == quicrq_media_source_close) {
         /* close the context */

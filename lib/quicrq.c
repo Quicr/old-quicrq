@@ -39,46 +39,81 @@
  * Check whether there is congestion, and also check the highest (least urgent)
  * priority level among the streams.
  * 
- * When transitioning into congestion, set the priority level to the highest
- * level in all streams.
- * If congestion persists for 2 RTT after setting the priority level, increment it.
- * If congestion recedes, decrement it.
+ * There are two marks and a priority level
+ * - has_backlog:
+ *    set if one stream reports backlog.
+ *    cleared at beginning of congestion epoch.
+ * - is_congested:
+ *    set initially when the first backlog is reported.
+ *    cleared when not congested anymore
+ * - priority_threshold
+ *    packets at this or higher threshold are skipped.
  * 
- * This needs indication by stream -- or control stream for the datagram sources:
- * - highest priority observed.
- * - is congested
- * This also needs connection level information:
- * - last time congestion assessed
- * - priority threshold
+ * The state also includes the "start of epoch" time, and the "old priority
+ * threshold
+ *    
+ * 
+ * The marks are evaluated:
+ * - when the first congestion is reported (has_backlog && !is_congested)
+ *     - this starts an epoch.
+ * - at the beginning of every new epoch.
+ *     - if this is the first epoch for this priority, do nothing
+ *       because the priority had no observable effect.
+ *     - if backlog reported, and threshold > 128, decrease threshold
+ *     - else if no backlog reported during the last epoch, increase the threshold
+ *         - if threshold larger than max flag, clear "is_congested".
+ * - in any case, reset "has_backlog", "old threshold", and epoch time.
+ *  
  */
-int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint64_t current_time)
+int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, int has_backlog, uint64_t current_time)
 {
-    if (current_time >= cnx_ctx->congestion_check_time) {
-        if (!cnx_ctx->is_congested) {
-            int is_congested = 0;
-            uint8_t threshold_max = 0;
-            quicrq_stream_ctx_t* next_stream = cnx_ctx->first_stream;
+    int should_skip = 0;
 
-            while (next_stream != NULL) {
-                /* TO DO: find lowest priority encountered */
-                next_stream = next_stream->next_stream;
+    /* Update the 'worst flag for the connection' */
+    if (flags > cnx_ctx->congestion.max_flags && flags != 0xff) {
+        cnx_ctx->congestion.max_flags = flags;
+    }
+    cnx_ctx->congestion.has_backlog |= has_backlog;
+
+    if (!cnx_ctx->congestion.is_congested) {
+        if (has_backlog) {
+            /* Enter the congested state */
+            cnx_ctx->congestion.is_congested = 1;
+            cnx_ctx->congestion.has_backlog = 0;
+            cnx_ctx->congestion.priority_threshold = cnx_ctx->congestion.max_flags;
+            cnx_ctx->congestion.old_priority_threshold = 0xff;
+        }
+    } else if (current_time >= cnx_ctx->congestion.congestion_check_time) {
+        /* Check the epoch */
+        uint8_t old_priority_threshold = cnx_ctx->congestion.priority_threshold;
+
+        if (cnx_ctx->congestion.old_priority_threshold != cnx_ctx->congestion.priority_threshold) {
+            /* The threshold was changed at the last epoch check, so
+             * congestion would not reflect the next threshold. Do nothing. */
+        } else if (cnx_ctx->congestion.has_backlog) {
+            /* if congested, set threshold priority to lower value */
+            if (cnx_ctx->congestion.priority_threshold > 0x80) {
+                cnx_ctx->congestion.priority_threshold -= 1;
             }
-            /* Todo: if congested, set threshold priority to lowest value */
-            /* Set evaluation period to some fixed value*/
         }
         else {
-            /* Was congested already. If not, ease the threshold. If persist,
-             * decrease the threshold. */
-            quicrq_stream_ctx_t* next_stream = cnx_ctx->first_stream;
-
-            while (next_stream != NULL) {
-                /* TO DO: check whether congestion persisted  */
-
-                next_stream = next_stream->next_stream;
+            if (cnx_ctx->congestion.priority_threshold < cnx_ctx->congestion.max_flags) {
+                cnx_ctx->congestion.priority_threshold += 1;
+            }
+            else {
+                cnx_ctx->congestion.is_congested = 0;
             }
         }
+        /* Reset the values to prepare the next epoch */
+        cnx_ctx->congestion.old_priority_threshold = old_priority_threshold;
+        cnx_ctx->congestion.has_backlog = 0;
+        cnx_ctx->congestion.congestion_check_time += 50000; /* TODO: should be RTT of connection */
     }
-    return -1;
+    /* Evaluate whether this packet should be skipped */
+    if (cnx_ctx->qr_ctx->do_congestion_control && cnx_ctx->congestion.is_congested && flags >= cnx_ctx->congestion.priority_threshold) {
+        should_skip = 1;
+    }
+    return should_skip;
 }
 
 /* Congestion check per stream.
@@ -267,13 +302,25 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
             ret = -1;
         }
         else {
+#if 1
+            if (stream_ctx->next_object_id > 64) {
+                DBG_PRINTF("%s", "Bug");
+            }
+#endif
             /* Find how much data is actually available */
             ret = stream_ctx->publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, 
                 &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
 #if 1
-            /* Update the 'worst flag for the stream' */
-            /* Check the cache time, compare to current time, determine congestion */
-            /* If the flag should be skipped, mark the current object as "to skip". */
+            if (is_new_group) {
+                stream_ctx->next_group_id += 1;
+                stream_ctx->next_object_id = 0;
+                stream_ctx->next_object_offset = 0;
+            }
+
+            if (available > 0 && stream_ctx->next_object_offset == 0 && stream_ctx->next_object_id != 0 && !is_new_group) {
+                /* Check the cache time, compare to current time, determine congestion */
+                is_object_skipped = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx, flags, has_backlog, current_time);
+            }
 #endif
         }
     }
@@ -298,7 +345,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                     /* copy the stream header to the packet */
                     memcpy(buffer, stream_header, h_size);
                     /* Set the message length */
-                    size_t message_length = h_size - 2 + available;
+                    size_t message_length = h_size - 2;
                     buffer[0] = (uint8_t)(message_length >> 8);
                     buffer[1] = (uint8_t)(message_length & 0xff);
 
@@ -334,12 +381,13 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         ret = -1;
                     }
                     else {
-                        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, 
+                        size_t m_size = h_size - 2;
+                        picoquic_log_app_message(stream_ctx->cnx_ctx->cnx,
                             "Fin group, object of stream %" PRIu64 " : %" PRIu64 ", %" PRIu64,
                             stream_ctx->stream_id, stream_ctx->final_group_id, stream_ctx->final_object_id);
 
-                        stream_header[0] = (uint8_t)(h_size >> 8);
-                        stream_header[1] = (uint8_t)(h_size & 0xff);
+                        stream_header[0] = (uint8_t)(m_size >> 8);
+                        stream_header[1] = (uint8_t)(m_size & 0xff);
                         memcpy(buffer, stream_header, h_size);
                         stream_ctx->is_final_object_id_sent = 1;
                     }
@@ -1057,6 +1105,13 @@ uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time)
     return next_time;
 }
 
+/* Enable of disablecongestion control*/
+
+void quicrq_enable_congestion_control(quicrq_ctx_t* qr, int enable_congestion_control)
+{
+    qr->do_congestion_control = (enable_congestion_control == 0) ? 0 : 1;
+}
+
 /* Prepare to send a datagram */
 
 int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, size_t space, uint64_t current_time)
@@ -1527,6 +1582,11 @@ int quicrq_process_incoming_subscribe(quicrq_stream_ctx_t* stream_ctx, size_t ur
 int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, size_t length, int is_fin)
 {
     int ret = 0;
+#if 1
+    if (is_fin) {
+        DBG_PRINTF("%s", "Bug");
+    }
+#endif
 
     while (ret == 0 && length > 0) {
         /* There may be a set of messages back to back, and all have to be received. */
@@ -1663,7 +1723,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
-                                incoming.data, incoming.group_id, incoming.object_id, incoming.offset, 0, incoming.flags, /* TODO: ectects_previous_group*/ 0,
+                                incoming.data, incoming.group_id, incoming.object_id, incoming.offset, 0, incoming.flags, UINT64_MAX,
                                 incoming.is_last_fragment, incoming.length);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }

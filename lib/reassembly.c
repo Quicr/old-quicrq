@@ -388,7 +388,14 @@ int quicrq_reassembly_input(
 {
     int ret = 0;
 
-    if (object_id < reassembly_ctx->next_object_id) {
+    if (group_id == reassembly_ctx->next_group_id + 1 &&
+        object_id == 0 &&
+        nb_objects_previous_group == UINT64_MAX) {
+        nb_objects_previous_group = reassembly_ctx->next_object_id;
+    }
+
+    if (group_id == reassembly_ctx->next_group_id &&
+        object_id < reassembly_ctx->next_object_id) {
         /* No need for this object. */
     }
     else {

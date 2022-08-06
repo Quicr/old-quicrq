@@ -40,6 +40,10 @@ quicrq_test_config_t* quicrq_test_congestion_config_create(uint64_t simulate_los
         if (config->nodes[0] == NULL || config->nodes[1] == NULL || config->nodes[2] == NULL || congested_link == NULL) {
             ret = -1;
         }
+
+        for (int i = 0; i < 3; i++) {
+            quicrq_enable_congestion_control(config->nodes[i], 1);
+        }
     }
 
     if (ret == 0) {

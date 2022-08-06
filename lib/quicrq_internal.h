@@ -475,6 +475,15 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
     void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn,
     quicrq_media_publisher_fn getdata_fn, quicrq_datagram_publisher_fn get_datagram_fn, quicrq_media_publisher_delete_fn delete_fn);
 
+typedef struct st_quicrq_cnx_congestion_state_t {
+    int has_backlog; /* Indicates whether at least on flow is congested. */
+    int is_congested;
+    uint8_t max_flags; /* largest flag value across streams, used in congestion control */
+    uint8_t priority_threshold; /* Indicates the highest priority level that may be dropped. */
+    uint8_t old_priority_threshold; /* Threshold at beginning of epoch. */
+    uint64_t congestion_check_time;
+} quicrq_cnx_congestion_state_t;
+
 /* Quicrq per connection context */
 struct st_quicrq_cnx_ctx_t {
     struct st_quicrq_cnx_ctx_t* next_cnx;
@@ -485,9 +494,7 @@ struct st_quicrq_cnx_ctx_t {
     struct sockaddr_storage addr;
     picoquic_cnx_t* cnx;
     int is_server;
-    int is_congested; /* Indicates whether at least on flow is congested. */
-    uint8_t priority_threshold; /* Indicates the highest priority level that may be dropped. */
-    uint64_t congestion_check_time;
+    quicrq_cnx_congestion_state_t congestion;
 
     uint64_t next_datagram_stream_id; /* only used for receiving */
     uint64_t next_abandon_datagram_id; /* used to test whether unexpected datagrams are OK */
@@ -551,6 +558,8 @@ struct st_quicrq_ctx_t {
     int extra_repeat_on_nack : 1;
     int extra_repeat_after_received_delayed : 1;
     uint64_t extra_repeat_delay;
+    /* Control whether to enable congestion control -- mostly for testability */
+    unsigned int do_congestion_control : 1;
 };
 
 quicrq_stream_ctx_t* quicrq_find_or_create_stream(
