@@ -247,7 +247,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
             first_fragment_state->group_id != group_id ||
             first_fragment_state->object_id != object_id ||
             first_fragment_state->offset + first_fragment_state->data_length < offset) {
-            /* Special cas for stream data. */
+            /* Special case for stream data. */
             if (first_fragment_state != NULL &&
                 first_fragment_state->group_id + 1 == group_id &&
                 object_id == 0 && offset == 0 &&
@@ -675,11 +675,6 @@ int quicrq_relay_publisher_fn(
                             *is_new_group = 1;
                         }
                         else {
-#if 1
-                            if (media_ctx->current_object_id + 1 >= next_group_fragment->nb_objects_previous_group) {
-                                DBG_PRINTF("%s", "Bug");
-                            }
-#endif
                             DBG_PRINTF("Group %" PRIu64 " is not complete.", media_ctx->current_group_id);
                         }
                     }

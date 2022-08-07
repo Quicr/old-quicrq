@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.20b"
+#define QUICRQ_VERSION "0.21"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
@@ -22,7 +22,7 @@ extern "C" {
  * different protocol versions will not be compatible, and connections attempts
  * between such binaries will fail, forcing deployments of compatible versions.
  */
-#define QUICRQ_ALPN "quicr-h20"
+#define QUICRQ_ALPN "quicr-h21"
 #define QUICRQ_PORT 853
 
 /* QUICR error codes */
