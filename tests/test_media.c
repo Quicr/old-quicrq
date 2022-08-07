@@ -334,8 +334,10 @@ int test_media_object_publisher_fn(
                         /* Copy data from object in memory */
                         size_t available = pub_ctx->media_object_size - pub_ctx->media_object_read;
                         size_t copied = data_max_size;
-
-                        if (pub_ctx->media_object_read == 0 && pub_ctx->media_object_size > 10000) {
+                        /* Simulate begining of group on either video I frame (l > 10000) 
+                         * or any audio frame (l < 200) */
+                        if (pub_ctx->media_object_read == 0 && (
+                            pub_ctx->media_object_size > 10000 || pub_ctx->media_object_size < 200)) {
                             *is_new_group = 1;
                         }
 
@@ -1184,8 +1186,8 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
             uint64_t nb_objects_previous_group = 0;
             inactive = 0;
             if (is_new_group) {
-                if (group_id > 0) {
-                    nb_objects_previous_group = object_id + 1;
+                if (object_id > 0) {
+                    nb_objects_previous_group = object_id;
                     group_id += 1;
                     object_id = 0;
                     object_offset = 0;
@@ -1412,8 +1414,8 @@ int quicrq_media_publish_test_one(char const* media_source_name, char const* med
         if (ret == 0) {
             uint64_t nb_objects_previous_group = 0;
             if (is_new_group) {
-                if (group_id > 0) {
-                    nb_objects_previous_group = object_id + 1;
+                if (object_id > 0) {
+                    nb_objects_previous_group = object_id;
                     group_id += 1;
                     object_id = 0;
                     object_offset = 0;
