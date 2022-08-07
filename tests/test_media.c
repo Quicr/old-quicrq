@@ -334,6 +334,11 @@ int test_media_object_publisher_fn(
                         /* Copy data from object in memory */
                         size_t available = pub_ctx->media_object_size - pub_ctx->media_object_read;
                         size_t copied = data_max_size;
+
+                        if (pub_ctx->media_object_read == 0 && pub_ctx->media_object_size > 10000) {
+                            *is_new_group = 1;
+                        }
+
                         if (data_max_size >= available) {
                             *is_last_fragment = 1;
                             copied = available;
@@ -761,8 +766,9 @@ int test_media_consumer_object_ready(
         if (ret == 0) {
             /* if first time seen, document the delivery in the log */
             if (object_mode != quicrq_reassembly_object_repair) {
-                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
-                    current_time, current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
+                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
+                    group_id, object_id, current_time,
+                    current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
                     ret = -1;
                 }
             }
@@ -900,8 +906,8 @@ int test_object_stream_consumer_cb(
             if (ret == 0) {
                 /* in sequence, document the delivery in the log */
                 uint8_t flags = (properties == NULL) ? 0 : properties->flags;
-                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
-                    current_time, current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
+                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64  ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
+                    group_id, object_id, current_time, current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
                     ret = -1;
                 }
             }
@@ -1739,8 +1745,8 @@ int quicrq_media_object_source_test_one(char const* media_source_name, char cons
         if (ret == 0) {
             uint64_t nb_objects_previous_group = 0;
             if (is_new_group) {
-                if (group_id > 0) {
-                    nb_objects_previous_group = object_id + 1;
+                if (object_id > 0) {
+                    nb_objects_previous_group = object_id;
                     group_id += 1;
                     object_id = 0;
                     object_offset = 0;
@@ -1922,10 +1928,10 @@ int quicrq_object_stream_test_one(char const* media_source_name, char const* med
             &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
         if (ret == 0) {
             if (is_new_group) {
-                if (group_id > 0) {
-                    nb_objects_previous_group = object_id + 1;
+                if (object_id > 0) {
+                    nb_objects_previous_group = object_id;
+                    group_id += 1;
                 }
-                group_id += 1;
                 object_id = 0;
                 object_offset = 0;
             }
