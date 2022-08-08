@@ -893,12 +893,36 @@ int test_object_stream_consumer_cb(
 
     switch (action) {
     case quicrq_media_datagram_ready:
-        /* Find the object header */
-        if (data_length < QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
+        /* Special case for zero length objects */
+        if (data_length == 0) {
+            /* Create a fake header */
+            quicrq_media_object_header_t current_header = { 0 };
+            uint8_t flags = 0xff;
+            /* Create log entry */
+            if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64  ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
+                group_id, object_id, current_time, current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
+                ret = -1;
+            }
+            if (ret == 0) {
+                uint8_t header_buf[256];
+                uint8_t* fh = quicr_encode_object_header(header_buf, header_buf + sizeof(header_buf), &current_header);
+                if (fh == NULL) {
+                    ret = -1;
+                }
+                else {
+                    size_t header_length = fh - header_buf;
+                    if (fwrite(header_buf, 1, header_length, cons_ctx->Res) != header_length) {
+                        ret = -1;
+                    }
+                }
+            }
+        }
+        else if (data_length < QUIRRQ_MEDIA_TEST_HEADER_SIZE) {
             /* Malformed object */
             ret = -1;
         }
         else {
+            /* Parse the object header */
             quicrq_media_object_header_t current_header;
             const uint8_t* fh = quicr_decode_object_header(data,
                 data + QUIRRQ_MEDIA_TEST_HEADER_SIZE, &current_header);
@@ -1018,14 +1042,14 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
                             DBG_PRINTF("Result file not finished with reference: ret=%d", ret);
                         }
                     }
-                    else if (result_ctx->media_object_size == 0) {
+                    else if (result_ctx->media_object_size == 0 || result_ctx->current_header.length == 0) {
                         /* Indicates that this object was dropped in transmission */
                         if (nb_losses == NULL) {
                             DBG_PRINTF("Numbers %llu was lost", (unsigned long long)ref_ctx->current_header.number);
                             ret = -1;
                         }
                         else {
-                            *nb_losses++;
+                            *nb_losses += 1;
                         }
                         if (loss_flag != NULL) {
                             uint8_t flag = test_media_set_flags(1, is_audio, ref_ctx->media_object_size);

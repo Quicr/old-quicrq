@@ -116,15 +116,6 @@ int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, in
     return should_skip;
 }
 
-/* Congestion check per stream.
- * This is done when the stream is ready to send a message.
- */
-
-int quicrq_congestion_check_per_stream(quicrq_stream_ctx_t* stream_ctx, uint64_t current_time)
-{
-    return -1;
-}
-
 /* Allocate space in the message buffer */
 int quicrq_msg_buffer_alloc(quicrq_message_buffer_t* msg_buffer, size_t space, size_t bytes_stored)
 {
@@ -326,11 +317,6 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
             /* Prepare and a place holder for the object, pretending 0 length, setting the flags to 0xFF
              * Call the publisher APi to signal that the object should be skipped. 
              */
-#if 1
-            if (flags < 0x82) {
-                DBG_PRINTF("%s", "Bug");
-            }
-#endif
             h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
                 stream_ctx->next_group_id, stream_ctx->next_object_id, nb_objects_previous_group, 0, 1, 0xFF, 0, NULL);
 
@@ -360,7 +346,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                 }
             }
         }
-        else if (available == 0) {
+        else if (available == 0 && flags != 0xff) {
             if (is_media_finished) {
                 /* Send the fin object immediately, because it would be very hard to get
                  * a new "prepare to send" callback after an empty response.
@@ -412,6 +398,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                 if (h_size + available > space) {
                     /* The encoding changed, the computation of available space was wrong. */
                     available = space - h_size;
+                    is_last_fragment = 0;
                     h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
                         stream_ctx->next_group_id, stream_ctx->next_object_id, nb_objects_previous_group, stream_ctx->next_object_offset, is_last_fragment, flags, available, NULL);
                     /* The header size may have changed again, if the smaller "available" value is coded on fewer bytes. But it can only be decreased. */

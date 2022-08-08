@@ -173,7 +173,7 @@ int quicrq_media_object_publisher(
                 *has_backlog = media_ctx->has_backlog;
             } else if (object_source_item->group_id < media_ctx->object_source_ctx->next_group_id ||
                 (object_source_item->group_id == media_ctx->object_source_ctx->next_group_id &&
-                    object_source_item->object_id < media_ctx->object_source_ctx->next_object_id)) {
+                    object_source_item->object_id + 1 < media_ctx->object_source_ctx->next_object_id)) {
                 *has_backlog = 1;
                 media_ctx->has_backlog = 1;
             }

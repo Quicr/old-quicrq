@@ -37,6 +37,7 @@ typedef struct st_quicrq_reassembly_object_t {
     uint64_t nb_objects_previous_group;
     uint64_t final_offset;
     uint8_t flags;
+    int is_last_received;
     uint64_t data_received;
     uint64_t last_update_time;
     uint8_t* reassembled;
@@ -280,9 +281,15 @@ static int quicrq_reassembly_object_add_packet(
 static int quicrq_reassembly_object_reassemble(quicrq_reassembly_object_t* object)
 {
     int ret = 0;
-
+    /* Special case for zero length objects */
+    if (object->is_last_received && object->final_offset == 0 && object->data_received == 0) {
+        object->reassembled = (uint8_t*)malloc(1);
+        if (object->reassembled == NULL) {
+            ret = -1;
+        }
+    }
     /* Check that that the received bytes are in order */
-    if (object->final_offset == 0 || object->data_received != object->final_offset) {
+    else if (object->final_offset == 0 || object->data_received != object->final_offset) {
         ret = -1;
     }
     else if (object->first_packet == NULL || object->first_packet->offset != 0) {
@@ -412,6 +419,7 @@ int quicrq_reassembly_input(
             }
             /* If this is the last fragment, update the object length */
             if (is_last_fragment) {
+                object->is_last_received = 1;
                 if (object->final_offset == 0) {
                     object->final_offset = offset + data_length;
                 }
@@ -424,7 +432,7 @@ int quicrq_reassembly_input(
             if (ret != 0) {
                 DBG_PRINTF("Add packet, ret = %d", ret);
             }
-            else if (object->final_offset > 0 && object->data_received >= object->final_offset) {
+            else if (object->is_last_received && object->data_received >= object->final_offset) {
                 /* If the object is complete, verify and submit */
                 quicrq_reassembly_object_mode_enum object_mode;
                 if (group_id == reassembly_ctx->next_group_id + 1 &&

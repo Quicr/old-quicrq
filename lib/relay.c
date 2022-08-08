@@ -446,7 +446,6 @@ int quicrq_relay_consumer_cb(
         /* Check that this datagram was not yet received.
          * This requires accessing the cache by object_id, offset and length. */
          /* Add fragment (or fragments) to cache */
-
         ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, 
             group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
         /* Manage fin of transmission */
@@ -692,7 +691,7 @@ int quicrq_relay_publisher_fn(
                     *has_backlog = media_ctx->has_backlog;
                 } else if (media_ctx->current_group_id < media_ctx->cache_ctx->next_group_id ||
                     (media_ctx->current_group_id == media_ctx->cache_ctx->next_group_id &&
-                        media_ctx->current_object_id < media_ctx->cache_ctx->next_object_id)) {
+                        media_ctx->current_object_id + 1 < media_ctx->cache_ctx->next_object_id)) {
                     *has_backlog = 1;
                     media_ctx->has_backlog = 1;
                 }

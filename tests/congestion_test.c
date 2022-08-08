@@ -305,14 +305,14 @@ int quicrq_congestion_test_one(int is_real_time, int use_datagrams, uint64_t sim
 
 int quicrq_congestion_basic_test()
 {
-    int ret = quicrq_congestion_test_one(1, 0, 0, 0, 25, 0x82);
+    int ret = quicrq_congestion_test_one(1, 0, 0, 0, 80, 0x82);
 
     return ret;
 }
 
 int quicrq_congestion_basic_recv_test()
 {
-    int ret = quicrq_congestion_test_one(1, 0, 0, 1, 25, 0x82);
+    int ret = quicrq_congestion_test_one(1, 0, 0, 1, 80, 0x82);
 
     return ret;
 }
