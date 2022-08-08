@@ -825,7 +825,7 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
         quicrq_wakeup_media_stream(stream_ctx);
         stream_ctx = stream_ctx->next_stream_for_source;
     }
-};
+}
 
 /* Request media in connection.
  * Send a media request to the server.

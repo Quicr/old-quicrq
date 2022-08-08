@@ -665,7 +665,7 @@ int quicrq_relay_publisher_fn(
                             *is_new_group = 1;
                         }
                         else {
-                            DBG_PRINTF("Group %" PRIu64 " is not complete.", media_ctx->current_group_id);
+                            DBG_PRINTF("Group %" PRIu64 " is not complete, time= %" PRIu64, media_ctx->current_group_id, current_time);
                         }
                     }
                 }
@@ -929,11 +929,6 @@ quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx(quicrq_ctx_t* qr_ctx)
         cache_ctx->qr_ctx = qr_ctx;
     }
     return cache_ctx;
-}
-
-void quicrq_relay_delete_cache(quicrq_relay_cached_media_t* cache_ctx)
-{
-    return;
 }
 
 quicrq_relay_consumer_context_t* quicrq_relay_create_cons_ctx()

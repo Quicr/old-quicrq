@@ -36,6 +36,7 @@ typedef struct st_quicrq_reassembly_object_t {
     uint64_t object_id;
     uint64_t nb_objects_previous_group;
     uint64_t final_offset;
+    uint64_t queue_delay;
     uint8_t flags;
     int is_last_received;
     uint64_t data_received;
@@ -67,7 +68,7 @@ static picosplay_node_t* quicrq_object_node_create(void* v_media_object)
 
 static void quicrq_object_node_delete(void* tree, picosplay_node_t* node)
 {
-#ifdef _WINDOWS
+#ifdef UNREFERENCED_PARAMETER
     UNREFERENCED_PARAMETER(tree);
 #endif
     memset(node, 0, sizeof(picosplay_node_t));
@@ -388,6 +389,7 @@ int quicrq_reassembly_input(
     uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
     int is_last_fragment,
@@ -407,6 +409,13 @@ int quicrq_reassembly_input(
         if (object == NULL) {
             /* Create a media object for reassembly */
             object = quicrq_reassembly_object_create(reassembly_ctx, group_id, object_id);
+            object->queue_delay = queue_delay;
+            object->flags = flags;
+        }
+        else {
+            if (object->queue_delay < queue_delay) {
+                object->queue_delay = queue_delay;
+            }
         }
         /* per fragment logic */
         if (object == NULL) {

@@ -122,6 +122,9 @@ int quicrq_media_object_publisher(
     int* has_backlog,
     uint64_t current_time)
 {
+#ifdef UNREFERENCED_PARAMETER
+    UNREFERENCED_PARAMETER(current_time);
+#endif
     int ret = 0;
     quicrq_object_source_publisher_ctx_t* media_ctx = (quicrq_object_source_publisher_ctx_t*)v_media_ctx;
     quicrq_object_source_item_t* object_source_item = NULL;
