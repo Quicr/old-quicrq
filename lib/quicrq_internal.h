@@ -130,7 +130,7 @@ uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64
 const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length);
 size_t quicrq_fragment_msg_reserve(uint64_t group_id, uint64_t object_id, 
     uint64_t nb_objects_previous_group,
-    uint64_t offset, int is_last_fragment, uint8_t flags, size_t repair_length);
+    uint64_t offset, int is_last_fragment, size_t data_length);
 uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type,
     uint64_t group_id, uint64_t object_id, uint64_t nb_objects_previous_group,
     uint64_t offset, int is_last_fragment, uint8_t flags, size_t length, const uint8_t* data);

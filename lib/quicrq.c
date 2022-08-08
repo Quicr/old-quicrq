@@ -392,7 +392,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
             if (h_byte == NULL) {
                 /* That should not happen, unless the stream_header size was way too small */
                 ret = -1;
-            } else if (h_byte - stream_header != h_size) {
+            } else if ((size_t)(h_byte - stream_header) != h_size) {
                 /* Encoding has changed. May need to change the length, and if that recompute the header */
                 h_size = h_byte - stream_header;
                 if (h_size + available > space) {
