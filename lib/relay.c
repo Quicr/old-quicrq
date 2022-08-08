@@ -54,7 +54,7 @@ static int64_t quicrq_relay_cache_fragment_node_compare(void* l, void* r) {
             }
         }
     }
-    return ret;
+return ret;
 }
 
 static picosplay_node_t* quicrq_relay_cache_fragment_node_create(void* v_media_object)
@@ -68,7 +68,7 @@ static void quicrq_relay_cache_fragment_node_delete(void* tree, picosplay_node_t
     UNREFERENCED_PARAMETER(tree);
 #endif
     quicrq_relay_cached_media_t* cached_media = (quicrq_relay_cached_media_t*)((char*)tree - offsetof(struct st_quicrq_relay_cached_media_t, fragment_tree));
-    quicrq_relay_cached_fragment_t* fragment = (quicrq_relay_cached_fragment_t *)quicrq_relay_cache_fragment_node_value(node);
+    quicrq_relay_cached_fragment_t* fragment = (quicrq_relay_cached_fragment_t*)quicrq_relay_cache_fragment_node_value(node);
 
     if (fragment->previous_in_order == NULL) {
         cached_media->first_fragment = fragment->next_in_order;
@@ -87,7 +87,7 @@ static void quicrq_relay_cache_fragment_node_delete(void* tree, picosplay_node_t
     free(quicrq_relay_cache_fragment_node_value(node));
 }
 
-quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx, 
+quicrq_relay_cached_fragment_t* quicrq_relay_cache_get_fragment(quicrq_relay_cached_media_t* cached_ctx,
     uint64_t group_id, uint64_t object_id, uint64_t offset)
 {
     quicrq_relay_cached_fragment_t key = { 0 };
@@ -148,7 +148,6 @@ void quicrq_relay_cache_progress(quicrq_relay_cached_media_t* cached_ctx,
             cached_ctx->next_offset = 0;
             is_expected = 1;
         }
-
         if (is_expected) {
             if (fragment->is_last_fragment) {
                 cached_ctx->next_object_id += 1;
@@ -163,7 +162,6 @@ void quicrq_relay_cache_progress(quicrq_relay_cached_media_t* cached_ctx,
         }
     } while ((next_fragment_node = picosplay_next(next_fragment_node)) != NULL);
 }
-
 
 int quicrq_relay_add_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
@@ -246,15 +244,7 @@ int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_c
         if (first_fragment_state == NULL || 
             first_fragment_state->group_id != group_id ||
             first_fragment_state->object_id != object_id ||
-            first_fragment_state->offset + first_fragment_state->data_length < offset) {
-            /* Special case for stream data. */
-            if (first_fragment_state != NULL &&
-                first_fragment_state->group_id + 1 == group_id &&
-                object_id == 0 && offset == 0 &&
-                nb_objects_previous_group == UINT64_MAX) {
-                nb_objects_previous_group = first_fragment_state->object_id;
-            }
-            
+            first_fragment_state->offset + first_fragment_state->data_length < offset) {          
             /* Insert the whole fragment */
             ret = quicrq_relay_add_fragment_to_cache(cached_ctx, data, 
                 group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
@@ -456,6 +446,7 @@ int quicrq_relay_consumer_cb(
         /* Check that this datagram was not yet received.
          * This requires accessing the cache by object_id, offset and length. */
          /* Add fragment (or fragments) to cache */
+
         ret = quicrq_relay_propose_fragment_to_cache(cons_ctx->cached_ctx, data, 
             group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
         /* Manage fin of transmission */
