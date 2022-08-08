@@ -312,7 +312,7 @@ int quicrq_congestion_basic_test()
 
 int quicrq_congestion_basic_recv_test()
 {
-    int ret = quicrq_congestion_test_one(1, 0, 0, 1, 80, 0x82);
+    int ret = quicrq_congestion_test_one(1, 0, 0, 1, 85, 0x82);
 
     return ret;
 }

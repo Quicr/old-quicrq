@@ -27,6 +27,7 @@ static const quicrq_test_def_t test_table[] =
     { "basic", quicrq_basic_test },
     { "basic_rt", quicrq_basic_rt_test },
     { "congestion_basic", quicrq_congestion_basic_test },
+    { "congestion_basic_recv", quicrq_congestion_basic_recv_test },
     { "media_video1", quicrq_media_video1_test },
     { "media_video1_rt", quicrq_media_video1_rt_test },
     { "media_audio1", quicrq_media_audio1_test },

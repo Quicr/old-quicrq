@@ -22,6 +22,7 @@ extern "C" {
     int quicrq_object_stream_rt_test();
     int quicrq_basic_rt_test();
     int quicrq_congestion_basic_test();
+    int quicrq_congestion_basic_recv_test();
     int quicrq_datagram_basic_test();
     int quicrq_datagram_loss_test();
     int quicrq_datagram_extra_test();
