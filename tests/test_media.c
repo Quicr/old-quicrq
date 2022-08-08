@@ -83,6 +83,10 @@ void* test_media_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t* stre
         media_ctx->is_audio = test_media_is_audio((const uint8_t*)srce_ctx->file_path, strlen(srce_ctx->file_path));
         media_ctx->p_next_time = srce_ctx->p_next_time;
         media_ctx->min_packet_size = srce_ctx->min_packet_size;
+        if (stream_ctx != NULL) {
+            /* Just to appease the Wpedantic warnings. */
+            media_ctx->stream_id = stream_ctx->stream_id;
+        }
     }
 
     return media_ctx;
@@ -624,9 +628,9 @@ int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_d
     char * result_file_name, char * result_log_name, size_t result_name_size)
 {
     int ret = 0;
-    int last_sep = 0;
-    int last_dot = (int)url_length;
-    int name_length = 0;
+    size_t last_sep = 0;
+    size_t last_dot = (int)url_length;
+    size_t name_length = 0;
     for (size_t i = 0; i < url_length; i++) {
         if (url[i] == (uint8_t)'\\' || url[i] == (uint8_t)'/') {
             last_sep = (int)(i + 1);
@@ -1614,7 +1618,7 @@ int quicrq_media_object_publish_test()
                     &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, simulated_time);
 
                 if (ret == 0) {
-                    for (int x = 0; x < data_length; x++) {
+                    for (size_t x = 0; x < data_length; x++) {
                         if (media_buffer[x] != (uint8_t)i) {
                             ret = -1;
                             break;

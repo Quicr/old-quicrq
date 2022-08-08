@@ -65,7 +65,7 @@ int quicrq_app_check_source_time(quicrq_app_loop_cb_t* cb_ctx,
     uint64_t next_time = time_check_arg->current_time + time_check_arg->delta_t;
     uint64_t cache_next_time;
 
-    for (int i = 0; ret== 0 && i < cb_ctx->nb_test_sources; i++) {
+    for (size_t i = 0; ret== 0 && i < cb_ctx->nb_test_sources; i++) {
         /* Find the time at which the next object will be ready. */
         uint64_t next_source_time = test_media_object_source_next_time(
             cb_ctx->test_source_ctx[i], time_check_arg->current_time);
@@ -125,6 +125,9 @@ int quicrq_app_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mo
 
     if (cb_ctx == NULL) {
         ret = PICOQUIC_ERROR_UNEXPECTED_ERROR;
+        if (quic == NULL) {
+            DBG_PRINTF("%s", "Quic context not set.");
+        }
     }
     else {
         switch (cb_mode) {

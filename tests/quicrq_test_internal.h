@@ -15,7 +15,7 @@ extern "C" {
 #define QUIRRQ_MEDIA_TEST_HEADER_SIZE 20
 
 typedef struct st_generation_parameters_t {
-    int target_duration;
+    uint64_t target_duration;
     int objects_per_second;
     int nb_p_in_i;
     int objects_in_epoch;
@@ -29,6 +29,7 @@ typedef struct st_test_media_publisher_context_t {
     FILE* F;
     generation_parameters_t* generation_context;
     quicrq_media_object_header_t current_header;
+    uint64_t stream_id;
     uint64_t start_time;
     uint64_t* p_next_time;
     uint8_t* media_object;

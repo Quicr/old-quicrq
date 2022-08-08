@@ -48,9 +48,12 @@ static picosplay_node_t* quicrq_object_source_node_create(void* v_media_object)
 
 static void quicrq_object_source_node_delete(void* tree, picosplay_node_t* object_node)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(tree);
-#endif
+    if (tree != NULL) {
+        picosplay_tree_t* p_tree = (picosplay_tree_t*)tree;
+        if (p_tree->size <= 0) {
+            DBG_PRINTF("Delete object source node, tree size: %d", p_tree->size);
+        }
+    }
     free(quicrq_object_source_node_value(object_node));
 }
 
@@ -78,6 +81,7 @@ typedef struct st_quicrq_object_source_publisher_ctx_t {
     uint64_t next_group_id;
     uint64_t next_object_id;
     size_t next_object_offset;
+    uint64_t last_time;
     int next_was_sent;
     int has_backlog;
 } quicrq_object_source_publisher_ctx_t;
@@ -122,9 +126,6 @@ int quicrq_media_object_publisher(
     int* has_backlog,
     uint64_t current_time)
 {
-#ifdef UNREFERENCED_PARAMETER
-    UNREFERENCED_PARAMETER(current_time);
-#endif
     int ret = 0;
     quicrq_object_source_publisher_ctx_t* media_ctx = (quicrq_object_source_publisher_ctx_t*)v_media_ctx;
     quicrq_object_source_item_t* object_source_item = NULL;
@@ -197,6 +198,8 @@ int quicrq_media_object_publisher(
                 if (media_ctx->next_object_offset >= object_source_item->object_length) {
                     media_ctx->next_was_sent = 1;
                 }
+                /* Just a silly line to appease -Wpedantic */
+                media_ctx->last_time = current_time;
             }
         }
     }
