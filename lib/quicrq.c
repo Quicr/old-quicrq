@@ -1169,6 +1169,8 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                     DBG_PRINTF("Error, first publisher function call returns %d, space = %zu, available = %zu", ret, space - h_size, available);
                 }
                 else {
+                    int is_object_skipped = 0;
+
                     if (is_new_group) {
                         nb_objects_previous_group = stream_ctx->next_object_id;
                         stream_ctx->next_group_id += 1;
@@ -1182,7 +1184,44 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                         /* Wake up the control stream so the final message can be sent. */
                         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                     }
-                    if (available > 0) {
+
+                    if (available > 0 && stream_ctx->next_object_offset == 0 && 
+                        stream_ctx->next_object_id != 0 && !is_new_group) {
+                        /* Check the cache time, compare to current time, determine congestion */
+                        is_object_skipped = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx, flags, has_backlog, current_time);
+                    }
+
+                    if (is_object_skipped) {
+                        h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX, stream_ctx->datagram_stream_id,
+                            stream_ctx->next_group_id, stream_ctx->next_object_id, 0, 0, 0xff, nb_objects_previous_group, 1);
+                        if (h_byte == NULL) {
+                            /* Not enough space in header buffer to encode the header. That should never happen */
+                            quicrq_log_message(stream_ctx->cnx_ctx, "Error: datagram header longer than %zu", QUICRQ_DATAGRAM_HEADER_MAX);
+                            DBG_PRINTF("Error: datagram header longer than %zu", QUICRQ_DATAGRAM_HEADER_MAX);
+                            ret = -1;
+                        }
+                        else {
+                            ret = stream_ctx->publisher_fn(quicrq_media_source_skip_object, stream_ctx->media_ctx, NULL, 0, &data_length,
+                                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
+                            if (ret == 0) {
+                                h_size = h_byte - datagram_header;
+                                buffer = (uint8_t*)picoquic_provide_datagram_buffer(context, h_size);
+                                at_least_one_active = 1;
+                                if (buffer == NULL) {
+                                    quicrq_log_message(stream_ctx->cnx_ctx, "Error, cannot obtain datagram buffer, space = %zu, available = %zu", space, h_size);
+                                    DBG_PRINTF("Error, cannot obtain datagram buffer, space = %zu, required = %zu", space, h_size);
+                                    ret = -1;
+                                }
+                                else {
+                                    /* Push the header */
+                                    memcpy(buffer, datagram_header, h_size);
+                                    stream_ctx->next_object_id++;
+                                    stream_ctx->next_object_offset = 0;
+                                }
+                            }
+                        }
+                        break;
+                    } else if (available > 0) {
                         /* Predict length of datagram_stream_id + length of offset.
                          * TODO: the number of bytes available depends on the header size, which depends on
                         * object_id, and offset. The object size and object offset are managed by the
@@ -1851,9 +1890,11 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             ret = quicrq_receive_datagram(cnx_ctx, bytes, length, picoquic_get_quic_time(cnx_ctx->qr_ctx->quic));
             break;
         case picoquic_callback_prepare_datagram:
-            /* Prepare to send a datagram */
-            ret = quicrq_prepare_to_send_datagram(cnx_ctx, bytes, length, picoquic_get_quic_time(cnx_ctx->qr_ctx->quic));
+            /* Prepare to send a datagram */ {
+            uint64_t current_time = picoquic_get_quic_time(cnx_ctx->qr_ctx->quic);
+            ret = quicrq_prepare_to_send_datagram(cnx_ctx, bytes, length, current_time);
             break;
+        }
         case picoquic_callback_stream_reset: /* Client reset stream #x */
         case picoquic_callback_stop_sending: /* Client asks server to reset stream #x */
             /* TODO: react to abandon stream, etc. */

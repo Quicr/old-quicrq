@@ -751,15 +751,15 @@ int quicrq_relay_datagram_publisher_prepare(
     }
 
     /* Move to the next fragment if it is available */
-    while (media_ctx->current_fragment != NULL && media_ctx->length_sent >= media_ctx->current_fragment->data_length &&
+    /* BUG: wrong results if receiving NULL length fragments */
+    if (media_ctx->current_fragment != NULL && media_ctx->is_current_fragment_sent &&
         media_ctx->current_fragment->next_in_order != NULL) {
         media_ctx->length_sent = 0;
+        media_ctx->is_current_fragment_sent = 0;
         media_ctx->current_fragment = media_ctx->current_fragment->next_in_order;
     }
-
     /* Return the flags per fragment */
-    if (media_ctx->current_fragment != NULL && media_ctx->length_sent < media_ctx->current_fragment->data_length) {
-        /* TODO: how to assess that the media is finished? */
+    if (media_ctx->current_fragment != NULL && !media_ctx->is_current_fragment_sent) {
         size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
         uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
         uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
@@ -784,7 +784,7 @@ int quicrq_relay_datagram_publisher_prepare(
                     is_last_fragment = media_ctx->current_fragment->is_last_fragment;
                     copied = available;
                 }
-                if (copied > 0) {
+                if (copied > 0 || media_ctx->current_fragment->data_length == 0) {
                     /* Get a buffer inside the datagram packet */
                     void* buffer = picoquic_provide_datagram_buffer(context, copied + h_size);
                     if (buffer == NULL) {
@@ -805,8 +805,11 @@ int quicrq_relay_datagram_publisher_prepare(
                         if (ret == 0) {
                             memcpy(buffer, datagram_header, h_size);
                             /* Get the media */
-                            memcpy(((uint8_t*)buffer) + h_size, media_ctx->current_fragment->data + media_ctx->length_sent, copied);
-                            media_ctx->length_sent += copied;
+                            if (copied > 0) {
+                                memcpy(((uint8_t*)buffer) + h_size, media_ctx->current_fragment->data + media_ctx->length_sent, copied);
+                                media_ctx->length_sent += copied;
+                            }
+                            media_ctx->is_current_fragment_sent |= (media_ctx->length_sent >= media_ctx->current_fragment->data_length);
                             *media_was_sent = 1;
                             *at_least_one_active = 1;
                             if (stream_ctx != NULL) {

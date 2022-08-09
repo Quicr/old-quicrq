@@ -95,6 +95,7 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int has_backlog;
     quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
+    int is_current_fragment_sent;
 } quicrq_relay_publisher_context_t;
 
 typedef struct st_quicrq_relay_consumer_context_t {

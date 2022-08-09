@@ -45,6 +45,13 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(congestion_datagram)
+		{
+			int ret = quicrq_congestion_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(media_video1)
 		{
 			int ret = quicrq_media_video1_test();
