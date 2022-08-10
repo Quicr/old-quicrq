@@ -82,6 +82,18 @@ typedef struct st_quicrq_relay_cached_media_t {
     uint64_t cache_delete_time;
 } quicrq_relay_cached_media_t;
 
+
+typedef struct st_quicrq_relay_publisher_object_state_t {
+    picosplay_node_t publisher_object_node;
+    uint64_t group_id;
+    uint64_t object_id;
+    uint64_t nb_objects_previous_group;
+    uint64_t final_offset;
+    uint64_t bytes_sent;
+    int is_dropped;
+    int is_sent;
+} quicrq_relay_publisher_object_state_t;
+
 typedef struct st_quicrq_relay_publisher_context_t {
     quicrq_relay_cached_media_t* cache_ctx;
     uint64_t current_group_id;
@@ -96,6 +108,7 @@ typedef struct st_quicrq_relay_publisher_context_t {
     quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
     int is_current_fragment_sent;
+    picosplay_tree_t publisher_object_tree;
 } quicrq_relay_publisher_context_t;
 
 typedef struct st_quicrq_relay_consumer_context_t {

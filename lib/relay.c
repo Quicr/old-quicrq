@@ -572,10 +572,74 @@ void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx)
  * When the correction is available, the client is notified, and polls for the
  * missing object-id.
  */
+/* Manage the splay of cached fragments */
+static void* quicrq_relay_publisher_object_node_value(picosplay_node_t* publisher_object_node)
+{
+    return (publisher_object_node == NULL) ? NULL : (void*)((char*)publisher_object_node - offsetof(struct st_quicrq_relay_publisher_object_state_t, publisher_object_node));
+}
+
+static int64_t quicrq_relay_publisher_object_node_compare(void* l, void* r) {
+    quicrq_relay_publisher_object_state_t* ls = (quicrq_relay_publisher_object_state_t*)l;
+    quicrq_relay_publisher_object_state_t* rs = (quicrq_relay_publisher_object_state_t*)r;
+    int64_t ret = ls->group_id - rs->group_id;
+
+    if (ret == 0) {
+        ret = ls->object_id - rs->object_id;
+    }
+    return ret;
+}
+
+static picosplay_node_t* quicrq_relay_publisher_object_node_create(void* v_publisher_object)
+{
+    return &((quicrq_relay_publisher_object_state_t*)v_publisher_object)->publisher_object_node;
+}
+
+static void quicrq_relay_publisher_object_node_delete(void* tree, picosplay_node_t* node)
+{
+    if (tree == NULL){
+        /* quicrq_relay_publisher_context_t* cached_media = (quicrq_relay_publisher_context_t*)((char*)tree - offsetof(struct st_quicrq_relay_publisher_context_t, publisher_object_tree)); */
+        DBG_PRINTF("%s", "Calling object node delete with empty tree");
+
+    }
+
+    free(quicrq_relay_publisher_object_node_value(node));
+}
+
+
+quicrq_relay_publisher_object_state_t* quicrq_relay_publisher_object_add(quicrq_relay_publisher_context_t* media_ctx,
+    uint64_t group_id, uint64_t object_id)
+{
+    int ret = 0;
+    quicrq_relay_publisher_object_state_t* publisher_object = 
+        (quicrq_relay_publisher_object_state_t*)malloc(sizeof(quicrq_relay_publisher_object_state_t));
+
+    if (publisher_object != NULL) {
+        memset(publisher_object, 0, sizeof(quicrq_relay_publisher_object_state_t));
+        publisher_object->group_id = group_id;
+        publisher_object->object_id = object_id;
+        picosplay_insert(&media_ctx->publisher_object_tree, publisher_object);
+    }
+
+    return publisher_object;
+}
+
+quicrq_relay_publisher_object_state_t* quicrq_relay_publisher_object_get(quicrq_relay_publisher_context_t* media_ctx,
+    uint64_t group_id, uint64_t object_id)
+{
+    quicrq_relay_publisher_object_state_t key = { 0 };
+    key.group_id = group_id;
+    key.object_id = object_id;
+    picosplay_node_t* publisher_object_node = picosplay_find(&media_ctx->publisher_object_tree, &key);
+    return (quicrq_relay_publisher_object_state_t*)quicrq_relay_publisher_object_node_value(publisher_object_node);
+}
+
+
 
 void quicrq_relay_publisher_close(quicrq_relay_publisher_context_t* media_ctx)
 {
     quicrq_relay_cached_media_t * cached_ctx = media_ctx->cache_ctx;
+
+    picosplay_empty_tree(&media_ctx->publisher_object_tree);
 
     if (cached_ctx->is_closed && cached_ctx->qr_ctx != NULL) {
         /* This may be the last connection served from this cache */
@@ -730,6 +794,285 @@ int quicrq_relay_publisher_fn(
     return ret;
 }
 
+
+
+/* Evaluate whether the media context has backlog, and check
+* whether the current object should be skipped.
+*/
+int quicrq_relay_datagram_publisher_object_eval(
+    quicrq_stream_ctx_t* stream_ctx,
+    quicrq_relay_publisher_context_t* media_ctx, int* should_skip)
+{
+    int ret = 0;
+
+    *should_skip = 0;
+    if (media_ctx->current_fragment->object_id != 0 &&
+        media_ctx->current_fragment->data_length > 0) {
+        if (stream_ctx->cnx_ctx->qr_ctx->quic != NULL &&
+            media_ctx->current_fragment != NULL) {
+            uint64_t current_time = picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic);
+            int64_t delta_t = current_time - media_ctx->current_fragment->cache_time;
+            int has_backlog = delta_t > 33333;
+
+            *should_skip = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx,
+                media_ctx->current_fragment->flags, has_backlog, current_time);
+        }
+    }
+
+    return ret;
+}
+
+
+/* datagram_publisher_check_object:
+ * evaluate and if necessary progress the "current fragment" pointer.
+ * After this evaluation, expect the following results:
+ *  - return code not zero: something went very wrong.
+ *  - media_ctx->current_fragment == NULL: sending is not started yet.
+ *  - media_ctx->current_fragment != NULL:
+ *    - media_ctx->is_current_fragment_sent == 1: already sent. Nothing else available.
+ *    - media_ctx->is_current_fragment_sent == 0: should be processed
+ */
+
+int quicrq_relay_datagram_publisher_check_fragment(
+    quicrq_stream_ctx_t* stream_ctx, quicrq_relay_publisher_context_t* media_ctx, int * should_skip)
+{
+    int ret = 0;
+    quicrq_relay_publisher_object_state_t* publisher_object = NULL;
+
+    *should_skip = 0;
+
+    /* The "current fragment" shall never be NULL, unless this is the very first one. */
+    if (media_ctx->current_fragment == NULL) {
+        media_ctx->current_fragment = media_ctx->cache_ctx->first_fragment;
+    }
+    if (media_ctx->current_fragment == NULL) {
+        /* Nothing to send yet */
+    }
+    else if (media_ctx->is_current_fragment_sent) {
+        /* Find the next fragment in order, but skip if already skipped. */
+        while (media_ctx->current_fragment->next_in_order != NULL) {
+            /* Progress to the next fragment */
+            media_ctx->length_sent = 0;
+            media_ctx->is_current_fragment_sent = 0;
+            media_ctx->current_fragment = media_ctx->current_fragment->next_in_order;
+            publisher_object =
+                quicrq_relay_publisher_object_get(media_ctx, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id);
+            if (publisher_object == NULL) {
+                /* Check whether the object is before the start of the list */
+                quicrq_relay_publisher_object_state_t* first_object = (quicrq_relay_publisher_object_state_t*)
+                    quicrq_relay_publisher_object_node_value(picosplay_first(&media_ctx->publisher_object_tree));
+                if (first_object != NULL && (first_object->group_id > media_ctx->current_fragment->group_id ||
+                    (first_object->group_id == media_ctx->current_fragment->group_id &&
+                        first_object->object_id > media_ctx->current_fragment->object_id))) {
+                    /* This fragment should be skipped. */
+                    media_ctx->is_current_fragment_sent = 1;
+                }
+                else {
+                    /* this is a new object. The fragment should be processed. */
+                    ret = quicrq_relay_datagram_publisher_object_eval(stream_ctx, media_ctx, should_skip);
+                    break;
+                }
+            }
+            else if (publisher_object->is_dropped){
+                /* Continue looking for the next object */
+                media_ctx->is_current_fragment_sent = 1;
+            }
+            else {
+                /* new fragment of a valid object. Should be sent next. */
+                break;
+            }
+        }
+    }
+    return ret;
+}
+
+/* Prune the publisher object tree, removing all nodes that
+ * have a successor and have not already been sent.
+ * This avoids keeping large lists in memory.
+ */
+int quicrq_relay_datagram_publisher_object_prune(
+    quicrq_relay_publisher_context_t* media_ctx)
+{
+    int ret = 0;
+    quicrq_relay_publisher_object_state_t* first_object = (quicrq_relay_publisher_object_state_t*)
+        quicrq_relay_publisher_object_node_value(picosplay_first(&media_ctx->publisher_object_tree));
+
+    while (first_object != NULL && first_object->is_sent) {
+        quicrq_relay_publisher_object_state_t* next_object = (quicrq_relay_publisher_object_state_t*)
+            quicrq_relay_publisher_object_node_value(picosplay_next(&first_object->publisher_object_node));
+        if (next_object == NULL) {
+            break;
+        }
+        else {
+            if ((next_object->group_id == first_object->group_id && next_object->object_id == first_object->object_id + 1) ||
+                (next_object->group_id == first_object->group_id + 1 && next_object->object_id == 0 &&
+                    next_object->nb_objects_previous_group == first_object->object_id + 1)) {
+                /* In sequence! */
+                picosplay_delete_hint(&media_ctx->publisher_object_tree, &first_object->publisher_object_node);
+                first_object = next_object;
+            }
+            else {
+                break;
+            }
+        }
+    }
+
+    return ret;
+}
+
+/* Update the publisher object after a fragment was sent.
+ * - Keep track of how many bytes were sent for the object.
+ * - Keep track of the bytes needed:
+ *   - zero if object is skipped
+ *   - final offset if object is sent.
+ * - Mark "sent" if all bytes sent.
+ * - if sent, check whether to prune the tree
+ */
+int quicrq_relay_datagram_publisher_object_update(
+    quicrq_relay_publisher_context_t* media_ctx,
+    int should_skip,
+    int is_last_fragment,
+    uint64_t next_offset,
+    size_t copied )
+{
+    int ret = 0;
+    quicrq_relay_publisher_object_state_t* publisher_object = 
+        quicrq_relay_publisher_object_get(media_ctx, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id);
+    if (publisher_object == NULL) {
+        publisher_object = quicrq_relay_publisher_object_add(media_ctx,
+            media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id);
+    }
+    if (publisher_object == NULL) {
+        ret = -1;
+    }
+    else {
+        /* Document object properties */
+        publisher_object->bytes_sent += copied;
+        if (is_last_fragment) {
+            publisher_object->final_offset = next_offset;
+        }
+        publisher_object->is_dropped = should_skip;
+        if (media_ctx->current_fragment->nb_objects_previous_group > 0) {
+            publisher_object->nb_objects_previous_group = media_ctx->current_fragment->nb_objects_previous_group;
+        }
+        /* Check whether fully sent.
+         * Consider special case of zero length fragments, skipped at previous network node.
+         */
+        if ((is_last_fragment && copied >= next_offset) ||
+            (publisher_object->final_offset > 0 && publisher_object->bytes_sent >= publisher_object->final_offset)) {
+            publisher_object->is_sent = 1;
+            ret = quicrq_relay_datagram_publisher_object_prune(media_ctx);
+        }
+    }
+
+    return ret;
+}
+
+/* Send the next fragment, or a placeholder if the object shall be skipped. 
+ */
+int quicrq_relay_datagram_publisher_send_fragment(
+    quicrq_stream_ctx_t* stream_ctx,
+    quicrq_relay_publisher_context_t* media_ctx,
+    uint64_t datagram_stream_id,
+    void* context,
+    size_t space,
+    int* media_was_sent,
+    int* at_least_one_active,
+    int should_skip)
+{
+    int ret = 0;
+    size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
+    uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
+    uint8_t flags = (should_skip) ? 0xff : media_ctx->current_fragment->flags;
+    int is_last_fragment = (should_skip) ? 1: media_ctx->current_fragment->is_last_fragment;
+    size_t h_size = 0;
+    uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
+        datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
+        media_ctx->current_fragment->queue_delay, flags, media_ctx->current_fragment->nb_objects_previous_group,
+        is_last_fragment);
+    if (h_byte == NULL) {
+        /* Should never happen. */
+        ret = -1;
+    }
+    else {
+        h_size = h_byte - datagram_header;
+
+        if (h_size > space) {
+            /* TODO: should get a min encoding length per stream */
+            /* Can't do anything there */
+            *at_least_one_active = 1;
+        }
+        else {
+            size_t available = 0;
+            size_t copied = 0; 
+            if (!should_skip && media_ctx->current_fragment->data_length > 0) {
+                /* If we are not skipping this object, compute the exact number of bytes to be sent.
+                 * Encode the header again if something changed, e.g., last fragment bit. 
+                 */
+                available = media_ctx->current_fragment->data_length - media_ctx->length_sent;
+                copied = space - h_size;
+                if (copied >= available) {
+                    copied = available;
+                } else if (is_last_fragment){
+                    /* In the rare case where this was the last fragment but there is not enough space available, 
+                     * we need to reset the header.
+                     */
+                    is_last_fragment = 0;
+                    h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
+                        datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
+                        media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, media_ctx->current_fragment->nb_objects_previous_group,
+                        0);
+
+                    if (h_byte != datagram_header + h_size) {
+                        /* Can't happen, unless our coding assumptions were wrong. Would need to debug that. */
+                        ret = -1;
+                    }
+                }
+            }
+            if (copied > 0 || should_skip || media_ctx->current_fragment->data_length == 0){
+                /* Get a buffer inside the datagram packet */
+                void* buffer = picoquic_provide_datagram_buffer(context, copied + h_size);
+                if (buffer == NULL) {
+                    ret = -1;
+                }
+                else {
+                    /* Push the header */
+                    if (ret == 0) {
+                        memcpy(buffer, datagram_header, h_size);
+                        /* Get the media */
+                        if (copied > 0) {
+                            memcpy(((uint8_t*)buffer) + h_size, media_ctx->current_fragment->data + media_ctx->length_sent, copied);
+                            media_ctx->length_sent += copied;
+                        }
+                        media_ctx->is_current_fragment_sent |= (should_skip || media_ctx->length_sent >= media_ctx->current_fragment->data_length);
+                        *media_was_sent = 1;
+                        *at_least_one_active = 1;
+                        if (stream_ctx != NULL) {
+                            /* Keep track in stream context */
+                            ret = quicrq_datagram_ack_init(stream_ctx,
+                                media_ctx->current_fragment->group_id,
+                                media_ctx->current_fragment->object_id, offset,
+                                media_ctx->current_fragment->nb_objects_previous_group,
+                                ((uint8_t*)buffer) + h_size, copied,
+                                media_ctx->current_fragment->queue_delay, is_last_fragment, NULL,
+                                picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
+                            if (ret != 0) {
+                                DBG_PRINTF("Datagram ack init returns %d", ret);
+                            }
+                        }
+                        if (ret == 0) {
+                            ret = quicrq_relay_datagram_publisher_object_update(media_ctx,
+                                should_skip, is_last_fragment, offset + copied, copied);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
 int quicrq_relay_datagram_publisher_prepare(
     quicrq_stream_ctx_t* stream_ctx,
     quicrq_relay_publisher_context_t* media_ctx,
@@ -738,104 +1081,27 @@ int quicrq_relay_datagram_publisher_prepare(
     size_t space,
     int* media_was_sent,
     int* at_least_one_active,
-    int * not_ready)
+    int* not_ready)
 {
-    int ret = 0;
+    /* First, check if there is something to send. */
+    int ret;
+    int should_skip = 0;
 
     *media_was_sent = 0;
     *not_ready = 0;
-
-    /* Check whether the current fragment is fully sent, progress if needed */
-    if (media_ctx->current_fragment == NULL) {
-        media_ctx->current_fragment = media_ctx->cache_ctx->first_fragment;
-    }
-
-    /* Move to the next fragment if it is available */
-    /* BUG: wrong results if receiving NULL length fragments */
-    if (media_ctx->current_fragment != NULL && media_ctx->is_current_fragment_sent &&
-        media_ctx->current_fragment->next_in_order != NULL) {
-        media_ctx->length_sent = 0;
-        media_ctx->is_current_fragment_sent = 0;
-        media_ctx->current_fragment = media_ctx->current_fragment->next_in_order;
-    }
-    /* Return the flags per fragment */
-    if (media_ctx->current_fragment != NULL && !media_ctx->is_current_fragment_sent) {
-        size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
-        uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
-        uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-            datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
-            media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, media_ctx->current_fragment->nb_objects_previous_group, 0);
-        if (h_byte == NULL) {
-            ret = -1;
-        }
-        else {
-            int is_last_fragment = 0;
-            size_t h_size = h_byte - datagram_header;
-
-            if (h_size > space) {
-                /* TODO: should get a min encoding length per stream */
-                /* Can't do anything there */
-                *at_least_one_active = 1;
-            }
-            else {
-                size_t available = media_ctx->current_fragment->data_length - media_ctx->length_sent;
-                size_t copied = space - h_size;
-                if (copied >= available) {
-                    is_last_fragment = media_ctx->current_fragment->is_last_fragment;
-                    copied = available;
-                }
-                if (copied > 0 || media_ctx->current_fragment->data_length == 0) {
-                    /* Get a buffer inside the datagram packet */
-                    void* buffer = picoquic_provide_datagram_buffer(context, copied + h_size);
-                    if (buffer == NULL) {
-                        ret = -1;
-                    }
-                    else {
-                        /* Push the header */
-                        if (is_last_fragment) {
-                            h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-                                datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
-                                media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, media_ctx->current_fragment->nb_objects_previous_group, 1);
-
-                            if (h_byte != datagram_header + h_size) {
-                                /* Can't happen, unless our coding assumptions were wrong. Need to debug that. */
-                                ret = -1;
-                            }
-                        }
-                        if (ret == 0) {
-                            memcpy(buffer, datagram_header, h_size);
-                            /* Get the media */
-                            if (copied > 0) {
-                                memcpy(((uint8_t*)buffer) + h_size, media_ctx->current_fragment->data + media_ctx->length_sent, copied);
-                                media_ctx->length_sent += copied;
-                            }
-                            media_ctx->is_current_fragment_sent |= (media_ctx->length_sent >= media_ctx->current_fragment->data_length);
-                            *media_was_sent = 1;
-                            *at_least_one_active = 1;
-                            if (stream_ctx != NULL) {
-                                /* Keep track in stream context */
-                                ret = quicrq_datagram_ack_init(stream_ctx,
-                                    media_ctx->current_fragment->group_id,
-                                    media_ctx->current_fragment->object_id, offset, 
-                                    media_ctx->current_fragment->nb_objects_previous_group,
-                                    ((uint8_t*)buffer) + h_size, copied,
-                                    media_ctx->current_fragment->queue_delay, is_last_fragment, NULL, 
-                                    picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
-                                if (ret != 0) {
-                                    DBG_PRINTF("Datagram ack init returns %d", ret);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    else {
-        /* not ready yet */
+    
+    /* Evaluate fragment and congestion */
+    ret = quicrq_relay_datagram_publisher_check_fragment(stream_ctx, media_ctx, &should_skip);
+    if (ret != 0 || media_ctx->current_fragment == NULL || media_ctx->is_current_fragment_sent) {
         *not_ready = 1;
     }
-
+    else  {
+        /* Then send the object */
+        if (ret == 0) {
+            ret = quicrq_relay_datagram_publisher_send_fragment(stream_ctx, media_ctx, datagram_stream_id,
+                context, space, media_was_sent, at_least_one_active, should_skip);
+        }
+    }
     return ret;
 }
 
@@ -890,6 +1156,9 @@ void* quicrq_relay_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t * s
         if (stream_ctx != NULL) {
             stream_ctx->start_object_id = cache_ctx->first_object_id;
         }
+        picosplay_init_tree(&media_ctx->publisher_object_tree, quicrq_relay_publisher_object_node_compare,
+            quicrq_relay_publisher_object_node_create, quicrq_relay_publisher_object_node_delete,
+            quicrq_relay_publisher_object_node_value);
     }
     return media_ctx;
 }
