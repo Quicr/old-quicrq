@@ -801,7 +801,7 @@ int quicrq_relay_publisher_fn(
 */
 int quicrq_relay_datagram_publisher_object_eval(
     quicrq_stream_ctx_t* stream_ctx,
-    quicrq_relay_publisher_context_t* media_ctx, int* should_skip)
+    quicrq_relay_publisher_context_t* media_ctx, int* should_skip, uint64_t current_time)
 {
     int ret = 0;
 
@@ -810,7 +810,6 @@ int quicrq_relay_datagram_publisher_object_eval(
         media_ctx->current_fragment->data_length > 0) {
         if (stream_ctx->cnx_ctx->qr_ctx->quic != NULL &&
             media_ctx->current_fragment != NULL) {
-            uint64_t current_time = picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic);
             int64_t delta_t = current_time - media_ctx->current_fragment->cache_time;
             int has_backlog = delta_t > 33333;
 
@@ -834,7 +833,7 @@ int quicrq_relay_datagram_publisher_object_eval(
  */
 
 int quicrq_relay_datagram_publisher_check_fragment(
-    quicrq_stream_ctx_t* stream_ctx, quicrq_relay_publisher_context_t* media_ctx, int * should_skip)
+    quicrq_stream_ctx_t* stream_ctx, quicrq_relay_publisher_context_t* media_ctx, int * should_skip, uint64_t current_time)
 {
     int ret = 0;
     quicrq_relay_publisher_object_state_t* publisher_object = NULL;
@@ -869,7 +868,7 @@ int quicrq_relay_datagram_publisher_check_fragment(
                 }
                 else {
                     /* this is a new object. The fragment should be processed. */
-                    ret = quicrq_relay_datagram_publisher_object_eval(stream_ctx, media_ctx, should_skip);
+                    ret = quicrq_relay_datagram_publisher_object_eval(stream_ctx, media_ctx, should_skip, current_time);
                     break;
                 }
             }
@@ -1081,7 +1080,8 @@ int quicrq_relay_datagram_publisher_prepare(
     size_t space,
     int* media_was_sent,
     int* at_least_one_active,
-    int* not_ready)
+    int* not_ready,
+    uint64_t current_time)
 {
     /* First, check if there is something to send. */
     int ret;
@@ -1091,7 +1091,7 @@ int quicrq_relay_datagram_publisher_prepare(
     *not_ready = 0;
     
     /* Evaluate fragment and congestion */
-    ret = quicrq_relay_datagram_publisher_check_fragment(stream_ctx, media_ctx, &should_skip);
+    ret = quicrq_relay_datagram_publisher_check_fragment(stream_ctx, media_ctx, &should_skip, current_time);
     if (ret != 0 || media_ctx->current_fragment == NULL || media_ctx->is_current_fragment_sent) {
         *not_ready = 1;
     }
@@ -1110,7 +1110,8 @@ int quicrq_relay_datagram_publisher_fn(
     void* context,
     size_t space,
     int* media_was_sent,
-    int* at_least_one_active)
+    int* at_least_one_active,
+    uint64_t current_time)
 {
     int ret = 0;
     int not_ready = 0;
@@ -1120,7 +1121,7 @@ int quicrq_relay_datagram_publisher_fn(
      * which helps designing unit tests.
      */
     ret = quicrq_relay_datagram_publisher_prepare(stream_ctx, media_ctx,
-        stream_ctx->datagram_stream_id, context, space, media_was_sent, at_least_one_active, &not_ready);
+        stream_ctx->datagram_stream_id, context, space, media_was_sent, at_least_one_active, &not_ready, current_time);
 
     if (not_ready){
         /* Nothing to send at this point. If the media sending is finished, mark the stream accordingly.

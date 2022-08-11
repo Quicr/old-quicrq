@@ -1130,7 +1130,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
             if (stream_ctx->get_datagram_fn != NULL) {
                 /* If the source can directly format datagrams, just poll it */
                 int media_was_sent = 0;
-                ret = stream_ctx->get_datagram_fn(stream_ctx, context, space, &media_was_sent, &at_least_one_active);
+                ret = stream_ctx->get_datagram_fn(stream_ctx, context, space, &media_was_sent, &at_least_one_active, current_time);
                 if (media_was_sent || ret != 0) {
                     break;
                 }

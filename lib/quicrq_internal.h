@@ -167,7 +167,8 @@ typedef int (*quicrq_datagram_publisher_fn)(
     void* context,
     size_t space,
     int* media_was_sent,
-    int* at_least_one_active);
+    int* at_least_one_active,
+    uint64_t current_time);
 
 /* Media publisher API.
  * This now only an internal API. 
@@ -611,6 +612,8 @@ int quicrq_media_object_bridge_fn(
 const char* quicrq_uint8_t_to_text(const uint8_t* u, size_t length, char* buffer, size_t buffer_length);
 void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...);
 
+/* Evaluation of congestion state */
+int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, int has_backlog, uint64_t current_time);
 
 #ifdef __cplusplus
 }
