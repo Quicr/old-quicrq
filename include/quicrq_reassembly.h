@@ -23,7 +23,7 @@ typedef struct st_quicrq_reassembly_context_t {
     uint64_t next_object_id;
     uint64_t final_group_id;
     uint64_t final_object_id;
-    int is_finished : 1;
+    unsigned int is_finished : 1;
 } quicrq_reassembly_context_t;
 
 typedef enum {
@@ -52,6 +52,7 @@ int quicrq_reassembly_input(
     uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
     int is_last_fragment,

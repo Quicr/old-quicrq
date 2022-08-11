@@ -13,11 +13,16 @@
  */
 
 /* Create a test network */
-quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss, uint64_t extra_delay)
+quicrq_test_config_t* quicrq_test_congestion_config_create(uint64_t simulate_loss, int congested_receiver)
 {
+    int ret = 0;
     /* Create a configuration with three nodes, four links, one source and 8 attachment points.*/
     quicrq_test_config_t* config = quicrq_test_config_create(3, 4, 4, 1);
-    if (config != NULL) {
+    picoquictest_sim_link_t* congested_link = NULL;
+
+    if (config == NULL) {
+        ret = -1;
+    } else {
         /* Create the contexts for the origin (0),  client-1 (1) and client-2 (2) */
         config->nodes[0] = quicrq_create(QUICRQ_ALPN,
             config->test_server_cert_file, config->test_server_key_file, NULL, NULL, NULL,
@@ -29,13 +34,25 @@ quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss,
         config->nodes[2] = quicrq_create(QUICRQ_ALPN,
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
             NULL, 0, &config->simulated_time);
-        if (config->nodes[0] == NULL || config->nodes[1] == NULL || config->nodes[2] == NULL) {
-            quicrq_test_config_delete(config);
-            config = NULL;
+
+        congested_link = picoquictest_sim_link_create(0.001, 10000, NULL, 0, config->simulated_time);
+
+        if (config->nodes[0] == NULL || config->nodes[1] == NULL || config->nodes[2] == NULL || congested_link == NULL) {
+            ret = -1;
+        }
+
+        for (int i = 0; i < 3; i++) {
+            quicrq_enable_congestion_control(config->nodes[i], 1);
         }
     }
-    if (config != NULL) {
+
+    if (ret == 0) {
         /* Populate the attachments */
+        int replaced_link_id;
+        int srce_node_id;
+        int dest_node_id;
+        struct sockaddr* dest_addr;
+
         config->return_links[0] = 1;
         config->attachments[0].link_id = 0;
         config->attachments[0].node_id = 0;
@@ -50,22 +67,42 @@ quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss,
         config->attachments[3].node_id = 2;
         /* Set the desired loss pattern */
         config->simulate_loss = simulate_loss;
-
-        /* set the extra delay as specified.
-         * we only test for extra delays in the triangle tests.
-         */
-        for (int i = 0; i < config->nb_nodes; i++) {
-            if (extra_delay > 0) {
-                quicrq_set_extra_repeat(config->nodes[i], 0, 1);
-            }
-            quicrq_set_extra_repeat_delay(config->nodes[i], extra_delay);
+        /* Replace the selected link by the congested link */
+        if (congested_receiver) {
+            srce_node_id = 0;
+            dest_node_id = 2;
+        }
+        else {
+            srce_node_id = 1;
+            dest_node_id = 0;
+        }
+        dest_addr = quicrq_test_find_send_addr(config, srce_node_id, dest_node_id);
+        replaced_link_id = quicrq_test_find_send_link(config, srce_node_id, dest_addr, NULL);
+        if (replaced_link_id < 0) {
+            /* Bug! */
+            ret = -1;
+        }
+        else {
+            picoquictest_sim_link_delete(config->links[replaced_link_id]);
+            config->links[replaced_link_id] = congested_link;
         }
     }
+
+    if (ret != 0) {
+        quicrq_test_config_delete(config);
+        config = NULL;
+
+        if (congested_link != NULL) {
+            picoquictest_sim_link_delete(congested_link);
+            congested_link = NULL;
+        }
+    }
+
     return config;
 }
 
 /* Basic relay test */
-int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, uint64_t extra_delay, uint64_t start_point, int test_cache_clear)
+int quicrq_congestion_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int congested_receiver, int max_drops, uint8_t min_loss_flag)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -73,7 +110,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     int is_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
-    quicrq_test_config_t* config = quicrq_test_triangle_config_create(simulate_losses, extra_delay);
+    quicrq_test_config_t* config = quicrq_test_congestion_config_create(simulate_losses, congested_receiver);
     quicrq_cnx_ctx_t* cnx_ctx_1 = NULL;
     quicrq_cnx_ctx_t* cnx_ctx_2 = NULL;
     char media_source_path[512];
@@ -84,8 +121,8 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     int partial_closure = 0;
     uint64_t client2_close_time = UINT64_MAX;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx-%llu-%llu-%d.txt", is_real_time, use_datagrams,
-        (unsigned long long)simulate_losses, (unsigned long long) extra_delay, (unsigned long long) start_point, test_cache_clear);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%d-%llx-%d.txt", is_real_time, use_datagrams,
+        (unsigned long long)simulate_losses, congested_receiver);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, 1,
@@ -121,9 +158,6 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time);
         if (config->object_sources[0] == NULL) {
             ret = -1;
-        }
-        else if (start_point > 0) {
-            ret = test_media_object_source_set_start(config->object_sources[0], 0, start_point);
         }
     }
 
@@ -230,50 +264,37 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
         ret = -1;
     }
 
-    if (ret == 0 && test_cache_clear) {
-        /* Check that relay sources are deleted after a sufficient timer */
-        uint64_t cache_time = config->simulated_time + 10000000;
-
-        while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < cache_time) {
-            /* Run the simulation until the media caches have been deleted */
-            int is_active = 0;
-
-            ret = quicrq_test_loop_step(config, &is_active, UINT64_MAX);
-            if (ret != 0) {
-                DBG_PRINTF("Fail on cache loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
-            }
-
-            nb_steps++;
-
-            if (is_active) {
-                nb_inactive = 0;
-            }
-            else {
-                nb_inactive++;
-                if (nb_inactive >= max_inactive) {
-                    DBG_PRINTF("Exit cache loop after too many inactive: %d", nb_inactive);
-                }
-            }
-            /* Check whether the media is closed at origin and relay */
-            if (config->nodes[0]->first_source == NULL) {
-                DBG_PRINTF("Origin cache deleted at %" PRIu64, config->simulated_time);
-                break;
-            }
-        }
-
-        if (ret == 0 && config->nodes[0]->first_source != NULL) {
-            DBG_PRINTF("Origin cache not deleted at %" PRIu64, config->simulated_time);
-            ret = -1;
-        }
-    }
-
     /* Clear everything. */
     if (config != NULL) {
         quicrq_test_config_delete(config);
     }
+
     /* Verify that media file was received correctly */
     if (ret == 0) {
-        ret = quicrq_compare_media_file(result_file_name, media_source_path);
+        if (is_real_time) {
+            /* TODO: comparison based on congestion tests */
+            int observed_drops = 0;
+            uint8_t observed_min_loss = 0xff;
+
+            ret = quicrq_compare_media_file_ex(result_file_name, media_source_path, &observed_drops, &observed_min_loss);
+
+            if (ret == 0) {
+                if (observed_drops > max_drops) {
+                    DBG_PRINTF("Got %d drops, larger than %d\n", observed_drops, max_drops);
+                    ret = -1;
+                }
+                else if (observed_min_loss < min_loss_flag) {
+                    DBG_PRINTF("Drop level 0x%x, expected 0x%x\n", observed_min_loss, min_loss_flag);
+                    ret = -1;
+                }
+                else {
+                    /* To do: parse the log file to get the max delay. */
+                }
+            }
+        }
+        else {
+            ret = quicrq_compare_media_file(result_file_name, media_source_path);
+        }
     }
     else {
         DBG_PRINTF("Test failed before getting results, ret = %d", ret);
@@ -282,51 +303,51 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     return ret;
 }
 
-int quicrq_triangle_basic_test()
+int quicrq_congestion_basic_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 0);
+    int ret = quicrq_congestion_test_one(1, 0, 0, 0, 80, 0x82);
 
     return ret;
 }
 
-int quicrq_triangle_basic_loss_test()
+int quicrq_congestion_basic_recv_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0x7080, 0, 0, 0);
+    int ret = quicrq_congestion_test_one(1, 0, 0, 1, 85, 0x82);
 
     return ret;
 }
 
-int quicrq_triangle_datagram_test()
+int quicrq_congestion_basic_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 0);
+    int ret = quicrq_congestion_test_one(1, 0, 0x7080, 0, 161, 0x82);
 
     return ret;
 }
 
-int quicrq_triangle_datagram_loss_test()
+int quicrq_congestion_datagram_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0, 0, 0);
+    int ret = quicrq_congestion_test_one(1, 1, 0, 0, 73, 0x82);
 
     return ret;
 }
 
-int quicrq_triangle_datagram_extra_test()
+int quicrq_congestion_datagram_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 0, 0);
+    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 0, 106, 0x82);
 
     return ret;
 }
 
-int quicrq_triangle_start_point_test()
+int quicrq_congestion_datagram_recv_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 12345, 0);
+    int ret = quicrq_congestion_test_one(1, 1, 0, 1, 75, 0x82);
 
     return ret;
 }
 
-int quicrq_triangle_cache_test()
+int quicrq_congestion_datagram_rloss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1);
+    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 1, 106, 0x82);
 
     return ret;
 }

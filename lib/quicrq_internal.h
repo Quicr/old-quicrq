@@ -84,6 +84,7 @@ typedef struct st_quicrq_message_t {
     uint64_t datagram_stream_id;
     uint64_t group_id;
     uint64_t object_id;
+    uint64_t nb_objects_previous_group;
     uint64_t offset;
     uint8_t flags;
     int is_last_fragment;
@@ -127,9 +128,15 @@ const uint8_t* quicrq_fin_msg_decode(const uint8_t* bytes, const uint8_t* bytes_
 size_t quicrq_repair_request_reserve(uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 uint8_t* quicrq_repair_request_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
 const uint8_t* quicrq_repair_request_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length);
-size_t quicrq_fragment_msg_reserve(uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length);
-uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t repair_group_id, uint64_t repair_object_id, uint64_t repair_offset, int is_last_fragment, size_t repair_length, const uint8_t* repair_data);
-const uint8_t* quicrq_fragment_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t *repair_group_id, uint64_t* repair_object_id, uint64_t* repair_offset, int* is_last_fragment, size_t* repair_length, const uint8_t** repair_data);
+size_t quicrq_fragment_msg_reserve(uint64_t group_id, uint64_t object_id, 
+    uint64_t nb_objects_previous_group,
+    uint64_t offset, int is_last_fragment, size_t data_length);
+uint8_t* quicrq_fragment_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type,
+    uint64_t group_id, uint64_t object_id, uint64_t nb_objects_previous_group,
+    uint64_t offset, int is_last_fragment, uint8_t flags, size_t length, const uint8_t* data);
+const uint8_t* quicrq_fragment_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+    uint64_t* group_id, uint64_t* object_id, uint64_t* nb_objects_previous_group,
+    uint64_t* offset, int* is_last_fragment, uint8_t* flags, size_t* length, const uint8_t** data);
 size_t quicrq_start_point_msg_reserve(uint64_t start_group, uint64_t start_object);
 uint8_t* quicrq_start_point_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t start_group, uint64_t start_object);
 const uint8_t* quicrq_start_point_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);
@@ -147,7 +154,7 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 
 /* Initialize the tracking of a datagram after sending it in a stream context */
 int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id, uint64_t object_id,
-    uint64_t object_offset, uint64_t nb_objects_previous_group, const uint8_t* data, size_t length,
+    uint64_t object_offset, uint8_t flags, uint64_t nb_objects_previous_group, const uint8_t* data, size_t length,
     uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time);
 
 /* Transmission of out of order datagrams is possible for relays.
@@ -160,7 +167,8 @@ typedef int (*quicrq_datagram_publisher_fn)(
     void* context,
     size_t space,
     int* media_was_sent,
-    int* at_least_one_active);
+    int* at_least_one_active,
+    uint64_t current_time);
 
 /* Media publisher API.
  * This now only an internal API. 
@@ -212,6 +220,7 @@ typedef int (*quicrq_datagram_publisher_fn)(
 
 typedef enum {
     quicrq_media_source_get_data = 0,
+    quicrq_media_source_skip_object,
     quicrq_media_source_close
 } quicrq_media_source_action_enum;
 
@@ -222,10 +231,12 @@ typedef int (*quicrq_media_publisher_fn)(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    uint8_t* flags,
     int* is_new_group,
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time);
 typedef void (*quicrq_media_publisher_delete_fn)(void* pub_ctx);
 
@@ -282,11 +293,14 @@ int quicrq_media_object_publisher(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    uint8_t* flags,
     int* is_new_group,
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time);
+
 void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t* stream_ctx);
 
 /* Quic media consumer. Old definition, moved to internal only.
@@ -466,6 +480,15 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
     void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn,
     quicrq_media_publisher_fn getdata_fn, quicrq_datagram_publisher_fn get_datagram_fn, quicrq_media_publisher_delete_fn delete_fn);
 
+typedef struct st_quicrq_cnx_congestion_state_t {
+    int has_backlog; /* Indicates whether at least on flow is congested. */
+    int is_congested;
+    uint8_t max_flags; /* largest flag value across streams, used in congestion control */
+    uint8_t priority_threshold; /* Indicates the highest priority level that may be dropped. */
+    uint8_t old_priority_threshold; /* Threshold at beginning of epoch. */
+    uint64_t congestion_check_time;
+} quicrq_cnx_congestion_state_t;
+
 /* Quicrq per connection context */
 struct st_quicrq_cnx_ctx_t {
     struct st_quicrq_cnx_ctx_t* next_cnx;
@@ -476,6 +499,7 @@ struct st_quicrq_cnx_ctx_t {
     struct sockaddr_storage addr;
     picoquic_cnx_t* cnx;
     int is_server;
+    quicrq_cnx_congestion_state_t congestion;
 
     uint64_t next_datagram_stream_id; /* only used for receiving */
     uint64_t next_abandon_datagram_id; /* used to test whether unexpected datagrams are OK */
@@ -539,6 +563,8 @@ struct st_quicrq_ctx_t {
     int extra_repeat_on_nack : 1;
     int extra_repeat_after_received_delayed : 1;
     uint64_t extra_repeat_delay;
+    /* Control whether to enable congestion control -- mostly for testability */
+    unsigned int do_congestion_control : 1;
 };
 
 quicrq_stream_ctx_t* quicrq_find_or_create_stream(
@@ -586,6 +612,8 @@ int quicrq_media_object_bridge_fn(
 const char* quicrq_uint8_t_to_text(const uint8_t* u, size_t length, char* buffer, size_t buffer_length);
 void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...);
 
+/* Evaluation of congestion state */
+int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, int has_backlog, uint64_t current_time);
 
 #ifdef __cplusplus
 }

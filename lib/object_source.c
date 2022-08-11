@@ -48,9 +48,12 @@ static picosplay_node_t* quicrq_object_source_node_create(void* v_media_object)
 
 static void quicrq_object_source_node_delete(void* tree, picosplay_node_t* object_node)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(tree);
-#endif
+    if (tree != NULL) {
+        picosplay_tree_t* p_tree = (picosplay_tree_t*)tree;
+        if (p_tree->size <= 0) {
+            DBG_PRINTF("Delete object source node, tree size: %d", p_tree->size);
+        }
+    }
     free(quicrq_object_source_node_value(object_node));
 }
 
@@ -78,7 +81,9 @@ typedef struct st_quicrq_object_source_publisher_ctx_t {
     uint64_t next_group_id;
     uint64_t next_object_id;
     size_t next_object_offset;
+    uint64_t last_time;
     int next_was_sent;
+    int has_backlog;
 } quicrq_object_source_publisher_ctx_t;
 
 void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t * stream_ctx)
@@ -113,21 +118,25 @@ int quicrq_media_object_publisher(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    uint8_t* flags,
     int* is_new_group,
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time)
 {
     int ret = 0;
     quicrq_object_source_publisher_ctx_t* media_ctx = (quicrq_object_source_publisher_ctx_t*)v_media_ctx;
     quicrq_object_source_item_t* object_source_item = NULL;
     if (action == quicrq_media_source_get_data) {
+        *flags = 0;
         *is_new_group = 0;
         *is_media_finished = 0;
         *is_last_fragment = 0;
         *is_still_active = 0;
         *data_length = 0;
+        *has_backlog = 0;
         /* if the current object ID is already published, find the next one */
         if (media_ctx->next_was_sent) {
             media_ctx->next_object_id++;
@@ -140,11 +149,12 @@ int quicrq_media_object_publisher(
         if (object_source_item == NULL && media_ctx->next_object_id > 0) {
             object_source_item = quicrq_get_object_source_item(media_ctx->object_source_ctx,
                 media_ctx->next_group_id + 1, 0);
-            if (object_source_item != NULL && object_source_item->nb_objects_previous_group <= media_ctx->next_object_id) {
+            if (object_source_item != NULL && object_source_item->nb_objects_previous_group <= media_ctx->next_object_id + 1) {
                 media_ctx->next_group_id++;
                 media_ctx->next_object_id = 0;
                 media_ctx->next_object_offset = 0;
                 media_ctx->next_was_sent = 0;
+                *is_new_group = 1;
             }
             else {
                 object_source_item = NULL;
@@ -159,7 +169,23 @@ int quicrq_media_object_publisher(
             size_t available = object_source_item->object_length - media_ctx->next_object_offset;
             size_t copied = data_max_size;
 
+            *flags = object_source_item->properties.flags;
             *is_still_active = 1;
+
+            /* Estimate whether the media source is backlogged */
+            if (media_ctx->next_object_offset > 0) {
+                *has_backlog = media_ctx->has_backlog;
+            } else if (object_source_item->group_id < media_ctx->object_source_ctx->next_group_id ||
+                (object_source_item->group_id == media_ctx->object_source_ctx->next_group_id &&
+                    object_source_item->object_id + 1 < media_ctx->object_source_ctx->next_object_id)) {
+                *has_backlog = 1;
+                media_ctx->has_backlog = 1;
+            }
+            else {
+                *has_backlog = 0;
+                media_ctx->has_backlog = 0;
+            }
+
             if (data_max_size >= available) {
                 *is_last_fragment = 1;
                 copied = available;
@@ -172,8 +198,14 @@ int quicrq_media_object_publisher(
                 if (media_ctx->next_object_offset >= object_source_item->object_length) {
                     media_ctx->next_was_sent = 1;
                 }
+                /* Just a silly line to appease -Wpedantic */
+                media_ctx->last_time = current_time;
             }
         }
+    }
+    else if (action == quicrq_media_source_skip_object)
+    {
+        media_ctx->next_was_sent = 1;
     }
     else if (action == quicrq_media_source_close) {
         /* close the context */
@@ -278,6 +310,10 @@ int quicrq_publish_object(
         source_object->object_time = picoquic_get_quic_time(object_source_ctx->qr_ctx->quic);
         source_object->object = ((uint8_t *)source_object) + sizeof(quicrq_object_source_item_t);
         source_object->nb_objects_previous_group = nb_objects_previous_group;
+        /* Copy the properties */
+        if (properties != NULL) {
+            memcpy(&source_object->properties, properties, sizeof(quicrq_media_object_properties_t));
+        }
         memcpy(source_object->object, object_data, object_length);
         (void)picosplay_insert(&object_source_ctx->object_source_tree, source_object);
         /* Signal to the quic context that the source is now active. */

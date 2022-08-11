@@ -82,6 +82,18 @@ typedef struct st_quicrq_relay_cached_media_t {
     uint64_t cache_delete_time;
 } quicrq_relay_cached_media_t;
 
+
+typedef struct st_quicrq_relay_publisher_object_state_t {
+    picosplay_node_t publisher_object_node;
+    uint64_t group_id;
+    uint64_t object_id;
+    uint64_t nb_objects_previous_group;
+    uint64_t final_offset;
+    uint64_t bytes_sent;
+    int is_dropped;
+    int is_sent;
+} quicrq_relay_publisher_object_state_t;
+
 typedef struct st_quicrq_relay_publisher_context_t {
     quicrq_relay_cached_media_t* cache_ctx;
     uint64_t current_group_id;
@@ -91,8 +103,12 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int is_media_complete;
     int is_sending_object;
     int is_start_point_sent;
+    int is_current_object_skipped;
+    int has_backlog;
     quicrq_relay_cached_fragment_t* current_fragment;
     uint64_t length_sent;
+    int is_current_fragment_sent;
+    picosplay_tree_t publisher_object_tree;
 } quicrq_relay_publisher_context_t;
 
 typedef struct st_quicrq_relay_consumer_context_t {
@@ -105,8 +121,8 @@ typedef struct st_quicrq_relay_context_t {
     struct sockaddr_storage server_addr;
     quicrq_ctx_t* qr_ctx;
     quicrq_cnx_ctx_t* cnx_ctx;
-    int is_origin_only : 1;
-    int use_datagrams : 1;
+    unsigned int is_origin_only : 1;
+    unsigned int use_datagrams : 1;
 } quicrq_relay_context_t;
 
 int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
@@ -131,14 +147,16 @@ int quicrq_relay_datagram_publisher_prepare(
     size_t space,
     int* media_was_sent,
     int* at_least_one_active,
-    int* not_ready);
+    int* not_ready,
+    uint64_t current_time);
 
 int quicrq_relay_datagram_publisher_fn(
     quicrq_stream_ctx_t* stream_ctx,
     void* context,
     size_t space,
     int* media_was_sent,
-    int* at_least_one_active);
+    int* at_least_one_active,
+    uint64_t current_time);
 
 int quicrq_relay_publisher_fn(
     quicrq_media_source_action_enum action,
@@ -146,10 +164,12 @@ int quicrq_relay_publisher_fn(
     uint8_t* data,
     size_t data_max_size,
     size_t* data_length,
+    uint8_t* flags,
     int * is_new_group,
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
+    int* has_backlog,
     uint64_t current_time);
 
 quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx(quicrq_ctx_t * qr_ctx);

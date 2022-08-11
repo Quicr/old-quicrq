@@ -48,6 +48,7 @@ target_compile_options(quicrq-core PRIVATE
 
 add_library(quicrq-tests
     tests/basic_test.c
+    tests/congestion_test.c
     tests/fourlegs_test.c
     tests/proto_test.c
     tests/pyramid_test.c

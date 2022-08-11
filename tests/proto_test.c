@@ -29,6 +29,7 @@ static quicrq_message_t stream_rq = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -44,6 +45,7 @@ static quicrq_message_t datagram_rq = {
     sizeof(url1),
     url1,
     1234,
+    0,
     0,
     0,
     0,
@@ -72,6 +74,7 @@ static quicrq_message_t fin_msg = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -91,6 +94,7 @@ static quicrq_message_t repair_request_msg = {
     0,
     0,
     123456,
+    0,
     1234,
     0,
     1,
@@ -113,8 +117,9 @@ static quicrq_message_t fragment_msg = {
     0,
     0,
     123456,
-    1234,
     0,
+    1234,
+    0x17,
     1,
     sizeof(repair_bytes),
     repair_bytes,
@@ -126,6 +131,34 @@ static uint8_t fragment_msg_bytes[] = {
     0x00,
     0x80, 0x01, 0xe2, 0x40,
     0x49, 0xa5,
+    0x17,
+    (uint8_t)sizeof(repair_bytes),
+    REPAIR_BYTES
+};
+
+static quicrq_message_t fragment_msg2 = {
+    QUICRQ_ACTION_FRAGMENT,
+    0,
+    NULL,
+    0,
+    11,
+    0,
+    60,
+    0,
+    0x17,
+    1,
+    sizeof(repair_bytes),
+    repair_bytes,
+    0
+};
+
+static uint8_t fragment_msg2_bytes[] = {
+    QUICRQ_ACTION_FRAGMENT,
+    0x0b,
+    0x00,
+    0x01,
+    0x17,
+    0x3c,
     (uint8_t)sizeof(repair_bytes),
     REPAIR_BYTES
 };
@@ -134,6 +167,7 @@ static quicrq_message_t post_msg = {
     QUICRQ_ACTION_POST,
     sizeof(url1),
     url1,
+    0,
     0,
     0,
     0,
@@ -163,6 +197,7 @@ static quicrq_message_t accept_dg = {
     0,
     0,
     0,
+    0,
     NULL,
     1
 };
@@ -178,6 +213,7 @@ static quicrq_message_t accept_st = {
     QUICRQ_ACTION_ACCEPT,
     0,
     NULL,
+    0,
     0,
     0,
     0,
@@ -206,6 +242,7 @@ static quicrq_message_t start_msg = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -220,6 +257,7 @@ static quicrq_message_t subscribe_msg = {
     QUICRQ_ACTION_SUBSCRIBE,
     sizeof(url1),
     url1,
+    0,
     0,
     0,
     0,
@@ -248,6 +286,7 @@ static quicrq_message_t notify_msg = {
     0,
     0,
     0,
+    0,
     NULL,
     0
 };
@@ -257,9 +296,6 @@ static uint8_t notify_msg_bytes[] = {
     sizeof(url1),
     URL1_BYTES
 };
-
-
-
 
 typedef struct st_proto_test_case_t {
     uint8_t* const data;
@@ -274,6 +310,7 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(fin_msg, fin_msg_bytes),
     PROTO_TEST_ITEM(repair_request_msg, repair_request_msg_bytes),
     PROTO_TEST_ITEM(fragment_msg, fragment_msg_bytes),
+    PROTO_TEST_ITEM(fragment_msg2, fragment_msg2_bytes),
     PROTO_TEST_ITEM(post_msg, post_msg_bytes),
     PROTO_TEST_ITEM(accept_dg, accept_dg_bytes),
     PROTO_TEST_ITEM(accept_st, accept_st_bytes),
@@ -372,6 +409,16 @@ static uint8_t bad_bytes14[] = {
     0x80, 0x01, 0xe2, 0x40
 };
 
+static uint8_t bad_bytes15[] = {
+    QUICRQ_ACTION_FRAGMENT,
+    0x0b,
+    0x00,
+    0x01,
+    0x17,
+    0x02,
+    0xff, 0xff
+};
+
 typedef struct st_proto_test_bad_case_t {
     uint8_t* const data;
     size_t data_length;
@@ -395,7 +442,8 @@ static proto_test_bad_case_t proto_bad_cases[] = {
     PROTO_TEST_BAD_ITEM(bad_bytes11),
     PROTO_TEST_BAD_ITEM(bad_bytes12),
     PROTO_TEST_BAD_ITEM(bad_bytes13),
-    PROTO_TEST_BAD_ITEM(bad_bytes14)
+    PROTO_TEST_BAD_ITEM(bad_bytes14),
+    PROTO_TEST_BAD_ITEM(bad_bytes15)
 };
 
 int proto_msg_test()
@@ -456,7 +504,7 @@ int proto_msg_test()
         if (bytes == NULL) {
             ret = -1;
         }
-        else if (bytes - msg != proto_cases[i].data_length) {
+        else if ((size_t)(bytes - msg) != proto_cases[i].data_length) {
             ret = -1;
         }
         else if (memcmp(msg, proto_cases[i].data, proto_cases[i].data_length) != 0) {

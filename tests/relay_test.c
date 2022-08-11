@@ -265,7 +265,7 @@ size_t nb_relay_test_groups_objects[3] = { 4, 4, 1 };
 int quicrq_relay_cache_verify(quicrq_relay_cached_media_t* cached_ctx)
 {
     int ret = 0;
-    size_t nb_fragments_found = 0;
+    int nb_fragments_found = 0;
     for (size_t f_id = 0; ret == 0 && f_id < nb_relay_test_objects; f_id++) {
         size_t offset = 0;
         while (ret == 0 && offset < relay_test_objects[f_id].length) {
@@ -310,7 +310,7 @@ int quicrq_relay_cache_verify(quicrq_relay_cached_media_t* cached_ctx)
     if (ret == 0) {
         /* Check that cache contains exactly the expected number of fragments */
         if (cached_ctx->fragment_tree.size != nb_fragments_found) {
-            DBG_PRINTF("Found %zu fragments, cache contains %zu", nb_fragments_found, cached_ctx->fragment_tree.size);
+            DBG_PRINTF("Found %d fragments, cache contains %d", nb_fragments_found, cached_ctx->fragment_tree.size);
             ret = -1;
         }
     }
@@ -318,14 +318,14 @@ int quicrq_relay_cache_verify(quicrq_relay_cached_media_t* cached_ctx)
         /* Verify the chain of fragments */
         quicrq_relay_cached_fragment_t* fragment = cached_ctx->first_fragment;
         quicrq_relay_cached_fragment_t* previous_fragment = NULL;
-        size_t nb_in_chain = 0;
+        int nb_in_chain = 0;
         while (fragment != NULL) {
             nb_in_chain++;
             previous_fragment = fragment;
             fragment = fragment->next_in_order;
         }
         if (nb_in_chain != cached_ctx->fragment_tree.size) {
-            DBG_PRINTF("Found %zu fragments in chain, cache contains %zu", nb_in_chain, cached_ctx->fragment_tree.size);
+            DBG_PRINTF("Found %d fragments in chain, cache contains %d", nb_in_chain, cached_ctx->fragment_tree.size);
             ret = -1;
         }
         else if (previous_fragment != cached_ctx->last_fragment) {
@@ -467,6 +467,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
     int is_last_fragment;
     int is_media_finished;
     int is_still_active;
+    int has_backlog;
     uint64_t group_id = 0;
     uint64_t object_id;
     uint8_t flags = 0;
@@ -492,7 +493,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
             d_context.allowed_space = 1023;
             /* Call the prepare function */
             ret = quicrq_relay_datagram_publisher_prepare(NULL, pub_ctx, 0, &d_context, d_context.allowed_space,
-                &media_was_sent, &at_least_one_active, &not_ready);
+                &media_was_sent, &at_least_one_active, &not_ready, current_time);
             /* Decode the datagram header to find the coded_fragment */
             if (ret == 0 && d_context.after_data > d_context.bytes0) {
                 const uint8_t* bytes = d_context.bytes0;
@@ -543,7 +544,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
             /* The first call to the publisher functions positions to the current group id, objectid, offset, etc. */
             nb_objects_previous_group = 0;
             ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, NULL, 1024, &fragment_length,
-                &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+               &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
             if (ret == 0 && fragment_length > 0) {
                 group_id = pub_ctx->current_group_id;
                 object_id = pub_ctx->current_object_id;
@@ -566,7 +567,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
                 if (ret == 0) {
                     /* The second call to the media function copies the data at the required space. */
                     ret = quicrq_relay_publisher_fn(quicrq_media_source_get_data, pub_ctx, data, 1024, &fragment_length,
-                        &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, current_time);
+                        &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
                 }
                 if (ret == 0){
                     fragment = data;

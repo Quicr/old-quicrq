@@ -24,6 +24,55 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(congestion_basic)
+		{
+			int ret = quicrq_congestion_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_basic_recv)
+		{
+			int ret = quicrq_congestion_basic_recv_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_basic_loss)
+		{
+			int ret = quicrq_congestion_basic_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_datagram)
+		{
+			int ret = quicrq_congestion_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_datagram_loss)
+		{
+			int ret = quicrq_congestion_datagram_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_datagram_recv)
+		{
+			int ret = quicrq_congestion_datagram_recv_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_datagram_rloss)
+		{
+			int ret = quicrq_congestion_datagram_rloss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(media_video1)
 		{
 			int ret = quicrq_media_video1_test();

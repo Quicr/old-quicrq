@@ -45,11 +45,13 @@ int quicrq_media_object_bridge_ready(
     if ((bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_peek) ||
         (!bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_repair)){
         /* Deliver to the application */
+        quicrq_object_stream_consumer_properties_t properties = { 0 };
+        properties.flags = flags;
         ret = bridge_ctx->object_stream_consumer_fn(
             quicrq_media_datagram_ready,
             bridge_ctx->object_stream_consumer_ctx,
             current_time, group_id, object_id,
-            data, data_length,  NULL);
+            data, data_length,  &properties);
     }
        
     return ret;
@@ -74,7 +76,8 @@ int quicrq_media_object_bridge_fn(
 
     switch (action) {
     case quicrq_media_datagram_ready:
-        ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, flags,
+        ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, 
+            queue_delay, flags,
             nb_objects_previous_group, is_last_fragment, data_length,
             quicrq_media_object_bridge_ready, bridge_ctx);
         if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {

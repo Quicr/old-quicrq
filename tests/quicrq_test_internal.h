@@ -15,7 +15,7 @@ extern "C" {
 #define QUIRRQ_MEDIA_TEST_HEADER_SIZE 20
 
 typedef struct st_generation_parameters_t {
-    int target_duration;
+    uint64_t target_duration;
     int objects_per_second;
     int nb_p_in_i;
     int objects_in_epoch;
@@ -29,6 +29,7 @@ typedef struct st_test_media_publisher_context_t {
     FILE* F;
     generation_parameters_t* generation_context;
     quicrq_media_object_header_t current_header;
+    uint64_t stream_id;
     uint64_t start_time;
     uint64_t* p_next_time;
     uint8_t* media_object;
@@ -37,6 +38,7 @@ typedef struct st_test_media_publisher_context_t {
     size_t media_object_size;
     size_t media_object_read;
     size_t min_packet_size;
+    int is_audio : 1;
     unsigned int is_real_time : 1;
     unsigned int is_finished : 1;
 } test_media_publisher_context_t;
@@ -132,11 +134,14 @@ typedef struct st_quicrq_test_config_target_t {
 
 quicrq_test_config_target_t* quicrq_test_config_target_create(char const * test_id, char const * url, int client_id, char const* ref);
 void quicrq_test_config_target_free(quicrq_test_config_target_t* target);
+int quicrq_test_find_send_link(quicrq_test_config_t* config, int srce_node_id, const struct sockaddr* dest_addr, struct sockaddr_storage* srce_addr);
 
 extern const generation_parameters_t video_1mps;
 
 int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log);
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file);
+int quicrq_compare_media_file_ex(char const* media_result_file, char const* media_reference_file, int* nb_losses, uint8_t* loss_flag);
+int test_media_is_audio(const uint8_t* url, size_t url_length);
 
 typedef struct st_test_object_stream_ctx_t {
     FILE* Res;

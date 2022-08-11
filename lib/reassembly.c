@@ -36,7 +36,9 @@ typedef struct st_quicrq_reassembly_object_t {
     uint64_t object_id;
     uint64_t nb_objects_previous_group;
     uint64_t final_offset;
+    uint64_t queue_delay;
     uint8_t flags;
+    int is_last_received;
     uint64_t data_received;
     uint64_t last_update_time;
     uint8_t* reassembled;
@@ -50,7 +52,13 @@ static void* quicrq_object_node_value(picosplay_node_t* object_node)
 }
 
 static int64_t quicrq_object_node_compare(void* l, void* r) {
-    return (int64_t)((quicrq_reassembly_object_t*)l)->object_id - ((quicrq_reassembly_object_t*)r)->object_id;
+    quicrq_reassembly_object_t* left = (quicrq_reassembly_object_t*)l;
+    quicrq_reassembly_object_t* right = (quicrq_reassembly_object_t*)r;
+    int64_t ret = left->group_id - right->group_id;
+    if (ret == 0) {
+        ret = left->object_id - right->object_id;
+    }
+    return ret;
 }
 
 static picosplay_node_t* quicrq_object_node_create(void* v_media_object)
@@ -60,9 +68,9 @@ static picosplay_node_t* quicrq_object_node_create(void* v_media_object)
 
 static void quicrq_object_node_delete(void* tree, picosplay_node_t* node)
 {
-#ifdef _WINDOWS
-    UNREFERENCED_PARAMETER(tree);
-#endif
+    if (tree == NULL) {
+        DBG_PRINTF("%s", "Attempt to delete from NULL tree");
+    }
     memset(node, 0, sizeof(picosplay_node_t));
 }
 
@@ -274,9 +282,15 @@ static int quicrq_reassembly_object_add_packet(
 static int quicrq_reassembly_object_reassemble(quicrq_reassembly_object_t* object)
 {
     int ret = 0;
-
+    /* Special case for zero length objects */
+    if (object->is_last_received && object->final_offset == 0 && object->data_received == 0) {
+        object->reassembled = (uint8_t*)malloc(1);
+        if (object->reassembled == NULL) {
+            ret = -1;
+        }
+    }
     /* Check that that the received bytes are in order */
-    if (object->final_offset == 0 || object->data_received != object->final_offset) {
+    else if (object->final_offset == 0 || object->data_received != object->final_offset) {
         ret = -1;
     }
     else if (object->first_packet == NULL || object->first_packet->offset != 0) {
@@ -340,11 +354,7 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
 
     while (ret == 0){
         object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_group_id, reassembly_ctx->next_object_id);
-        if (object != NULL) {
-            if (object->reassembled == NULL) {
-                object = NULL;
-            }
-        } else {
+        if (object == NULL) {
             object = quicrq_object_find(reassembly_ctx, reassembly_ctx->next_group_id + 1, 0);
             if (object != NULL && object->reassembled != NULL &&
                 object->nb_objects_previous_group == reassembly_ctx->next_object_id) {
@@ -352,7 +362,7 @@ int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassem
                 reassembly_ctx->next_object_id = 0;
             }
         }
-        if (object == NULL) {
+        if (object == NULL || object->reassembled == NULL) {
             break;
         } 
         /* Submit the object in order */
@@ -379,6 +389,7 @@ int quicrq_reassembly_input(
     uint64_t group_id,
     uint64_t object_id,
     uint64_t offset,
+    uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
     int is_last_fragment,
@@ -387,8 +398,9 @@ int quicrq_reassembly_input(
     void* app_media_ctx)
 {
     int ret = 0;
-
-    if (object_id < reassembly_ctx->next_object_id) {
+    if (group_id < reassembly_ctx->next_group_id ||
+        (group_id == reassembly_ctx->next_group_id &&
+        object_id < reassembly_ctx->next_object_id)) {
         /* No need for this object. */
     }
     else {
@@ -397,6 +409,13 @@ int quicrq_reassembly_input(
         if (object == NULL) {
             /* Create a media object for reassembly */
             object = quicrq_reassembly_object_create(reassembly_ctx, group_id, object_id);
+            object->queue_delay = queue_delay;
+            object->flags = flags;
+        }
+        else {
+            if (object->queue_delay < queue_delay) {
+                object->queue_delay = queue_delay;
+            }
         }
         /* per fragment logic */
         if (object == NULL) {
@@ -409,6 +428,7 @@ int quicrq_reassembly_input(
             }
             /* If this is the last fragment, update the object length */
             if (is_last_fragment) {
+                object->is_last_received = 1;
                 if (object->final_offset == 0) {
                     object->final_offset = offset + data_length;
                 }
@@ -421,11 +441,12 @@ int quicrq_reassembly_input(
             if (ret != 0) {
                 DBG_PRINTF("Add packet, ret = %d", ret);
             }
-            else if (object->final_offset > 0 && object->data_received >= object->final_offset) {
+            else if (object->is_last_received && object->data_received >= object->final_offset) {
                 /* If the object is complete, verify and submit */
                 quicrq_reassembly_object_mode_enum object_mode;
                 if (group_id == reassembly_ctx->next_group_id + 1 &&
-                    object_id == 0 && object->nb_objects_previous_group == reassembly_ctx->next_object_id) {
+                    object_id == 0 &&
+                    object->nb_objects_previous_group <= reassembly_ctx->next_object_id){
                     /* This is the first object of a new group, and all objects of the previous group
                      * have been received */
                     reassembly_ctx->next_group_id += 1;

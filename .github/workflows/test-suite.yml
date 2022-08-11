@@ -32,6 +32,7 @@ jobs:
           ulimit -c unlimited -S
           cd build
           make test && QRQRESULT=$?
+          tail /home/runner/work/quicrq/quicrq/build/Testing/Temporary/LastTest.log
           if [ ${QRQRESULT} == 0 ]; then exit 0; fi;
           exit 1
 

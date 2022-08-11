@@ -150,6 +150,7 @@ quicrq_fragment_message {
     group_id(i),
     object_id(i),
     offset_and_fin(i),
+    flags (8),
     length(i),
     data(...)
  }
@@ -160,9 +161,13 @@ two values, as in:
 ```
 offset_and_fin = 2*offset + is_last_fragment
 ```
-The flag `is_last_fragment` is set to 1 if this fragment is the last one of an object.
+The bit `is_last_fragment` is set to 1 if this fragment is the last one of an object.
 The offset value indicates where the fragment
-data starts in the object designated by `group_id` and `object_id`. Successive messages
+data starts in the object designated by `group_id` and `object_id`.
+
+The `flags` byte encodes the congestion control indicators associated with the object.
+
+Successive messages
 are sent in order, which means one of the following three conditions must be verified:
 
 * The group id and object id match the group id and object id of the previous fragment, the
@@ -181,7 +186,6 @@ NOTE: yes, this is not optimal. Breaking the objects in individual fragments is 
   "is_fist_of_group". A Start Point message could be inserted at the beginning of the
   stream to indicate the initial value of group ID and object ID. Doing that would remove
   6 to 8 bytes of overhead per message.
-NOTE: should update this format to carry a "flag".
 
 ### Fin Message
 
@@ -272,8 +276,7 @@ The `offset_and_fin` field encodes two values, as in:
 ```
 offset_and_fin = 2*offset + is_last_fragment
 ```
-
-The `flags` field is reserved, but currently set to 0 by senders and ignored by receivers.
+The `flags` byte encodes the congestion control indicators associated with the object.
 
 The `nb_objects_previous_group` is present if and only if this is the first fragment of the first object
 in a group, i.e., `object_id` and `offset` are both zero. The number indicates how many objects were sent
@@ -364,8 +367,122 @@ some objects, or maybe some fragments of large objects, and cause
 relays and clients to devote large amount of resource to
 performing reassembly.
 
- 
+## Congestion control
 
+There are time when the nexthop in a transmission path does not have enough
+bandwidth to receive the entire media stream. Attempting to just send it all
+would result in increased end-to-end latency, breaking the "real-time"
+expectations. This is mitigated by detecting congestion when it happen,
+and selectively dropping parts of the media stream to diminish the
+network load. Selective dropping is enabled by metadata carried in
+object headers, according to a media stream model.
 
+When the congestion happens at the first hop, it can
+also be mitigated by modulating the transmission rate. 
 
+### Data Model
 
+Media streams are composed of series of objects, organized in group
+of objects. Many media sources use a form of
+differential coding, in which an the encoding of an object
+includes only differences from previous objects. Such objects can
+only be rendered if the previous objects have been received.
+Selective dropping must be consistent with the structure of the media:
+if an object is dropped, there is little advantage to transmit
+dependent objects that could not be rendered.
+
+Media stream also include different categories of objects. For example,
+a video stream transmitted at 120 frames per second could also be rendered
+in a degraded way at 60 or 30 frame per seconds. If an intermediary has
+to drop frames, it might be better to keep some objects rather than others.
+
+We assume that objects will be encrypted, and that intermediaries
+cannot access the content of the objects to determine inter-object
+dependencies or rendering priorities. The solution is to transmit
+unencrypted metadata as part of the media stream. The metadata
+includes:
+
+* the organization of the media stream as series of group of objects,
+* stream-level metadata indicating general properties of the stream
+* object-level metadata indicating the properties of the object.
+
+In the current version, we make the assumption that "group of objects"
+form an atomic subset of the media stream, without dependencies on
+other groups. This implies that a relay that need to drop data could
+drop some or all objects in a group of object, and assume that
+receivers will properly render the next group.
+
+In theory, we could have multiple types of streams, with different
+sensitivity to congestion. For example, it is common to consider
+audio transmission as higher priority than video. In a video game,
+updates to the terrain might require different handling than
+audio and video. These differences could be encoded as media
+level metadata in a further version of the protocol. The current
+version will solely rely on object level metadata.
+
+Object level metadata is encoded as an 8 bit field, in which:
+
+* The least significant bit encodes whether the object may be dropped.
+* The 7 other bits encode a drop priority level.
+
+If an object is not marked as "may be dropped", it will never be dropped,
+even in case of congestion, and even if that causes increases in end-to-end
+latency. For all other objects, objects marked as higher drop priority
+will be dropped before lower drop priority ones.
+
+### Detecting congestion
+
+Senders and relays know at what time a given object was received,
+and can compute at what time it should be sent. Congestion is
+detected when that objects cannot be sent before the expected
+sending time.
+
+### Reacting to congestion
+
+The relays react to congestion by maintaining a "drop priority level"
+for each connection. The drop level is initially set to the lowest
+priority, and is reevaluated at regular intervals:
+
+* increase the drop level if the queue has increased beyond the threshold,
+* decrease the drop level if the queue is empty
+* keep the same level otherwise.
+
+The congestion level is set per connection. A connection may carry
+several media streams. The queue is deemed empty of is is empty
+for all these media streams, beyond the threshold if this is true
+for at least one media stream.
+
+When sending objects and fragments, the following apply:
+
+* if an object is marked as do not drop, don't.
+* if the fragment to be sent is the first of an object, drop it if the priority is below the drop level.
+* if the fragment is not the first for an object, drop it if the first fragment was dropped.
+* if the first object of a group was dropped, drop all other objects.
+
+### Documenting losses
+
+Dropping objects create an ambiguous situation for the receiver. Holes in the
+sequence of received objects may be due to transmission errors that will soon be
+corrected, or to congestion-driven drops that will never be. The holes must be
+somehow documented. The simplest solution is to replace the missing objects
+by "hole" messages.
+
+In datagram mode, hole messages are encoded using a special value of the
+datagram header, followed by zero bytes of content:
+
+* `datagram_stream_id`, and `group_id` are set to the expected value.
+* `object_id` is set to the id of the dropped object.
+* `offset_and_fin` are set to `offset=0` and `fin=1`.
+* `flags` are set to the special value `0xFF`.
+* if needed, `nb_objects_previous_group` is set to the expected value.
+
+This encoding consumes 5 to 8 bytes, which is much lower than a typical object encoding.
+
+In stream mode, hole messages are encoded as a special value of the fragment message,
+followed by zero bytes of content:
+
+* `group_id` is set to the expected value.
+* `object_id` is set to the id of the dropped object.
+* `offset_and_fin` are set to `offset=0` and `fin=1`.
+* `flags` are set to the special value `0xFF`.
+* `length` is set to zero.
