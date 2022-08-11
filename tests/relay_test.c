@@ -493,7 +493,7 @@ int quicr_relay_cache_publish_simulate(quicrq_relay_publisher_context_t* pub_ctx
             d_context.allowed_space = 1023;
             /* Call the prepare function */
             ret = quicrq_relay_datagram_publisher_prepare(NULL, pub_ctx, 0, &d_context, d_context.allowed_space,
-                &media_was_sent, &at_least_one_active, &not_ready);
+                &media_was_sent, &at_least_one_active, &not_ready, current_time);
             /* Decode the datagram header to find the coded_fragment */
             if (ret == 0 && d_context.after_data > d_context.bytes0) {
                 const uint8_t* bytes = d_context.bytes0;

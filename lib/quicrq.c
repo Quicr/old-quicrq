@@ -703,7 +703,7 @@ int64_t quicrq_datagram_check_horizon(quicrq_stream_ctx_t* stream_ctx, uint64_t 
 }
 
 int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id, uint64_t object_id, 
-    uint64_t object_offset, uint64_t nb_objects_previous_group, const uint8_t * data, size_t length,
+    uint64_t object_offset, uint8_t flags, uint64_t nb_objects_previous_group, const uint8_t * data, size_t length,
     uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time)
 {
     int ret = 0;
@@ -734,6 +734,7 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id,
                 da_new->group_id = group_id;
                 da_new->object_id = object_id;
                 da_new->object_offset = object_offset;
+                da_new->flags = flags;
                 da_new->nb_objects_previous_group = nb_objects_previous_group;
                 da_new->length = length;
                 da_new->is_last_fragment = is_last_fragment;
@@ -897,7 +898,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
         ret = -1;
     }
     else {
-        while (data_length > 0 && ret == 0) {
+        while ((data_length > 0 || found->flags == 0xff) && ret == 0) {
             uint8_t datagram[PICOQUIC_MAX_PACKET_SIZE];
             uint8_t* bytes = datagram;
             uint8_t* bytes_max = datagram + PICOQUIC_MAX_PACKET_SIZE;
@@ -909,7 +910,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
                 queue_delay_delta = (current_time - found->start_time + 500) / 1000;
             }
             /* Encode the header */
-            found->last_sent_time = picoquic_get_quic_time(picoquic_get_quic_ctx(stream_ctx->cnx_ctx->cnx));
+            found->last_sent_time = current_time;
             bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->datagram_stream_id,
                 found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, found->nb_objects_previous_group, found->is_last_fragment);
             /* Check how much data should be send in this fragment */
@@ -946,7 +947,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
 
                         /* split the fragment, get a new one, update old record, point found to new record. */
                         ret = quicrq_datagram_ack_init(stream_ctx, found->group_id, found->object_id, next_offset,
-                            found->nb_objects_previous_group, data, data_length,
+                            found->flags, found->nb_objects_previous_group, data, data_length,
                             found->queue_delay, found->is_last_fragment, &p_next_record, found->start_time);
                         if (ret == 0) {
                             quicrq_datagram_ack_state_t* next_record = (quicrq_datagram_ack_state_t*)p_next_record;
@@ -1215,8 +1216,21 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 else {
                                     /* Push the header */
                                     memcpy(buffer, datagram_header, h_size);
-                                    stream_ctx->next_object_id++;
-                                    stream_ctx->next_object_offset = 0;
+
+                                    /* Keep track in stream context */
+                                    ret = quicrq_datagram_ack_init(stream_ctx, 
+                                        stream_ctx->next_group_id, stream_ctx->next_object_id, 0,
+                                        0xff, nb_objects_previous_group,
+                                        ((uint8_t*)buffer) + h_size, 0, 0,
+                                        1, NULL, current_time);
+                                    if (ret != 0) {
+                                        DBG_PRINTF("Datagram ack init returns %d", ret);
+                                    }
+                                    else {
+                                        /* Update the object counters */
+                                        stream_ctx->next_object_id++;
+                                        stream_ctx->next_object_offset = 0;
+                                    }
                                 }
                             }
                         }
@@ -1282,7 +1296,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
                                 if (ret == 0) {
                                     ret = quicrq_datagram_ack_init(stream_ctx, 
                                         stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->next_object_offset,
-                                        nb_objects_previous_group,
+                                        flags, nb_objects_previous_group,
                                         ((uint8_t*)buffer) + h_size, data_length, 0,
                                         is_last_fragment, NULL, current_time);
                                     if (ret != 0) {

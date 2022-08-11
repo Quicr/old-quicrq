@@ -147,14 +147,16 @@ int quicrq_relay_datagram_publisher_prepare(
     size_t space,
     int* media_was_sent,
     int* at_least_one_active,
-    int* not_ready);
+    int* not_ready,
+    uint64_t current_time);
 
 int quicrq_relay_datagram_publisher_fn(
     quicrq_stream_ctx_t* stream_ctx,
     void* context,
     size_t space,
     int* media_was_sent,
-    int* at_least_one_active);
+    int* at_least_one_active,
+    uint64_t current_time);
 
 int quicrq_relay_publisher_fn(
     quicrq_media_source_action_enum action,

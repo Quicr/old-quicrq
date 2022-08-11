@@ -154,7 +154,7 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
 
 /* Initialize the tracking of a datagram after sending it in a stream context */
 int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id, uint64_t object_id,
-    uint64_t object_offset, uint64_t nb_objects_previous_group, const uint8_t* data, size_t length,
+    uint64_t object_offset, uint8_t flags, uint64_t nb_objects_previous_group, const uint8_t* data, size_t length,
     uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time);
 
 /* Transmission of out of order datagrams is possible for relays.
