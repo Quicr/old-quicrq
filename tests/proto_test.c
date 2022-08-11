@@ -504,7 +504,7 @@ int proto_msg_test()
         if (bytes == NULL) {
             ret = -1;
         }
-        else if (bytes - msg != proto_cases[i].data_length) {
+        else if ((size_t)(bytes - msg) != proto_cases[i].data_length) {
             ret = -1;
         }
         else if (memcmp(msg, proto_cases[i].data, proto_cases[i].data_length) != 0) {

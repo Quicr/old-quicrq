@@ -707,7 +707,6 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id,
     uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time)
 {
     int ret = 0;
-
     /* Check whether the object is below the horizon */
     if (quicrq_datagram_check_horizon(stream_ctx, group_id, object_id, object_offset) < 0) {
         /* at or below horizon, not new. */

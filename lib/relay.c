@@ -609,7 +609,6 @@ static void quicrq_relay_publisher_object_node_delete(void* tree, picosplay_node
 quicrq_relay_publisher_object_state_t* quicrq_relay_publisher_object_add(quicrq_relay_publisher_context_t* media_ctx,
     uint64_t group_id, uint64_t object_id)
 {
-    int ret = 0;
     quicrq_relay_publisher_object_state_t* publisher_object = 
         (quicrq_relay_publisher_object_state_t*)malloc(sizeof(quicrq_relay_publisher_object_state_t));
 
@@ -980,7 +979,7 @@ int quicrq_relay_datagram_publisher_send_fragment(
     int should_skip)
 {
     int ret = 0;
-    size_t offset = media_ctx->current_fragment->offset + media_ctx->length_sent;
+    size_t offset = (should_skip) ? 0 : media_ctx->current_fragment->offset + media_ctx->length_sent;
     uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
     uint8_t flags = (should_skip) ? 0xff : media_ctx->current_fragment->flags;
     int is_last_fragment = (should_skip) ? 1: media_ctx->current_fragment->is_last_fragment;
@@ -1132,7 +1131,7 @@ int quicrq_relay_datagram_publisher_fn(
 
         if ((media_ctx->cache_ctx->final_group_id != 0 || media_ctx->cache_ctx->final_object_id != 0) &&
             media_ctx->current_fragment != NULL &&
-            media_ctx->length_sent >= media_ctx->current_fragment->data_length &&
+            media_ctx->is_current_fragment_sent &&
             media_ctx->current_fragment->next_in_order == NULL) {
             /* Mark the stream as finished, prepare sending a final message */
             stream_ctx->final_group_id = media_ctx->cache_ctx->final_group_id;

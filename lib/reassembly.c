@@ -68,9 +68,9 @@ static picosplay_node_t* quicrq_object_node_create(void* v_media_object)
 
 static void quicrq_object_node_delete(void* tree, picosplay_node_t* node)
 {
-#ifdef UNREFERENCED_PARAMETER
-    UNREFERENCED_PARAMETER(tree);
-#endif
+    if (tree == NULL) {
+        DBG_PRINTF("%s", "Attempt to delete from NULL tree");
+    }
     memset(node, 0, sizeof(picosplay_node_t));
 }
 
