@@ -333,14 +333,14 @@ int quicrq_congestion_datagram_test()
 
 int quicrq_congestion_datagram_loss_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 0, 104, 0x82);
+    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 0, 106, 0x82);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_recv_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0, 1, 73, 0x82);
+    int ret = quicrq_congestion_test_one(1, 1, 0, 1, 75, 0x82);
 
     return ret;
 }
