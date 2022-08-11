@@ -121,8 +121,8 @@ typedef struct st_quicrq_relay_context_t {
     struct sockaddr_storage server_addr;
     quicrq_ctx_t* qr_ctx;
     quicrq_cnx_ctx_t* cnx_ctx;
-    int is_origin_only : 1;
-    int use_datagrams : 1;
+    unsigned int is_origin_only : 1;
+    unsigned int use_datagrams : 1;
 } quicrq_relay_context_t;
 
 int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,

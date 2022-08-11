@@ -23,7 +23,7 @@ typedef struct st_quicrq_reassembly_context_t {
     uint64_t next_object_id;
     uint64_t final_group_id;
     uint64_t final_object_id;
-    int is_finished : 1;
+    unsigned int is_finished : 1;
 } quicrq_reassembly_context_t;
 
 typedef enum {

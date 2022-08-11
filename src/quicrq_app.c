@@ -135,7 +135,7 @@ int quicrq_app_loop_cb(picoquic_quic_t* quic, picoquic_packet_loop_cb_enum cb_mo
             fprintf(stdout, "Waiting for packets.\n");
             if (callback_arg != NULL) {
                 picoquic_packet_loop_options_t* options = (picoquic_packet_loop_options_t*)callback_arg;
-                options->do_time_check = 1;
+                options->do_time_check |= 1;
             }
             break;
         case picoquic_packet_loop_after_receive:
@@ -424,6 +424,9 @@ int quic_app_loop(picoquic_quic_config_t* config,
             ret = -1;
         }
         else {
+            /* Enable congestion control by default */
+            quicrq_enable_congestion_control(cb_ctx.qr_ctx, 1);
+
             /* Setting logs, etc. */
             quicrq_set_quic(cb_ctx.qr_ctx, quic);
 
