@@ -772,7 +772,7 @@ int test_media_consumer_object_ready(
         if (ret == 0) {
             /* if first time seen, document the delivery in the log */
             if (object_mode != quicrq_reassembly_object_repair) {
-                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
+                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%zu,%d\n",
                     group_id, object_id, current_time,
                     current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
                     ret = -1;
@@ -903,7 +903,7 @@ int test_object_stream_consumer_cb(
             quicrq_media_object_header_t current_header = { 0 };
             uint8_t flags = 0xff;
             /* Create log entry */
-            if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64  ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
+            if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64  ",%" PRIu64 ",%" PRIu64 ",%zu,%d\n",
                 group_id, object_id, current_time, current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
                 ret = -1;
             }
@@ -936,7 +936,7 @@ int test_object_stream_consumer_cb(
             if (ret == 0) {
                 /* in sequence, document the delivery in the log */
                 uint8_t flags = (properties == NULL) ? 0 : properties->flags;
-                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64  ",%" PRIu64 ",%" PRIu64 ",%zu,%x\n",
+                if (fprintf(cons_ctx->Log, "%" PRIu64 ",%" PRIu64 ",%" PRIu64  ",%" PRIu64 ",%" PRIu64 ",%zu,%d\n",
                     group_id, object_id, current_time, current_header.timestamp, current_header.number, current_header.length, flags) <= 0) {
                     ret = -1;
                 }

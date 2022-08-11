@@ -30,6 +30,7 @@ static const quicrq_test_def_t test_table[] =
     { "congestion_basic_recv", quicrq_congestion_basic_recv_test },
     { "congestion_basic_loss", quicrq_congestion_basic_loss_test },
     { "congestion_datagram", quicrq_congestion_datagram_test },
+    { "congestion_datagram_loss", quicrq_congestion_datagram_loss_test },
     { "congestion_datagram_recv", quicrq_congestion_datagram_recv_test },
     { "media_video1", quicrq_media_video1_test },
     { "media_video1_rt", quicrq_media_video1_rt_test },
