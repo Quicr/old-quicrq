@@ -1154,6 +1154,7 @@ void* quicrq_relay_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t * s
         memset(media_ctx, 0, sizeof(quicrq_relay_publisher_context_t));
         media_ctx->cache_ctx = cache_ctx;
         if (stream_ctx != NULL) {
+            stream_ctx->start_group_id = cache_ctx->first_group_id;
             stream_ctx->start_object_id = cache_ctx->first_object_id;
         }
         picosplay_init_tree(&media_ctx->publisher_object_tree, quicrq_relay_publisher_object_node_compare,
