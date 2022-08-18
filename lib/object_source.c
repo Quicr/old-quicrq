@@ -230,9 +230,9 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
     /* Create the media object source context, and register it in the quicrq context */
     quicrq_media_object_source_ctx_t* object_source_ctx = (quicrq_media_object_source_ctx_t*)
         malloc(sizeof(quicrq_media_object_source_ctx_t));
-    /* Todo -- create a fragment cache, publish the corresponding source
-     */ 
     if (object_source_ctx != NULL) {
+        int ret = 0;
+
         memset(object_source_ctx, 0, sizeof(quicrq_media_object_source_ctx_t));
         object_source_ctx->qr_ctx = qr_ctx;
         /* Add to double linked list of sources for context */
@@ -249,6 +249,22 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
         if (properties != NULL) {
             memcpy(&object_source_ctx->properties, properties, sizeof(quicrq_media_object_source_properties_t));
         }
+#if 1
+        /* Todo -- create and initialize fragment cache, publish the corresponding source,
+        * then publish the corresponding source.
+        */
+        object_source_ctx->cached_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
+        if (object_source_ctx->cached_ctx != NULL) {
+            ret = quicrq_publish_fragment_cached_media(qr_ctx, object_source_ctx->cached_ctx, url, url_length);
+        }
+        /* If the API fails, close the media object source */
+        if (object_source_ctx->cached_ctx == NULL || ret != 0) {
+            DBG_PRINTF("%s", "Could not publish media source for media object source");
+            quicrq_delete_object_source(object_source_ctx);
+            object_source_ctx = NULL;
+        }
+
+#else
         /* Initialize the list of objects */
         quicrq_object_source_list_init(object_source_ctx);
         /* Call the publisher API */
@@ -261,6 +277,7 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
             quicrq_delete_object_source(object_source_ctx);
             object_source_ctx = NULL;
         }
+#endif
     }
     return(object_source_ctx);
 }
@@ -268,7 +285,33 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
 int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id)
 {
     int ret = 0;
+#if 1
+    ret = quicrq_fragment_cache_learn_start_point(object_source_ctx->cached_ctx, start_group_id, start_object_id);
+    if (ret == 0) {
+        object_source_ctx->start_group_id = start_group_id;
+        object_source_ctx->start_object_id = start_object_id;
+        if (object_source_ctx->next_group_id < start_group_id ||
+            (object_source_ctx->next_group_id == start_group_id &&
+                object_source_ctx->next_object_id < start_object_id)) {
+            object_source_ctx->next_group_id = start_group_id;
+            object_source_ctx->next_object_id = start_object_id;
+        }
 
+        /* Set the start point for the dependent streams. */
+        quicrq_stream_ctx_t* stream_ctx = object_source_ctx->cached_ctx->srce_ctx->first_stream;
+        while (stream_ctx != NULL) {
+            /* for each client waiting for data on this media,
+            * update the start point and then wakeup the stream
+            * so the start point can be releayed. */
+            stream_ctx->start_group_id = start_group_id;
+            stream_ctx->start_object_id = start_object_id;
+            if (stream_ctx->cnx_ctx->cnx != NULL) {
+                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            }
+            stream_ctx = stream_ctx->next_stream_for_source;
+        }
+    }
+#else
     if (object_source_ctx->start_group_id == 0 && object_source_ctx->start_object_id == 0 && object_source_ctx->next_object_id == 0) {
         object_source_ctx->start_group_id = start_group_id;
         object_source_ctx->start_object_id = start_object_id;
@@ -277,6 +320,7 @@ int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_sour
     else {
         ret = -1;
     }
+#endif
     return ret;
 }
 
@@ -290,6 +334,24 @@ int quicrq_publish_object(
     uint64_t  * published_object_id)
 {
     int ret = 0;
+#if 1
+    uint64_t current_time = picoquic_get_quic_time(object_source_ctx->qr_ctx->quic);
+    uint64_t nb_objects_previous_group = 0;
+
+    if (is_new_group && object_source_ctx->next_object_id > 0) {
+        nb_objects_previous_group = object_source_ctx->next_object_id;
+        object_source_ctx->next_group_id++;
+        object_source_ctx->next_object_id = 0;
+    }
+
+    ret = quicrq_fragment_propose_to_cache(object_source_ctx->cached_ctx,
+        object_data, object_source_ctx->next_group_id, object_source_ctx->next_object_id,
+        /* offset */ 0, /* queue delay */ 0, properties->flags, nb_objects_previous_group,
+        /* is_last_fragment */ 1, object_length, current_time);
+    if (ret == 0) {
+        object_source_ctx->next_object_id++;
+    }
+#else
     size_t allocated = sizeof(quicrq_object_source_item_t) + object_length;
     quicrq_object_source_item_t* source_object = (quicrq_object_source_item_t*) malloc(allocated);
     if (source_object == NULL) {
@@ -324,24 +386,48 @@ int quicrq_publish_object(
             quicrq_source_wakeup(object_source_ctx->media_source_ctx);
         }
     }
+#endif
     return ret;
 }
 
 void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_ctx)
 {
+#if 1
+    /* Document the final group-ID and object-ID in context */
     object_source_ctx->is_finished = 1;
+    object_source_ctx->cached_ctx->final_group_id = object_source_ctx->next_group_id;
+    object_source_ctx->cached_ctx->final_object_id = object_source_ctx->next_object_id;
+    /* wake up the clients waiting for data on this media */
+    quicrq_source_wakeup(object_source_ctx->cached_ctx->srce_ctx);
+#else
+    object_source_ctx->is_finished = 1;
+
     quicrq_source_wakeup(object_source_ctx->media_source_ctx);
+#endif
 }
 
 void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source_ctx)
 {
+#if 1
+    if (object_source_ctx->cached_ctx != NULL) {
+        /* Close the corresponding source context */
+        if (object_source_ctx->cached_ctx->srce_ctx != NULL) {
+            quicrq_delete_source(object_source_ctx->cached_ctx->srce_ctx, object_source_ctx->qr_ctx);
+        }
+        else {
+            /* Explicitly delete cache in rare cases where not yet connected to fragment source */
+            quicrq_fragment_cache_delete_ctx(object_source_ctx->cached_ctx);
+        }
+        object_source_ctx->cached_ctx = NULL;
+    }
+#else
     /* Close the corresponding source context */
     if (object_source_ctx->media_source_ctx != NULL) {
         quicrq_media_source_ctx_t* media_ctx = object_source_ctx->media_source_ctx;
         object_source_ctx->media_source_ctx = NULL;
         quicrq_delete_source(media_ctx, object_source_ctx->qr_ctx);
     }
-
+#endif
     /* Unlink from Quicr context */
     if (object_source_ctx->qr_ctx->first_object_source == object_source_ctx) {
         object_source_ctx->qr_ctx->first_object_source = object_source_ctx->next_in_qr_ctx;
@@ -355,8 +441,10 @@ void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source
     else if (object_source_ctx->next_in_qr_ctx != NULL) {
         object_source_ctx->next_in_qr_ctx->previous_in_qr_ctx = object_source_ctx->previous_in_qr_ctx;
     }
+#if 0
     /* Free the tree */
     picosplay_empty_tree(&object_source_ctx->object_source_tree);
+#endif
     /* Free the resource */
     free(object_source_ctx);
 }

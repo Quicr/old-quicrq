@@ -1531,7 +1531,7 @@ int quicrq_media_source_rt_test()
     return ret;
 }
 
-
+#if 0
 /* Verify that a media file can be read using the local object oriented publish API */
 int quicrq_media_object_publish_test()
 {
@@ -1863,7 +1863,7 @@ int quicrq_media_object_source_rt_test()
 
     return ret;
 }
-
+#endif
 /* use a local loop to verify that the object publisher works
  * in conjunction with the object consumer
  */

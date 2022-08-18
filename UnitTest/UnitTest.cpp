@@ -106,7 +106,7 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
-
+#if 0
 		TEST_METHOD(object_publish)
 		{
 			int ret = quicrq_media_object_publish_test();
@@ -127,7 +127,7 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
-
+#endif
 		TEST_METHOD(object_stream)
 		{
 			int ret = quicrq_object_stream_test();
