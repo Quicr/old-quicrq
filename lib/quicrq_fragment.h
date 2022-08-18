@@ -120,6 +120,8 @@ int quicrq_fragment_propose_to_cache(quicrq_fragment_cached_media_t* cached_ctx,
 int quicrq_fragment_cache_learn_start_point(quicrq_fragment_cached_media_t* cached_ctx,
     uint64_t start_group_id, uint64_t start_object_id);
 
+int quicrq_fragment_cache_learn_end_point(quicrq_fragment_cached_media_t* cached_ctx, uint64_t final_group_id, uint64_t final_object_id);
+
 /* Purging the old fragments from the cache.
  * There are two modes of operation.
  * In the general case, we want to make sure that all data has a chance of being

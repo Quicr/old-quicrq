@@ -70,16 +70,13 @@ int quicrq_relay_consumer_cb(
         break;
     case quicrq_media_final_object_id:
         /* Document the final group-ID and object-ID in context */
-        cons_ctx->cached_ctx->final_group_id = group_id;
-        cons_ctx->cached_ctx->final_object_id = object_id;
-        /* Manage fin of transmission */
-        if (cons_ctx->cached_ctx->next_group_id == cons_ctx->cached_ctx->final_group_id &&
-            cons_ctx->cached_ctx->next_object_id == cons_ctx->cached_ctx->final_object_id) {
-            ret = quicrq_consumer_finished;
-        }
+        ret = quicrq_fragment_cache_learn_end_point(cons_ctx->cached_ctx, group_id, object_id);
         if (ret == 0) {
-            /* wake up the clients waiting for data on this media */
-            quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
+            /* Manage fin of transmission on the consumer connection */
+            if (cons_ctx->cached_ctx->next_group_id == cons_ctx->cached_ctx->final_group_id &&
+                cons_ctx->cached_ctx->next_object_id == cons_ctx->cached_ctx->final_object_id) {
+                ret = quicrq_consumer_finished;
+            }
         }
         break;
     case quicrq_media_start_point:

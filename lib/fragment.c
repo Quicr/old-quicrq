@@ -345,6 +345,19 @@ int quicrq_fragment_cache_learn_start_point(quicrq_fragment_cached_media_t* cach
     return ret;
 }
 
+int quicrq_fragment_cache_learn_end_point(quicrq_fragment_cached_media_t* cached_ctx,
+    uint64_t final_group_id, uint64_t final_object_id)
+{
+    int ret = 0;
+    /* Document the final group-ID and object-ID in context */
+    cached_ctx->final_group_id = final_group_id;
+    cached_ctx->final_object_id = final_object_id;
+    /* wake up the clients waiting for data on this media */
+    quicrq_source_wakeup(cached_ctx->srce_ctx);
+    
+    return ret;
+}
+
 /* Purging the old fragments from the cache.
  * There are two modes of operation.
  * In the general case, we want to make sure that all data has a chance of being

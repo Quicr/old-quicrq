@@ -259,11 +259,11 @@ struct st_quicrq_media_object_source_ctx_t {
     struct st_quicrq_fragment_cached_media_t* cached_ctx;
     uint64_t next_group_id;
     uint64_t next_object_id;
+    uint64_t start_group_id;
+    uint64_t start_object_id;
 
     quicrq_media_source_ctx_t* media_source_ctx;
     quicrq_media_object_source_properties_t properties;
-    uint64_t start_group_id;
-    uint64_t start_object_id;
     picosplay_tree_t object_source_tree;
     int is_finished;
 };

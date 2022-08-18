@@ -396,10 +396,8 @@ void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_c
 #if 1
     /* Document the final group-ID and object-ID in context */
     object_source_ctx->is_finished = 1;
-    object_source_ctx->cached_ctx->final_group_id = object_source_ctx->next_group_id;
-    object_source_ctx->cached_ctx->final_object_id = object_source_ctx->next_object_id;
-    /* wake up the clients waiting for data on this media */
-    quicrq_source_wakeup(object_source_ctx->cached_ctx->srce_ctx);
+    (void) quicrq_fragment_cache_learn_end_point(object_source_ctx->cached_ctx,
+        object_source_ctx->next_group_id, object_source_ctx->next_object_id);
 #else
     object_source_ctx->is_finished = 1;
 
