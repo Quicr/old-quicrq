@@ -255,6 +255,7 @@ struct st_quicrq_media_object_source_ctx_t {
     quicrq_ctx_t* qr_ctx;
     struct st_quicrq_media_object_source_ctx_t* previous_in_qr_ctx;
     struct st_quicrq_media_object_source_ctx_t* next_in_qr_ctx;
+
     quicrq_media_source_ctx_t* media_source_ctx;
     quicrq_media_object_source_properties_t properties;
     uint64_t start_group_id;
@@ -275,6 +276,9 @@ struct st_quicrq_media_source_ctx_t {
     struct st_quicrq_stream_ctx_t* last_stream;
     uint8_t* media_url;
     size_t media_url_length;
+
+    struct st_quicrq_fragment_cached_media_t* fragment_cache;
+
     void* pub_ctx;
     quicrq_media_publisher_subscribe_fn subscribe_fn;
     quicrq_media_publisher_fn getdata_fn;

@@ -1037,3 +1037,12 @@ void quicrq_fragment_publisher_delete(void* v_pub_ctx)
     free(cache_ctx);
 }
 
+int quicrq_publish_fragment_cached_media(quicrq_ctx_t* qr_ctx,
+    quicrq_fragment_cached_media_t* cache_ctx, const uint8_t* url, const size_t url_length)
+{
+    /* if succeeded, publish the source */
+    cache_ctx->srce_ctx = quicrq_publish_datagram_source(qr_ctx, url, url_length, cache_ctx,
+        quicrq_fragment_publisher_subscribe, quicrq_fragment_publisher_fn, quicrq_fragment_datagram_publisher_fn,
+        quicrq_fragment_publisher_delete);
+    return (cache_ctx->srce_ctx == NULL)?-1:0;
+}

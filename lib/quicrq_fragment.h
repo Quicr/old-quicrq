@@ -263,6 +263,10 @@ void* quicrq_fragment_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t*
 
 void quicrq_fragment_publisher_delete(void* v_pub_ctx);
 
+/* Fragment cache media publish */
+int quicrq_publish_fragment_cached_media(quicrq_ctx_t* qr_ctx,
+    quicrq_fragment_cached_media_t* cache_ctx, const uint8_t* url, const size_t url_length);
+
 #ifdef __cplusplus
 }
 #endif

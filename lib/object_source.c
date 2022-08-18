@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "quicrq_internal.h"
+#include "quicrq_fragment.h"
 #include "picoquic_utils.h"
 
 /* Data management functions.
@@ -229,6 +230,8 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
     /* Create the media object source context, and register it in the quicrq context */
     quicrq_media_object_source_ctx_t* object_source_ctx = (quicrq_media_object_source_ctx_t*)
         malloc(sizeof(quicrq_media_object_source_ctx_t));
+    /* Todo -- create a fragment cache, publish the corresponding source
+     */ 
     if (object_source_ctx != NULL) {
         memset(object_source_ctx, 0, sizeof(quicrq_media_object_source_ctx_t));
         object_source_ctx->qr_ctx = qr_ctx;
