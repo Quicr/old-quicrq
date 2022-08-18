@@ -15,11 +15,6 @@ extern "C" {
     int quicrq_media_audio1_test();
     int quicrq_media_source_test();
     int quicrq_media_source_rt_test();
-#if 0
-    int quicrq_media_object_publish_test();
-    int quicrq_media_object_source_test();
-    int quicrq_media_object_source_rt_test();
-#endif
     int quicrq_object_stream_test();
     int quicrq_object_stream_rt_test();
     int quicrq_basic_rt_test();

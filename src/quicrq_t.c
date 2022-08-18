@@ -38,11 +38,6 @@ static const quicrq_test_def_t test_table[] =
     { "media_audio1", quicrq_media_audio1_test },
     { "media_source", quicrq_media_source_test },
     { "media_source_rt", quicrq_media_source_rt_test },
-#if 0
-    { "object_publish", quicrq_media_object_publish_test },
-    { "object_source", quicrq_media_object_source_test },
-    { "object_source_rt", quicrq_media_object_source_rt_test },
-#endif
     { "object_stream", quicrq_object_stream_test },
     { "object_stream_rt", quicrq_object_stream_rt_test },
     { "datagram_basic", quicrq_datagram_basic_test },
