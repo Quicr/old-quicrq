@@ -7,6 +7,7 @@
 #include "quicrq.h"
 #include "quicrq_reassembly.h"
 #include "quicrq_internal.h"
+#include "quicrq_fragment.h"
 #include "quicrq_relay.h"
 
 /* A relay is a specialized node, acting both as client when acquiring a media
@@ -46,7 +47,7 @@
   * The relayed media is kept until the end of the relay connection. This is of course not
   * sustainable, some version of cache management will have to be added later.
   */
-
+#if 0
 typedef struct st_quicrq_relay_cached_fragment_t {
     picosplay_node_t fragment_node;
     uint64_t group_id;
@@ -110,10 +111,11 @@ typedef struct st_quicrq_relay_publisher_context_t {
     int is_current_fragment_sent;
     picosplay_tree_t publisher_object_tree;
 } quicrq_relay_publisher_context_t;
+#endif
 
 typedef struct st_quicrq_relay_consumer_context_t {
     uint64_t last_object_id;
-    quicrq_relay_cached_media_t* cached_ctx;
+    quicrq_fragment_cached_media_t* cached_ctx;
 } quicrq_relay_consumer_context_t;
 
 typedef struct st_quicrq_relay_context_t {
@@ -124,7 +126,7 @@ typedef struct st_quicrq_relay_context_t {
     unsigned int is_origin_only : 1;
     unsigned int use_datagrams : 1;
 } quicrq_relay_context_t;
-
+#if 0
 int quicrq_relay_propose_fragment_to_cache(quicrq_relay_cached_media_t* cached_ctx,
     const uint8_t* data,
     uint64_t group_id,
@@ -174,6 +176,7 @@ int quicrq_relay_publisher_fn(
 
 quicrq_relay_cached_media_t* quicrq_relay_create_cache_ctx(quicrq_ctx_t * qr_ctx);
 void quicrq_relay_delete_cache_ctx(quicrq_relay_cached_media_t* cache_ctx);
+#endif
 
 /* Management of the relay cache
  */
