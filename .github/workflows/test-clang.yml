@@ -38,7 +38,6 @@ jobs:
           cd build
           make test && QRQRESULT=$?
           tail /home/runner/work/quicrq/quicrq/build/Testing/Temporary/LastTest.log
-          ./quicrq_t congestion_datagram_loss
           if [ ${QRQRESULT} == 0 ]; then exit 0; fi;
           exit 1
 
