@@ -13,12 +13,6 @@
 /* Object Source API functions.
  */
 
-static void quicrq_unlink_object_source_publisher(void* v_object_source_ctx)
-{
-    quicrq_media_object_source_ctx_t* object_source_ctx = (quicrq_media_object_source_ctx_t*)v_object_source_ctx;
-    object_source_ctx->media_source_ctx = NULL;
-}
-
 quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
     quicrq_media_object_source_properties_t* properties)
 {
@@ -66,8 +60,6 @@ int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_sour
     int ret = 0;
     ret = quicrq_fragment_cache_learn_start_point(object_source_ctx->cached_ctx, start_group_id, start_object_id);
     if (ret == 0) {
-        object_source_ctx->start_group_id = start_group_id;
-        object_source_ctx->start_object_id = start_object_id;
         if (object_source_ctx->next_group_id < start_group_id ||
             (object_source_ctx->next_group_id == start_group_id &&
                 object_source_ctx->next_object_id < start_object_id)) {
@@ -110,7 +102,6 @@ int quicrq_publish_object(
 void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_ctx)
 {
     /* Document the final group-ID and object-ID in context */
-    object_source_ctx->is_finished = 1;
     (void) quicrq_fragment_cache_learn_end_point(object_source_ctx->cached_ctx,
         object_source_ctx->next_group_id, object_source_ctx->next_object_id);
 }
