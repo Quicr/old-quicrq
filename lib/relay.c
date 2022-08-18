@@ -85,6 +85,7 @@ int quicrq_relay_consumer_cb(
     case quicrq_media_start_point:
         /* Document the start point, and clean the cache of data before that point */
         ret = quicrq_fragment_cache_learn_start_point(cons_ctx->cached_ctx, group_id, object_id);
+#if 0
         if (ret == 0) {
             /* Set the start point for the dependent streams. */
             quicrq_stream_ctx_t* stream_ctx = cons_ctx->cached_ctx->srce_ctx->first_stream;
@@ -99,6 +100,7 @@ int quicrq_relay_consumer_cb(
                 stream_ctx = stream_ctx->next_stream_for_source;
             }
         }
+#endif
         break;
     case quicrq_media_close:
         /* Document the final object */

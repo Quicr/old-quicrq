@@ -324,6 +324,23 @@ int quicrq_fragment_cache_learn_start_point(quicrq_fragment_cached_media_t* cach
             picosplay_delete_hint(&cached_ctx->fragment_tree, first_fragment_node);
         }
     }
+
+    if (ret == 0) {
+        /* Set the start point for the dependent streams. */
+        quicrq_stream_ctx_t* stream_ctx = cached_ctx->srce_ctx->first_stream;
+        while (stream_ctx != NULL) {
+            /* for each client waiting for data on this media,
+            * update the start point and then wakeup the stream 
+            * so the start point can be releayed. */
+            stream_ctx->start_group_id = start_group_id;
+            stream_ctx->start_object_id = start_object_id;
+            if (stream_ctx->cnx_ctx->cnx != NULL) {
+                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            }
+            stream_ctx = stream_ctx->next_stream_for_source;
+        }
+    }
+
     /* TODO: if the end is known, something special? */
     return ret;
 }

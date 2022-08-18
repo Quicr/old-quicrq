@@ -296,7 +296,7 @@ int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_sour
             object_source_ctx->next_group_id = start_group_id;
             object_source_ctx->next_object_id = start_object_id;
         }
-
+#if 0
         /* Set the start point for the dependent streams. */
         quicrq_stream_ctx_t* stream_ctx = object_source_ctx->cached_ctx->srce_ctx->first_stream;
         while (stream_ctx != NULL) {
@@ -310,6 +310,7 @@ int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_sour
             }
             stream_ctx = stream_ctx->next_stream_for_source;
         }
+#endif
     }
 #else
     if (object_source_ctx->start_group_id == 0 && object_source_ctx->start_object_id == 0 && object_source_ctx->next_object_id == 0) {
