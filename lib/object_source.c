@@ -43,7 +43,7 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
         */
         object_source_ctx->cached_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
         if (object_source_ctx->cached_ctx != NULL) {
-            ret = quicrq_publish_fragment_cached_media(qr_ctx, object_source_ctx->cached_ctx, url, url_length);
+            ret = quicrq_publish_fragment_cached_media(qr_ctx, object_source_ctx->cached_ctx, url, url_length, 1);
         }
         /* If the API fails, close the media object source */
         if (object_source_ctx->cached_ctx == NULL || ret != 0) {

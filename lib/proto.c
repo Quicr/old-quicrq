@@ -5,6 +5,7 @@
 #include <string.h>
 #include "quicrq.h"
 #include "quicrq_internal.h"
+#include "quicrq_fragment.h"
 #include "picoquic_utils.h"
 
 /* The protocol defines a set of actions, identified by a code. For each action
@@ -604,8 +605,7 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
  */
 
 quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
-    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn,
-    quicrq_media_publisher_fn getdata_fn, quicrq_datagram_publisher_fn get_datagram_fn, quicrq_media_publisher_delete_fn delete_fn)
+    void* pub_ctx, int is_local_object_source)
 {
     quicrq_media_source_ctx_t* srce_ctx = NULL;
     size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
@@ -628,10 +628,7 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
                 qr_ctx->last_source = srce_ctx;
             }
             srce_ctx->pub_ctx = pub_ctx;
-            srce_ctx->subscribe_fn = subscribe_fn;
-            srce_ctx->getdata_fn = getdata_fn;
-            srce_ctx->get_datagram_fn = get_datagram_fn;
-            srce_ctx->delete_fn = delete_fn;
+            srce_ctx->is_local_object_source = is_local_object_source;
 
             if (quicrq_notify_url_to_all(qr_ctx, url, url_length) < 0) {
                 DBG_PRINTF("%s", "Fail to notify new source");
@@ -676,10 +673,9 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
     else {
         srce_ctx->next_source->previous_source = srce_ctx->previous_source;
     }
-    /* call to the publisher function to explicitly close the source */
-    if (srce_ctx->delete_fn != NULL) {
-        srce_ctx->delete_fn(srce_ctx->pub_ctx);
-    }
+    /* We support only one kind of source, so we just call the delete function */
+    quicrq_fragment_publisher_delete(srce_ctx->pub_ctx);
+
     free(srce_ctx);
 }
 
@@ -745,11 +741,8 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
             stream_ctx->previous_stream_for_source = srce_ctx->last_stream;
             srce_ctx->last_stream = stream_ctx;
         }
-        /* Document media function. */
-        stream_ctx->publisher_fn = srce_ctx->getdata_fn;
-        stream_ctx->get_datagram_fn = srce_ctx->get_datagram_fn;
         /* Create a subscribe media context */
-        stream_ctx->media_ctx = srce_ctx->subscribe_fn(/*url, url_length, */ srce_ctx->pub_ctx, stream_ctx);
+        stream_ctx->media_ctx = quicrq_fragment_publisher_subscribe(srce_ctx->pub_ctx, stream_ctx);
         if (stream_ctx->media_ctx == NULL) {
             ret = -1;
             quicrq_log_message(stream_ctx->cnx_ctx, "No media available for URL: %s",
