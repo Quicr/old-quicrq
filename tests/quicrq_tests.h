@@ -13,10 +13,6 @@ extern "C" {
     int quicrq_media_video1_test();
     int quicrq_media_video1_rt_test();
     int quicrq_media_audio1_test();
-    int quicrq_media_source_test();
-    int quicrq_media_source_rt_test();
-    int quicrq_object_stream_test();
-    int quicrq_object_stream_rt_test();
     int quicrq_basic_rt_test();
     int quicrq_congestion_basic_test();
     int quicrq_congestion_basic_recv_test();

@@ -157,19 +157,6 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id,
     uint64_t object_offset, uint8_t flags, uint64_t nb_objects_previous_group, const uint8_t* data, size_t length,
     uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time);
 
-/* Transmission of out of order datagrams is possible for relays.
- * We use a function pointer to isolate the relay code for the main code,
- * and ensure the quicrq library can be used in clients without
- * loading the relay code.
- */
-typedef int (*quicrq_datagram_publisher_fn)(
-    quicrq_stream_ctx_t* stream_ctx,
-    void* context,
-    size_t space,
-    int* media_was_sent,
-    int* at_least_one_active,
-    uint64_t current_time);
-
 /* Media publisher API.
  * This now only an internal API. 
  *
@@ -224,29 +211,13 @@ typedef enum {
     quicrq_media_source_close
 } quicrq_media_source_action_enum;
 
-typedef void* (*quicrq_media_publisher_subscribe_fn)(void* pub_ctx, quicrq_stream_ctx_t* stream_ctx);
-typedef int (*quicrq_media_publisher_fn)(
-    quicrq_media_source_action_enum action,
-    void* media_ctx,
-    uint8_t* data,
-    size_t data_max_size,
-    size_t* data_length,
-    uint8_t* flags,
-    int* is_new_group,
-    int* is_last_fragment,
-    int* is_media_finished,
-    int* is_still_active,
-    int* has_backlog,
-    uint64_t current_time);
-typedef void (*quicrq_media_publisher_delete_fn)(void* pub_ctx);
-
 typedef struct st_quicrq_media_source_ctx_t quicrq_media_source_ctx_t;
-quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
-    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn,
-    quicrq_media_publisher_fn getdata_fn, quicrq_media_publisher_delete_fn delete_fn);
+
 void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_ctx);
 void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 
+quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
+    void* pub_ctx, int is_local_object_source);
 
  /* Quicrq per media object source context.
   */
@@ -277,10 +248,7 @@ struct st_quicrq_media_source_ctx_t {
     struct st_quicrq_fragment_cached_media_t* fragment_cache;
 
     void* pub_ctx;
-    quicrq_media_publisher_subscribe_fn subscribe_fn;
-    quicrq_media_publisher_fn getdata_fn;
-    quicrq_datagram_publisher_fn get_datagram_fn;
-    quicrq_media_publisher_delete_fn delete_fn;
+    int is_local_object_source;
 };
 
 quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length);
@@ -454,16 +422,10 @@ struct st_quicrq_stream_ctx_t {
     quicrq_message_buffer_t message_receive;
 
     quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
-    quicrq_media_publisher_fn publisher_fn; /* Data providing function for source */
-    quicrq_datagram_publisher_fn get_datagram_fn; /* Out of order publishing of datagrams */
     void* media_ctx; /* Callback argument for receiving or sending data */
 };
 
 int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_consumer_fn media_fn, void* media_ctx);
-
-quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
-    void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn,
-    quicrq_media_publisher_fn getdata_fn, quicrq_datagram_publisher_fn get_datagram_fn, quicrq_media_publisher_delete_fn delete_fn);
 
 typedef struct st_quicrq_cnx_congestion_state_t {
     int has_backlog; /* Indicates whether at least on flow is congested. */

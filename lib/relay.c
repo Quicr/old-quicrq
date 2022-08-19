@@ -237,7 +237,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
 
         if (ret == 0) {
             /* if succeeded, publish the source */
-            ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length);
+            ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0);
         }
 
         if (ret != 0) {
@@ -291,7 +291,7 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
             cache_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
             if (cache_ctx != NULL) {
                 char buffer[256];
-                ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length);
+                ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0);
                 picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Create cache for URL: %s",
                     quicrq_uint8_t_to_text(url, url_length, buffer, 256));
                 if (ret != 0) {
@@ -504,10 +504,7 @@ uint64_t quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
         /* Find all the sources that are cached by the relay function */
         while (srce_ctx != NULL) {
             quicrq_media_source_ctx_t* srce_to_delete = NULL;
-            if (srce_ctx->subscribe_fn == quicrq_fragment_publisher_subscribe &&
-                srce_ctx->getdata_fn == quicrq_fragment_publisher_fn &&
-                srce_ctx->get_datagram_fn == quicrq_fragment_datagram_publisher_fn &&
-                srce_ctx->delete_fn == quicrq_fragment_publisher_delete) {
+            if (!srce_ctx->is_local_object_source) {
                 /* This is a source created by the relay */
                 quicrq_fragment_cached_media_t* cache_ctx = (quicrq_fragment_cached_media_t*)srce_ctx->pub_ctx;
 
@@ -582,7 +579,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
             /* Create a cache context for the URL */
             cache_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
             if (cache_ctx != NULL) {
-                ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length);
+                ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0);
                 if (ret != 0) {
                     /* Could not publish the media, free the resource. */
                     free(cache_ctx);
