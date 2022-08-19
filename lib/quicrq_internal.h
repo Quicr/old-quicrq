@@ -255,15 +255,13 @@ struct st_quicrq_media_object_source_ctx_t {
     quicrq_ctx_t* qr_ctx;
     struct st_quicrq_media_object_source_ctx_t* previous_in_qr_ctx;
     struct st_quicrq_media_object_source_ctx_t* next_in_qr_ctx;
-    quicrq_media_source_ctx_t* media_source_ctx;
-    quicrq_media_object_source_properties_t properties;
-    uint64_t start_group_id;
-    uint64_t start_object_id;
+
+    struct st_quicrq_fragment_cached_media_t* cached_ctx;
     uint64_t next_group_id;
     uint64_t next_object_id;
-    picosplay_tree_t object_source_tree;
-    int is_finished;
+    quicrq_media_object_source_properties_t properties;
 };
+
 
 /* Quicrq per media source context.
  */
@@ -275,6 +273,9 @@ struct st_quicrq_media_source_ctx_t {
     struct st_quicrq_stream_ctx_t* last_stream;
     uint8_t* media_url;
     size_t media_url_length;
+
+    struct st_quicrq_fragment_cached_media_t* fragment_cache;
+
     void* pub_ctx;
     quicrq_media_publisher_subscribe_fn subscribe_fn;
     quicrq_media_publisher_fn getdata_fn;
@@ -286,22 +287,6 @@ quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx);
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
-
-int quicrq_media_object_publisher(
-    quicrq_media_source_action_enum action,
-    void* v_media_ctx,
-    uint8_t* data,
-    size_t data_max_size,
-    size_t* data_length,
-    uint8_t* flags,
-    int* is_new_group,
-    int* is_last_fragment,
-    int* is_media_finished,
-    int* is_still_active,
-    int* has_backlog,
-    uint64_t current_time);
-
-void* quicrq_media_object_publisher_subscribe(void* pub_ctx, quicrq_stream_ctx_t* stream_ctx);
 
 /* Quic media consumer. Old definition, moved to internal only.
  * 

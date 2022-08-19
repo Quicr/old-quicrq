@@ -33,12 +33,24 @@
     <ClCompile Include="..\lib\object_consumer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\lib\fragment.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\lib\quicrq_relay_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\lib\quicrq_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\quicrq.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\quicrq_reassembly.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\quicrq_relay.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

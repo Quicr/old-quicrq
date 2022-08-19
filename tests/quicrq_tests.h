@@ -15,9 +15,6 @@ extern "C" {
     int quicrq_media_audio1_test();
     int quicrq_media_source_test();
     int quicrq_media_source_rt_test();
-    int quicrq_media_object_publish_test();
-    int quicrq_media_object_source_test();
-    int quicrq_media_object_source_rt_test();
     int quicrq_object_stream_test();
     int quicrq_object_stream_rt_test();
     int quicrq_basic_rt_test();
@@ -77,7 +74,7 @@ extern "C" {
     int quicrq_fourlegs_datagram_test();
     int quicrq_fourlegs_datagram_last_test();
     int quicrq_fourlegs_datagram_loss_test();
-    int quicrq_relay_cache_fill_test();
+    int quicrq_fragment_cache_fill_test();
     int quicrq_get_addr_test();
 
 #ifdef __cplusplus

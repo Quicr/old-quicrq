@@ -107,27 +107,6 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(object_publish)
-		{
-			int ret = quicrq_media_object_publish_test();
-
-			Assert::AreEqual(ret, 0);
-		}
-
-		TEST_METHOD(object_source)
-		{
-			int ret = quicrq_media_object_source_test();
-
-			Assert::AreEqual(ret, 0);
-		}
-
-		TEST_METHOD(object_source_rt)
-		{
-			int ret = quicrq_media_object_source_rt_test();
-
-			Assert::AreEqual(ret, 0);
-		}
-
 		TEST_METHOD(object_stream)
 		{
 			int ret = quicrq_object_stream_test();
@@ -449,12 +428,11 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(relay_cache_fill) {
-			int ret = quicrq_relay_cache_fill_test();
+		TEST_METHOD(fragment_cache_fill) {
+			int ret = quicrq_fragment_cache_fill_test();
 
 			Assert::AreEqual(ret, 0);
 		}
-
 		TEST_METHOD(get_addr) {
 			int ret = quicrq_get_addr_test();
 

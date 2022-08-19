@@ -38,9 +38,6 @@ static const quicrq_test_def_t test_table[] =
     { "media_audio1", quicrq_media_audio1_test },
     { "media_source", quicrq_media_source_test },
     { "media_source_rt", quicrq_media_source_rt_test },
-    { "object_publish", quicrq_media_object_publish_test },
-    { "object_source", quicrq_media_object_source_test },
-    { "object_source_rt", quicrq_media_object_source_rt_test },
     { "object_stream", quicrq_object_stream_test },
     { "object_stream_rt", quicrq_object_stream_rt_test },
     { "datagram_basic", quicrq_datagram_basic_test },
@@ -92,7 +89,7 @@ static const quicrq_test_def_t test_table[] =
     { "fourlegs_datagram", quicrq_fourlegs_datagram_test },
     { "fourlegs_datagram_last", quicrq_fourlegs_datagram_last_test },
     { "fourlegs_datagram_loss", quicrq_fourlegs_datagram_loss_test },
-    { "relay_cache_fill", quicrq_relay_cache_fill_test},
+    { "fragment_cache_fill", quicrq_fragment_cache_fill_test },
     { "get_addr", quicrq_get_addr_test }
 };
 

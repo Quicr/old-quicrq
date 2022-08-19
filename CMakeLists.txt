@@ -27,6 +27,7 @@ message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 
 
 add_library(quicrq-core
+    lib/fragment.c
     lib/quicrq.c
     lib/proto.c
     lib/reassembly.c
@@ -50,6 +51,7 @@ add_library(quicrq-tests
     tests/basic_test.c
     tests/congestion_test.c
     tests/fourlegs_test.c
+    tests/fragment_test.c
     tests/proto_test.c
     tests/pyramid_test.c
     tests/relay_test.c
