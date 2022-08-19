@@ -644,14 +644,6 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
     return srce_ctx;
 }
 
-
-quicrq_media_source_ctx_t* quicrq_publish_source(quicrq_ctx_t * qr_ctx, const uint8_t * url,
-    size_t url_length, void* pub_ctx, quicrq_media_publisher_subscribe_fn subscribe_fn, 
-    quicrq_media_publisher_fn getdata_fn, quicrq_media_publisher_delete_fn delete_fn)
-{
-    return quicrq_publish_datagram_source(qr_ctx, url, url_length, pub_ctx, subscribe_fn, getdata_fn, NULL, delete_fn);
-}
-
 void quicrq_set_default_source(quicrq_ctx_t* qr_ctx, quicrq_default_source_fn default_source_fn, void* default_source_ctx)
 {
     qr_ctx->default_source_fn = default_source_fn;

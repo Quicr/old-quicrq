@@ -94,33 +94,6 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-		TEST_METHOD(media_source)
-		{
-			int ret = quicrq_media_source_test();
-
-			Assert::AreEqual(ret, 0);
-		}
-		TEST_METHOD(media_source_rt)
-		{
-			int ret = quicrq_media_source_rt_test();
-
-			Assert::AreEqual(ret, 0);
-		}
-
-		TEST_METHOD(object_stream)
-		{
-			int ret = quicrq_object_stream_test();
-
-			Assert::AreEqual(ret, 0);
-		}
-
-		TEST_METHOD(object_stream_rt)
-		{
-			int ret = quicrq_object_stream_rt_test();
-
-			Assert::AreEqual(ret, 0);
-		}
-
 		TEST_METHOD(media_object_noloss)
 		{
 			int ret = quicrq_media_object_noloss();
