@@ -91,6 +91,7 @@ typedef struct st_quicrq_message_t {
     size_t length;
     const uint8_t* data;
     unsigned int use_datagram;
+    quicrq_subscribe_intent subscribe_intent;
 } quicrq_message_t;
 
 /* Encode and decode protocol messages
@@ -112,8 +113,8 @@ typedef struct st_quicrq_message_t {
  * - encode the message using xxxx_encode
  */
 size_t quicrq_subscribe_msg_reserve(size_t url_length);
-uint8_t* quicrq_subscribe_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url);
-const uint8_t* quicrq_subscribe_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
+uint8_t* quicrq_subscribe_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint8_t intent);
+const uint8_t* quicrq_subscribe_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint8_t* intent);
 size_t quicrq_notify_msg_reserve(size_t url_length);
 uint8_t* quicrq_notify_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url);
 const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);

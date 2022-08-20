@@ -427,8 +427,9 @@ void quicrq_relay_subscribe_pattern(quicrq_ctx_t* qr_ctx, quicrq_subscribe_actio
             quicrq_stream_ctx_t* stream_ctx = quicrq_relay_find_subscription(qr_ctx, url, url_length);
             if (stream_ctx == NULL) {
                 /* No subscription, create one. */
+                // TODO: subscribe intent needs to be revisited
                 stream_ctx = quicrq_cnx_subscribe_pattern(qr_ctx->relay_ctx->cnx_ctx, url, url_length,
-                    quicrq_relay_subscribe_notify, qr_ctx);
+                    quicrq_subscribe_intent_immediate ,quicrq_relay_subscribe_notify, qr_ctx);
             }
 
             if (stream_ctx == NULL) {

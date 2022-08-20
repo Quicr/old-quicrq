@@ -31,6 +31,7 @@ static quicrq_message_t stream_rq = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -53,6 +54,7 @@ static quicrq_message_t datagram_rq = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -76,6 +78,7 @@ static quicrq_message_t fin_msg = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -100,6 +103,7 @@ static quicrq_message_t repair_request_msg = {
     1,
     sizeof(repair_bytes),
     NULL,
+    0,
     0
 };
 
@@ -123,6 +127,7 @@ static quicrq_message_t fragment_msg = {
     1,
     sizeof(repair_bytes),
     repair_bytes,
+    0,
     0
 };
 
@@ -149,6 +154,7 @@ static quicrq_message_t fragment_msg2 = {
     1,
     sizeof(repair_bytes),
     repair_bytes,
+    0,
     0
 };
 
@@ -176,7 +182,8 @@ static quicrq_message_t post_msg = {
     0,
     0,
     NULL,
-    3
+    3,
+    0
 };
 
 static uint8_t post_msg_bytes[] = {
@@ -199,7 +206,8 @@ static quicrq_message_t accept_dg = {
     0,
     0,
     NULL,
-    1
+    1,
+    0
 };
 
 static uint8_t accept_dg_bytes[] = {
@@ -244,6 +252,7 @@ static quicrq_message_t start_msg = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -266,11 +275,13 @@ static quicrq_message_t subscribe_msg = {
     0,
     0,
     NULL,
-    0
+    0,
+    1,
 };
 
 static uint8_t subscribe_msg_bytes[] = {
     QUICRQ_ACTION_SUBSCRIBE,
+    quicrq_subscribe_intent_waitup,
     sizeof(url1),
     URL1_BYTES
 };
@@ -288,7 +299,8 @@ static quicrq_message_t notify_msg = {
     0,
     0,
     NULL,
-    0
+    0,
+    quicrq_subscribe_intent_waitup
 };
 
 static uint8_t notify_msg_bytes[] = {

@@ -30,6 +30,13 @@ extern "C" {
 #define QUICRQ_ERROR_INTERNAL 0x01
 #define QUICRQ_ERROR_PROTOCOL 0x02
 
+// Indicate the start point of media reception when subscribing
+typedef enum {
+    quicrq_subscribe_intent_immediate = 0,
+    quicrq_subscribe_intent_waitup,
+    quicrq_subscribe_intent_catchup
+} quicrq_subscribe_intent;
+
 /* Connection context management functions.
  * The type quicrq_ctx_t is treated here as an opaque pointer, to
  * provide isolation between the app and the stack.
@@ -208,7 +215,7 @@ typedef int (*quicrq_media_notify_fn)(
     void* notify_ctx, const uint8_t* url, size_t url_length);
 
 quicrq_stream_ctx_t* quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx,
-    const uint8_t* url, size_t url_length, 
+    const uint8_t* url, size_t url_length, quicrq_subscribe_intent intent, 
     quicrq_media_notify_fn media_notify_fn, void* notify_ctx);
 
 int quicrq_cnx_subscribe_pattern_close(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx);

@@ -259,7 +259,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
         results.result_log_name = result_log_name;
         results.use_datagrams = use_datagrams;
         stream_ctx_subscriber = quicrq_cnx_subscribe_pattern(cnx_ctx_subscriber, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-            pattern_length, quicrq_subscribe_test_notify, &results);
+            pattern_length, quicrq_subscribe_intent_immediate,  quicrq_subscribe_test_notify, &results);
 
         if (stream_ctx_subscriber == 0) {
             ret = -1;

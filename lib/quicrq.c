@@ -1773,7 +1773,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
     return ret;
 }
 
-quicrq_stream_ctx_t* quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, quicrq_media_notify_fn media_notify_fn, void* notify_ctx)
+quicrq_stream_ctx_t* quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, quicrq_subscribe_intent intent, quicrq_media_notify_fn media_notify_fn, void* notify_ctx)
 {
     /* Create a stream for the subscribe pattern */
     uint64_t stream_id = picoquic_get_next_local_stream_id(cnx_ctx->cnx, 0);
@@ -1784,7 +1784,7 @@ quicrq_stream_ctx_t* quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx, con
         if (quicrq_msg_buffer_alloc(message, quicrq_subscribe_msg_reserve(url_length), 0) == 0) {
             /* Format the media request */
             uint8_t* message_next = quicrq_subscribe_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
-                QUICRQ_ACTION_SUBSCRIBE, url_length, url);
+                QUICRQ_ACTION_SUBSCRIBE, url_length, url, intent);
             if (message_next == NULL) {
                 quicrq_delete_stream_ctx(cnx_ctx, stream_ctx);
                 stream_ctx = NULL;

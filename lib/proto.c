@@ -21,6 +21,7 @@
  * 
  *  quicrq_subscribe_message {
  *     message_type(i),
+ *     intent_type(i),
  *     url_length(i),
  *     url(...)
  *  }
@@ -34,22 +35,24 @@
 
 size_t quicrq_subscribe_msg_reserve(size_t url_length)
 {
-    return 8 + 2 + url_length;
+    return 8 + 1 + 2 + url_length;
 }
 
-uint8_t* quicrq_subscribe_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url)
+uint8_t* quicrq_subscribe_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint8_t intent)
 {
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL){
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+            (bytes = picoquic_frames_uint8_encode(bytes, bytes_max, intent)) != NULL) {
         bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url);
     }
     return bytes;
 }
 
-const uint8_t* quicrq_subscribe_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url)
+const uint8_t* quicrq_subscribe_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint8_t* intent)
 {
     *url = NULL;
     *url_length = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, intent)) != NULL &&
         (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, url_length)) != NULL) {
         *url = bytes;
         bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length);
@@ -488,7 +491,7 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
             bytes = quicrq_start_point_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
             break;
         case QUICRQ_ACTION_SUBSCRIBE:
-            bytes = quicrq_subscribe_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url);
+            bytes = quicrq_subscribe_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url, &msg->subscribe_intent);
             break;
         case QUICRQ_ACTION_NOTIFY:
             bytes = quicrq_notify_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url);
@@ -531,7 +534,7 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         bytes = quicrq_start_point_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
         break;
     case QUICRQ_ACTION_SUBSCRIBE:
-        bytes = quicrq_subscribe_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url);
+        bytes = quicrq_subscribe_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url, msg->subscribe_intent);
         break;
     case QUICRQ_ACTION_NOTIFY:
         bytes = quicrq_notify_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url);
