@@ -1975,6 +1975,7 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
         }
         else {
             picoquic_set_default_congestion_algorithm(qr_ctx->quic, picoquic_bbr_algorithm);
+            picoquic_set_default_priority(qr_ctx->quic, 4);
         }
     }
     return qr_ctx;
