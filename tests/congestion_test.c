@@ -347,7 +347,7 @@ int quicrq_congestion_datagram_recv_test()
 
 int quicrq_congestion_datagram_rloss_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 1, 106, 0x82);
+    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 1, 110, 0x82);
 
     return ret;
 }
