@@ -73,6 +73,7 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_START_POINT 8
 #define QUICRQ_ACTION_SUBSCRIBE 9
 #define QUICRQ_ACTION_NOTIFY 10
+#define QUICRQ_ACTION_CACHE_POLICY 11
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -91,6 +92,7 @@ typedef struct st_quicrq_message_t {
     size_t length;
     const uint8_t* data;
     unsigned int use_datagram;
+    uint8_t cache_policy;
 } quicrq_message_t;
 
 /* Encode and decode protocol messages
@@ -142,6 +144,9 @@ uint8_t* quicrq_start_point_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint6
 const uint8_t* quicrq_start_point_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* start_group, uint64_t* start_object);
 uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg);
 const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t * msg);
+size_t quicrq_cache_policy_msg_reserve();
+uint8_t* quicrq_cache_policy_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint8_t cache_policy);
+const uint8_t* quicrq_cache_policy_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * message_type, uint8_t * cache_policy);
 
 /* Encode and decode the header of datagram packets. */
 #define QUICRQ_DATAGRAM_HEADER_MAX 16
@@ -401,6 +406,11 @@ struct st_quicrq_stream_ctx_t {
     quicrq_stream_receive_state_enum receive_state;
     unsigned int is_client : 1;
     unsigned int is_sender : 1;
+    /* Indicates whether local cache management follows the "real time" logic,
+     * in which only recent objects are kept. By default, cache management 
+     * follows the "streaming" logic, in which everything is kept -- or nothing.
+     */
+    unsigned int is_cache_real_time : 1;
     /* For the sender, receiver finished happens if the client closes the control stream.
      * In that case, the server should close the stream and mark itself finished.
      * For the receiver, the transfer finishes if everything was received. In that
@@ -414,6 +424,7 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_active_datagram : 1;
     unsigned int is_start_object_id_sent : 1;
     unsigned int is_final_object_id_sent : 1;
+    unsigned int is_cache_policy_sent : 1;
 
     size_t bytes_sent;
     size_t bytes_received;

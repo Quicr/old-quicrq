@@ -31,6 +31,7 @@ static quicrq_message_t stream_rq = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -53,6 +54,7 @@ static quicrq_message_t datagram_rq = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -76,6 +78,7 @@ static quicrq_message_t fin_msg = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -100,6 +103,7 @@ static quicrq_message_t repair_request_msg = {
     1,
     sizeof(repair_bytes),
     NULL,
+    0,
     0
 };
 
@@ -123,6 +127,7 @@ static quicrq_message_t fragment_msg = {
     1,
     sizeof(repair_bytes),
     repair_bytes,
+    0,
     0
 };
 
@@ -149,6 +154,7 @@ static quicrq_message_t fragment_msg2 = {
     1,
     sizeof(repair_bytes),
     repair_bytes,
+    0,
     0
 };
 
@@ -176,7 +182,8 @@ static quicrq_message_t post_msg = {
     0,
     0,
     NULL,
-    3
+    3,
+    0
 };
 
 static uint8_t post_msg_bytes[] = {
@@ -199,7 +206,8 @@ static quicrq_message_t accept_dg = {
     0,
     0,
     NULL,
-    1
+    1,
+    0
 };
 
 static uint8_t accept_dg_bytes[] = {
@@ -222,6 +230,7 @@ static quicrq_message_t accept_st = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -229,7 +238,6 @@ static uint8_t accept_st_bytes[] = {
     QUICRQ_ACTION_ACCEPT,
     0
 };
-
 
 static quicrq_message_t start_msg = {
     QUICRQ_ACTION_START_POINT,
@@ -244,6 +252,7 @@ static quicrq_message_t start_msg = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -266,6 +275,7 @@ static quicrq_message_t subscribe_msg = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -288,6 +298,7 @@ static quicrq_message_t notify_msg = {
     0,
     0,
     NULL,
+    0,
     0
 };
 
@@ -296,6 +307,31 @@ static uint8_t notify_msg_bytes[] = {
     sizeof(url1),
     URL1_BYTES
 };
+
+
+static quicrq_message_t cache_policy_msg = {
+    QUICRQ_ACTION_CACHE_POLICY,
+    0,
+    NULL,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    0,
+    1
+};
+
+static uint8_t cache_policy_bytes[] = {
+    QUICRQ_ACTION_CACHE_POLICY,
+    1
+};
+
+
 
 typedef struct st_proto_test_case_t {
     uint8_t* const data;
@@ -316,7 +352,8 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(accept_st, accept_st_bytes),
     PROTO_TEST_ITEM(start_msg, start_msg_bytes),
     PROTO_TEST_ITEM(subscribe_msg, subscribe_msg_bytes),
-    PROTO_TEST_ITEM(notify_msg, notify_msg_bytes)
+    PROTO_TEST_ITEM(notify_msg, notify_msg_bytes),
+    PROTO_TEST_ITEM(cache_policy_msg, cache_policy_bytes)
 };
 
 static uint8_t bad_bytes1[] = {

@@ -1224,6 +1224,28 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
+#if 0
+            else if (stream_ctx->is_cache_real_time && !stream_ctx->is_cache_policy_sent) {
+                quicrq_log_message(stream_ctx->cnx_ctx,
+                    "Stream %" PRIu64 ", sending start object id: %" PRIu64 "/%" PRIu64,
+                    stream_ctx->stream_id, stream_ctx->start_group_id, stream_ctx->start_object_id);
+                if (quicrq_msg_buffer_alloc(message, quicrq_start_point_msg_reserve(stream_ctx->start_group_id, stream_ctx->start_object_id), 0) != 0) {
+                    ret = -1;
+                }
+                else {
+                    uint8_t* message_next = quicrq_start_point_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_START_POINT,
+                        stream_ctx->start_group_id, stream_ctx->start_object_id);
+                    if (message_next == NULL) {
+                        ret = -1;
+                    }
+                    else {
+                        /* Queue the media request message to that stream */
+                        message->message_size = message_next - message->buffer;
+                        stream_ctx->send_state = quicrq_sending_start_point;
+                    }
+                }
+            }
+#endif
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
                 quicrq_log_message(stream_ctx->cnx_ctx, "Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64,

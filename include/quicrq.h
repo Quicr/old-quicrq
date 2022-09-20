@@ -96,6 +96,7 @@ typedef struct st_quicrq_media_object_header_t {
  */
 
 typedef struct st_quicrq_media_object_source_properties_t {
+    int use_real_time_caching : 1;
     int tbd;
 } quicrq_media_object_source_properties_t;
 

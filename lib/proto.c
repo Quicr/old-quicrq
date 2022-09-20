@@ -357,6 +357,33 @@ const uint8_t* quicrq_start_point_msg_decode(const uint8_t* bytes, const uint8_t
     return bytes;
 }
 
+/* Cache Policy Message
+ *     message_type(i),
+ *     cache_policy(i)
+ */
+size_t quicrq_cache_policy_msg_reserve()
+{
+    size_t len = 2;
+    return len;
+}
+
+
+uint8_t* quicrq_cache_policy_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint8_t cache_policy)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL) {
+        bytes = picoquic_frames_uint8_encode(bytes, bytes_max, cache_policy);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_cache_policy_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint8_t* cache_policy)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL){
+        bytes = picoquic_frames_uint8_decode(bytes, bytes_max, cache_policy);
+    }
+    return bytes;
+}
+
 /* Media POST message.  
  *     message_type(i),
  *     url_length(i),
@@ -493,6 +520,9 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
         case QUICRQ_ACTION_NOTIFY:
             bytes = quicrq_notify_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url);
             break;
+        case QUICRQ_ACTION_CACHE_POLICY:
+            bytes = quicrq_cache_policy_msg_decode(bytes, bytes_max, &msg->message_type, &msg->cache_policy);
+            break;
         default:
             /* Unexpected message type */
             bytes = NULL;
@@ -535,6 +565,9 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         break;
     case QUICRQ_ACTION_NOTIFY:
         bytes = quicrq_notify_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url);
+        break;
+    case QUICRQ_ACTION_CACHE_POLICY:
+        bytes = quicrq_cache_policy_msg_encode(bytes, bytes_max, msg->message_type, msg->cache_policy);
         break;
     default:
         /* Unexpected message type */
