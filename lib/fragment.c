@@ -358,6 +358,26 @@ int quicrq_fragment_cache_learn_end_point(quicrq_fragment_cached_media_t* cached
     return ret;
 }
 
+int quicrq_fragment_cache_set_real_time_cache(quicrq_fragment_cached_media_t* cached_ctx)
+{
+    int ret = 0;
+    quicrq_stream_ctx_t* stream_ctx = cached_ctx->srce_ctx->first_stream;
+    /* remember the policy */
+    cached_ctx->use_real_time_caching = 1;
+    /* Set the cache policy for the dependent streams. */
+    while (stream_ctx != NULL && ret == 0) {
+        /* for each client waiting for data on this media,
+        * update the cache policy
+        * so the start point can be releayed. */
+        stream_ctx->is_cache_real_time = 1;
+        if (stream_ctx->cnx_ctx->cnx != NULL) {
+            ret = picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+        }
+        stream_ctx = stream_ctx->next_stream_for_source;
+    }
+    return ret;
+}
+
 /* Purging the old fragments from the cache.
  * There are two modes of operation.
  * In the general case, we want to make sure that all data has a chance of being

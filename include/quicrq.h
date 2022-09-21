@@ -96,7 +96,7 @@ typedef struct st_quicrq_media_object_header_t {
  */
 
 typedef struct st_quicrq_media_object_source_properties_t {
-    int use_real_time_caching : 1;
+    unsigned int use_real_time_caching : 1;
     int tbd;
 } quicrq_media_object_source_properties_t;
 
@@ -156,6 +156,7 @@ typedef enum {
     quicrq_media_datagram_ready = 0,
     quicrq_media_start_point,
     quicrq_media_final_object_id,
+    quicrq_media_real_time_cache,
     quicrq_media_close
 } quicrq_media_consumer_enum;
 

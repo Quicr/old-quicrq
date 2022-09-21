@@ -183,14 +183,15 @@ static quicrq_message_t post_msg = {
     0,
     NULL,
     3,
-    0
+    1
 };
 
 static uint8_t post_msg_bytes[] = {
     QUICRQ_ACTION_POST,
     sizeof(url1),
     URL1_BYTES,
-    3
+    3,
+    1
 };
 
 static quicrq_message_t accept_dg = {

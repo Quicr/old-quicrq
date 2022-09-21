@@ -359,7 +359,7 @@ const uint8_t* quicrq_start_point_msg_decode(const uint8_t* bytes, const uint8_t
 
 /* Cache Policy Message
  *     message_type(i),
- *     cache_policy(i)
+ *     cache_policy(8)
  */
 size_t quicrq_cache_policy_msg_reserve()
 {
@@ -389,24 +389,27 @@ const uint8_t* quicrq_cache_policy_msg_decode(const uint8_t* bytes, const uint8_
  *     url_length(i),
  *     url(...)
  *     datagram_capable(i)
+ *     cache_policy(8)
+ *     
  * The post message is sent by a client when ready to push a media fragment.
  */
 
 size_t quicrq_post_msg_reserve(size_t url_length)
 {
-    return  1 + 2 + url_length + 1;
+    return  1 + 2 + url_length + 1 + 1;
 }
 
-uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, unsigned int datagram_capable)
+uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, unsigned int datagram_capable, uint8_t cache_policy)
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
-        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url)) != NULL) {
-        bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_capable);
+        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_capable)) != NULL) {
+        bytes = picoquic_frames_uint8_encode(bytes, bytes_max, cache_policy);
     }
     return bytes;
 }
 
-const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, unsigned int* datagram_capable)
+const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, unsigned int* datagram_capable, uint8_t * cache_policy)
 {
     uint64_t dg_cap = 0;
     *datagram_capable = 0;
@@ -416,7 +419,8 @@ const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes
         (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, url_length)) != NULL) {
         *url = bytes;
         if ((bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length)) != NULL &&
-            (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &dg_cap)) != NULL){
+            (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &dg_cap)) != NULL &&
+            (bytes = picoquic_frames_uint8_decode(bytes, bytes_max, cache_policy)) != NULL) {
             if (dg_cap <= 3) {
                 *datagram_capable = (unsigned int)dg_cap;
             }
@@ -506,7 +510,7 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
                 &msg->offset, &msg->is_last_fragment, &msg->flags, &msg->length, &msg->data);
             break;
         case QUICRQ_ACTION_POST:
-            bytes = quicrq_post_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url, &msg->use_datagram);
+            bytes = quicrq_post_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url, &msg->use_datagram, &msg->cache_policy);
             break;
         case QUICRQ_ACTION_ACCEPT:
             bytes = quicrq_accept_msg_decode(bytes, bytes_max, &msg->message_type, &msg->use_datagram, &msg->datagram_stream_id);
@@ -552,7 +556,7 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
             msg->offset, msg->is_last_fragment, msg->flags, msg->length, msg->data);
         break;
     case QUICRQ_ACTION_POST:
-        bytes = quicrq_post_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url, msg->use_datagram);
+        bytes = quicrq_post_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url, msg->use_datagram, msg->cache_policy);
         break;
     case QUICRQ_ACTION_ACCEPT:
         bytes = quicrq_accept_msg_encode(bytes, bytes_max, msg->message_type, msg->use_datagram, msg->datagram_stream_id);
@@ -774,6 +778,8 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
             stream_ctx->previous_stream_for_source = srce_ctx->last_stream;
             srce_ctx->last_stream = stream_ctx;
         }
+        /* set the cache policy */
+        stream_ctx->is_cache_real_time = srce_ctx->is_cache_real_time;
         /* Create a subscribe media context */
         stream_ctx->media_ctx = quicrq_fragment_publisher_subscribe(srce_ctx->pub_ctx, stream_ctx);
         if (stream_ctx->media_ctx == NULL) {
@@ -952,7 +958,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
             if (ret == 0) {
                 /* Format the post message */
                 uint8_t* message_next = quicrq_post_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
-                    QUICRQ_ACTION_POST, url_length, url, (use_datagrams)?1:0);
+                    QUICRQ_ACTION_POST, url_length, url, (use_datagrams)?1:0, stream_ctx->is_cache_real_time);
                 if (message_next == NULL) {
                     ret = -1;
                 }
@@ -960,6 +966,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
                     /* Queue the post messageto that stream */
                     stream_ctx->is_client = 0;
                     stream_ctx->is_sender = 1;
+                    stream_ctx->is_cache_policy_sent = stream_ctx->is_cache_real_time;
                     message->message_size = message_next - message->buffer;
                     stream_ctx->send_state = quicrq_sending_initial;
                     stream_ctx->receive_state = quicrq_receive_confirmation;
@@ -989,17 +996,17 @@ int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_co
 
 /* Accept a media post and connect it to the local consumer */
 int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams)
+    int use_datagrams, uint8_t cache_policy)
 {
     int ret = 0;
     quicrq_message_buffer_t* message = &stream_ctx->message_sent;
     uint64_t datagram_stream_id = (use_datagrams)?stream_ctx->cnx_ctx->next_datagram_stream_id:0;
 
+    /* Format the accept message */
     if (quicrq_msg_buffer_alloc(message, quicrq_accept_msg_reserve(use_datagrams, datagram_stream_id), 0) != 0) {
         ret = -1;
     }
     else {
-        /* Format the accept message */
         uint8_t* message_next = quicrq_accept_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
             QUICRQ_ACTION_ACCEPT, use_datagrams, datagram_stream_id);
         if (message_next == NULL) {
@@ -1023,9 +1030,14 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
             quicrq_log_message(stream_ctx->cnx_ctx, "Accepted post of URL: %s on stream %" PRIu64,
                 quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
-
+            /* Set the cache policy for the local media */
+            if (ret == 0 && cache_policy != 0) {
+                ret = stream_ctx->consumer_fn(quicrq_media_real_time_cache, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
+                    NULL, 0, 0, 0, 0, 0, 0, 0, 0);
+            }
         }
     }
+
     return ret;
 }
 

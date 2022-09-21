@@ -122,6 +122,9 @@ const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* byt
 size_t quicrq_rq_msg_reserve(size_t url_length);
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint64_t datagram_stream_id);
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint64_t* datagram_stream_id);
+size_t quicrq_post_msg_reserve(size_t url_length);
+uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, unsigned int datagram_capable, uint8_t cache_policy);
+const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, unsigned int* datagram_capable, uint8_t* cache_policy);
 size_t quicrq_fin_msg_reserve(uint64_t final_group_id, uint64_t final_object_id);
 uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, 
     uint64_t final_group_id, uint64_t final_object_id);
@@ -254,6 +257,7 @@ struct st_quicrq_media_source_ctx_t {
 
     void* pub_ctx;
     int is_local_object_source;
+    int is_cache_real_time;
 };
 
 quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length);
@@ -366,6 +370,7 @@ struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
     struct st_quicrq_cnx_ctx_t* cnx_ctx;
+    /* Source from which data is read and sent on the stream. */
     quicrq_media_source_ctx_t* media_source;
     struct st_quicrq_stream_ctx_t* next_stream_for_source;
     struct st_quicrq_stream_ctx_t* previous_stream_for_source;
@@ -540,7 +545,7 @@ uint8_t* quicr_encode_object_header(uint8_t* fh, const uint8_t* fh_max, const qu
 
 /* Process a receive POST command */
 int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams);
+    int use_datagrams, uint8_t cache_policy);
 
 /*  Process a received ACCEPT response */
 int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_datagrams, uint64_t datagram_stream_id);

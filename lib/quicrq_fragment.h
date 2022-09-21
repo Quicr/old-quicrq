@@ -47,6 +47,7 @@ typedef struct st_quicrq_fragment_cached_media_t {
     quicrq_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree;
     int is_closed;
+    int use_real_time_caching : 1;
     uint64_t cache_delete_time;
 } quicrq_fragment_cached_media_t;
 
@@ -121,6 +122,8 @@ int quicrq_fragment_cache_learn_start_point(quicrq_fragment_cached_media_t* cach
     uint64_t start_group_id, uint64_t start_object_id);
 
 int quicrq_fragment_cache_learn_end_point(quicrq_fragment_cached_media_t* cached_ctx, uint64_t final_group_id, uint64_t final_object_id);
+
+int quicrq_fragment_cache_set_real_time_cache(quicrq_fragment_cached_media_t* cached_ctx);
 
 /* Purging the old fragments from the cache.
  * There are two modes of operation.

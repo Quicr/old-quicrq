@@ -1224,17 +1224,15 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-#if 0
             else if (stream_ctx->is_cache_real_time && !stream_ctx->is_cache_policy_sent) {
                 quicrq_log_message(stream_ctx->cnx_ctx,
-                    "Stream %" PRIu64 ", sending start object id: %" PRIu64 "/%" PRIu64,
-                    stream_ctx->stream_id, stream_ctx->start_group_id, stream_ctx->start_object_id);
-                if (quicrq_msg_buffer_alloc(message, quicrq_start_point_msg_reserve(stream_ctx->start_group_id, stream_ctx->start_object_id), 0) != 0) {
+                    "Stream %" PRIu64 ", sending cache policy: %" PRIu64 "/%d",
+                    stream_ctx->stream_id, stream_ctx->is_cache_real_time);
+                if (quicrq_msg_buffer_alloc(message, quicrq_cache_policy_msg_reserve(), 0) != 0) {
                     ret = -1;
                 }
                 else {
-                    uint8_t* message_next = quicrq_start_point_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_START_POINT,
-                        stream_ctx->start_group_id, stream_ctx->start_object_id);
+                    uint8_t* message_next = quicrq_cache_policy_msg_encode(message->buffer, message->buffer + message->buffer_alloc, QUICRQ_ACTION_CACHE_POLICY, 1);
                     if (message_next == NULL) {
                         ret = -1;
                     }
@@ -1245,7 +1243,6 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-#endif
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
                 quicrq_log_message(stream_ctx->cnx_ctx, "Nothing to send on stream %" PRIu64 ", state: %d, final: %" PRIu64,
@@ -1554,7 +1551,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 (incoming.use_datagram) ? "datagram" : "stream");
                             /* Decide whether to receive the data as stream or as datagrams */
                             /* Prepare a consumer for the data. */
-                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.use_datagram);
+                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.use_datagram, incoming.cache_policy);
                         }
                         break;
                     case QUICRQ_ACTION_ACCEPT:
@@ -1643,6 +1640,24 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         if (stream_ctx->media_notify_fn != NULL) {
                             stream_ctx->media_notify_fn(stream_ctx->notify_ctx, incoming.url, incoming.url_length);
                         }
+                        break;
+                    case QUICRQ_ACTION_CACHE_POLICY:
+                        if (stream_ctx->receive_state != quicrq_receive_fragment || stream_ctx->is_cache_real_time) {
+                            /* Protocol error */
+                            ret = -1;
+                        }
+                        else {
+                            /* Pass the start point to the media consumer. */
+                            quicrq_log_message(stream_ctx->cnx_ctx,
+                                "Stream %" PRIu64 ", cache policy: %d",
+                                stream_ctx->stream_id, incoming.cache_policy);
+                            stream_ctx->is_cache_real_time = (incoming.cache_policy == 0) ? 0 : 1;
+                            ret = stream_ctx->consumer_fn(quicrq_media_real_time_cache, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
+                                NULL, 0, 0, 0, 0, 0, 0, 0, 0);
+
+                            ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
+                        }
+                    break;
                         break;
                     default:
                         /* Some unknown message, maybe not implemented yet */

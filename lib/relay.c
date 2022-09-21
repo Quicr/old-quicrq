@@ -79,6 +79,10 @@ int quicrq_relay_consumer_cb(
             }
         }
         break;
+    case quicrq_media_real_time_cache:
+        /* Set the cache policy to real time for the media, and then for all subscribed groups */
+        ret = quicrq_fragment_cache_set_real_time_cache(cons_ctx->cached_ctx);
+        break;
     case quicrq_media_start_point:
         /* Document the start point, and clean the cache of data before that point */
         ret = quicrq_fragment_cache_learn_start_point(cons_ctx->cached_ctx, group_id, object_id);
@@ -329,8 +333,6 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
 
     return ret;
 }
-
-
 
 /* Management of subscriptions on relays.
  *

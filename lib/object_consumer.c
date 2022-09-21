@@ -90,6 +90,9 @@ int quicrq_media_object_bridge_fn(
             ret = quicrq_consumer_finished;
         }
         break;
+    case quicrq_media_real_time_cache:
+        /* Nothing to do there. */
+        break;
     case quicrq_media_start_point:
         ret = quicrq_reassembly_learn_start_point(&bridge_ctx->reassembly_ctx, object_id, current_time,
             quicrq_media_object_bridge_ready, bridge_ctx);

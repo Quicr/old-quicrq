@@ -816,6 +816,9 @@ int test_media_object_consumer_cb(
     case quicrq_media_close:
         ret = test_media_consumer_close(media_ctx);
         break;
+    case quicrq_media_real_time_cache:
+        /* Ignore that for now */
+        break;
     default:
         ret = -1;
         break;
