@@ -125,6 +125,16 @@ int quicrq_fragment_cache_learn_end_point(quicrq_fragment_cached_media_t* cached
 
 int quicrq_fragment_cache_set_real_time_cache(quicrq_fragment_cached_media_t* cached_ctx);
 
+/* Purging old fragments from the cache. 
+ * This should only be done for caches of type "real time".
+ * - Compute the first kept GOB.
+ *   - lowest of current read point for any reader and last GOB in cache.
+ * - Delete all objects with GOB < first kept.
+ */
+void quicrq_fragment_cache_media_purge_to_gob(
+    quicrq_fragment_cached_media_t* cached_ctx,
+    uint64_t kept_group_id);
+
 /* Purging the old fragments from the cache.
  * There are two modes of operation.
  * In the general case, we want to make sure that all data has a chance of being

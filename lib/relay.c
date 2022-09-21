@@ -508,32 +508,36 @@ uint64_t quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
             quicrq_media_source_ctx_t* srce_to_delete = NULL;
             if (!srce_ctx->is_local_object_source) {
                 /* This is a source created by the relay */
-                quicrq_fragment_cached_media_t* cache_ctx = (quicrq_fragment_cached_media_t*)srce_ctx->pub_ctx;
+                quicrq_fragment_cached_media_t* cached_ctx = (quicrq_fragment_cached_media_t*)srce_ctx->pub_ctx;
 
-                if (qr_ctx->cache_duration_max > 0) {
-                    /* TODO: Check the lowest value of the published object along subscribed clients;
-                     * setting the lowest value to UIN64_MAX for now */
-                     /* Purge cache from old entries */
-                    quicrq_fragment_cache_media_purge(cache_ctx,
-                        current_time, qr_ctx->cache_duration_max, UINT64_MAX);
+                if (srce_ctx->is_cache_real_time) {
+                    uint64_t kept_group_id = cached_ctx->next_group_id;
+                    quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
+
+                    /* Find the smallest GOB not currently read by active connections */
+                    while (stream_ctx != NULL) {
+                        if (stream_ctx->next_group_id < kept_group_id) {
+                            kept_group_id = stream_ctx->next_group_id;
+                        }
+                        stream_ctx = stream_ctx->next_stream_for_source;
+                    }
+                    /* Ask the cache management to purge up to that GOB */
+                    quicrq_fragment_cache_media_purge_to_gob(cached_ctx, kept_group_id);
                 }
-                if (cache_ctx->is_closed) {
-                    if (cache_ctx->first_fragment == NULL) {
-                        /* If the cache is empty and the source is closed, schedule it for deletion. */
+
+                if (qr_ctx->cache_duration_max > 0 && cached_ctx->is_closed && srce_ctx->first_stream == NULL) {
+                    /* If the source is closed and has no reader, delete at scheduled time. */
+                    if (current_time >= cached_ctx->cache_delete_time) {
                         srce_to_delete = srce_ctx;
-                    } else if (srce_ctx->first_stream == NULL) {
-                        /* If the source is closed and has no reader, delete at scheduled time. */
-                        if (current_time >= cache_ctx->cache_delete_time) {
-                            srce_to_delete = srce_ctx;
-                        }
-                        else if (cache_ctx->cache_delete_time < next_time) {
-                            /* Not ready to delete yet, ask for a wake up on timer */
-                            next_time = cache_ctx->cache_delete_time;
-                            is_cache_closing_still_needed = 1;
-                        }
+                    }
+                    else if (cached_ctx->cache_delete_time < next_time) {
+                        /* Not ready to delete yet, ask for a wake up on timer */
+                        next_time = cached_ctx->cache_delete_time;
+                        is_cache_closing_still_needed = 1;
                     }
                 }
             }
+
             srce_ctx = srce_ctx->next_source;
             if (srce_to_delete != NULL) {
                 quicrq_delete_source(srce_to_delete, qr_ctx);
@@ -609,8 +613,11 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
     return ret;
 }
 
-
-
+/* Set up a relay node as origin node.
+ * Main difference is that relays fetch content from origins, but origins
+ * only serve local content or content that has been explicitly posted by 
+ * a client.
+ */
 
 int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
 {
