@@ -96,39 +96,68 @@ const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* byt
  *     message_type(i),
  *     url_length(i),
  *     url(...),
+ *     intent_mode(i),
+ *     [ start_group_id(i),
+ *       start_object_id(i),]
  *     datagram_stream_id(i)
  * }
  * 
  * Same encoding and decoding code is used for both.
  * 
  */
-size_t quicrq_rq_msg_reserve(size_t url_length)
+size_t quicrq_rq_msg_reserve(size_t url_length, quicrq_subscribe_intent_enum intent_mode)
 {
-    return 8 + 2 + url_length;
+    size_t intent_length = (intent_mode == quicrq_subscribe_intent_start_point) ? 17:1;
+    return 8 + 2 + url_length + intent_mode;
 }
 
-uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint64_t datagram_stream_id)
+uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url,
+    quicrq_subscribe_intent_enum intent_mode, uint64_t start_group_id,  uint64_t start_object_id,  
+    uint64_t datagram_stream_id)
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
-        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url)) != NULL){
-        if (message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
-            bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_stream_id);
+        (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)intent_mode)) != NULL){
+        if (intent_mode != quicrq_subscribe_intent_start_point ||
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_group_id)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_object_id)) != NULL) {
+            if (message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
+                bytes = picoquic_frames_varint_encode(bytes, bytes_max, datagram_stream_id);
+            }
         }
     }
     return bytes;
 }
 
-const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * message_type, size_t * url_length, const uint8_t** url, uint64_t* datagram_stream_id)
+const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * message_type, size_t * url_length, const uint8_t** url,
+    quicrq_subscribe_intent_enum * intent_mode, uint64_t * start_group_id,  uint64_t * start_object_id, uint64_t* datagram_stream_id)
 {
+    uint64_t intent_64 = 0;
     *datagram_stream_id = 0;
     *url = NULL;
     *url_length = 0;
+    *intent_mode = 0;
+    *start_group_id = 0;
+    *start_object_id = 0;
+
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, url_length)) != NULL){
         *url = bytes;
         if ((bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length)) != NULL &&
-            *message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
-            bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id);
+            (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &intent_64)) != NULL) {
+            if (intent_64 > quicrq_subscribe_intent_start_point) {
+                bytes = NULL;
+            }
+            else {
+                *intent_mode = (quicrq_subscribe_intent_enum)intent_64;
+
+                if ((*intent_mode != quicrq_subscribe_intent_start_point ||
+                    ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_group_id)) != NULL &&
+                        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_object_id)) != NULL)) &&
+                    *message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
+                    bytes = picoquic_frames_varint_decode(bytes, bytes_max, datagram_stream_id);
+                }
+            }
         }
     }
     return bytes;
@@ -496,7 +525,8 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
         switch (msg->message_type) {
         case QUICRQ_ACTION_REQUEST_STREAM:
         case QUICRQ_ACTION_REQUEST_DATAGRAM:
-            bytes = quicrq_rq_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url, &msg->datagram_stream_id);
+            bytes = quicrq_rq_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url,
+                &msg->subscribe_intent, &msg->group_id, &msg->object_id, &msg->datagram_stream_id);
             break;
         case QUICRQ_ACTION_FIN_DATAGRAM:
             bytes = quicrq_fin_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
@@ -542,7 +572,8 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
     switch (msg->message_type) {
     case QUICRQ_ACTION_REQUEST_STREAM:
     case QUICRQ_ACTION_REQUEST_DATAGRAM:
-        bytes = quicrq_rq_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url, msg->datagram_stream_id);
+        bytes = quicrq_rq_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url,
+            msg->subscribe_intent, msg->group_id, msg->object_id, msg->datagram_stream_id);
         break;
     case QUICRQ_ACTION_FIN_DATAGRAM:
         bytes = quicrq_fin_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
@@ -856,26 +887,33 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
  * Send a media request to the server.
  */
 int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx, quicrq_stream_ctx_t** p_stream_ctx)
+    int use_datagrams, const quicrq_subscribe_intent_t * intent,
+    quicrq_media_consumer_fn media_consumer_fn, void* media_ctx, quicrq_stream_ctx_t** p_stream_ctx)
 {
     /* Create a stream for the media */
     int ret = 0;
     uint64_t stream_id = picoquic_get_next_local_stream_id(cnx_ctx->cnx, 0);
     quicrq_stream_ctx_t* stream_ctx = quicrq_create_stream_context(cnx_ctx, stream_id);
     quicrq_message_buffer_t* message = &stream_ctx->message_sent;
+    static const quicrq_subscribe_intent_t default_intent = { 0 };
+
+    if (intent == NULL) {
+        intent = &default_intent;
+    }
 
     if (stream_ctx == NULL) {
         ret = -1;
     }
     else {
-        if (quicrq_msg_buffer_alloc(message, quicrq_rq_msg_reserve(url_length), 0) != 0) {
+        if (quicrq_msg_buffer_alloc(message, quicrq_rq_msg_reserve(url_length, intent->intent_mode), 0) != 0) {
             ret = -1;
         }
         else {
             /* Format the media request */
             uint64_t datagram_stream_id = stream_ctx->cnx_ctx->next_datagram_stream_id;
             uint8_t* message_next = quicrq_rq_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
-                (use_datagrams)? QUICRQ_ACTION_REQUEST_DATAGRAM:QUICRQ_ACTION_REQUEST_STREAM, url_length, url, datagram_stream_id);
+                (use_datagrams)? QUICRQ_ACTION_REQUEST_DATAGRAM:QUICRQ_ACTION_REQUEST_STREAM, url_length, url,
+                intent->intent_mode, intent->start_group_id, intent->start_object_id, datagram_stream_id);
             if (message_next == NULL) {
                 ret = -1;
             } else {
@@ -906,7 +944,7 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
     int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx)
 {
     return quicrq_cnx_subscribe_media_ex(cnx_ctx, url, url_length,
-        use_datagrams, media_consumer_fn, media_ctx, NULL);
+        use_datagrams, NULL, media_consumer_fn, media_ctx, NULL);
 }
 
 /* Process an incoming subscribe command */

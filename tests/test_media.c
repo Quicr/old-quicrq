@@ -956,7 +956,8 @@ int test_object_stream_consumer_cb(
     return ret;
 }
 
-test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log)
+test_object_stream_ctx_t* test_object_stream_subscribe_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams,
+    quicrq_subscribe_intent_t * intent, char const* media_result_file, char const* media_result_log)
 {
     int ret = 0;
     /* Open and initialize result file and log file */
@@ -975,7 +976,7 @@ test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx
             ret = -1;
         }
         else {
-            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, use_datagrams, 1, test_object_stream_consumer_cb, cons_ctx);
+            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, use_datagrams, 1, intent, test_object_stream_consumer_cb, cons_ctx);
             if (cons_ctx->media_ctx == NULL) {
                 ret = -1;
             }
@@ -989,6 +990,12 @@ test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx
     return cons_ctx;
 }
 
+test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams,
+    char const* media_result_file, char const* media_result_log)
+{
+    return test_object_stream_subscribe_ex(cnx_ctx, url, url_length, use_datagrams,
+        NULL, media_result_file, media_result_log);
+}
 
 /* Compare media file.
  * These are binary files composed of sequences of objects.

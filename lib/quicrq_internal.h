@@ -93,6 +93,7 @@ typedef struct st_quicrq_message_t {
     const uint8_t* data;
     unsigned int use_datagram;
     uint8_t cache_policy;
+    quicrq_subscribe_intent_enum subscribe_intent;
 } quicrq_message_t;
 
 /* Encode and decode protocol messages
@@ -119,9 +120,11 @@ const uint8_t* quicrq_subscribe_msg_decode(const uint8_t* bytes, const uint8_t* 
 size_t quicrq_notify_msg_reserve(size_t url_length);
 uint8_t* quicrq_notify_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url);
 const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
-size_t quicrq_rq_msg_reserve(size_t url_length);
-uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, uint64_t datagram_stream_id);
-const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, uint64_t* datagram_stream_id);
+size_t quicrq_rq_msg_reserve(size_t url_length, quicrq_subscribe_intent_enum intent_mode);
+uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url,
+    quicrq_subscribe_intent_enum intent_mode, uint64_t start_group_id,  uint64_t start_object_id, uint64_t datagram_stream_id);
+const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url,
+    quicrq_subscribe_intent_enum * intent_mode, uint64_t * start_group_id,  uint64_t * start_object_id, uint64_t* datagram_stream_id);
 size_t quicrq_post_msg_reserve(size_t url_length);
 uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, unsigned int datagram_capable, uint8_t cache_policy);
 const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, unsigned int* datagram_capable, uint8_t* cache_policy);
@@ -295,7 +298,8 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx,
     quicrq_media_consumer_fn media_consumer_fn, void* media_ctx);
 
 int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx, quicrq_stream_ctx_t** p_stream_ctx);
+    int use_datagrams, const quicrq_subscribe_intent_t * intent,
+    quicrq_media_consumer_fn media_consumer_fn, void* media_ctx, quicrq_stream_ctx_t** p_stream_ctx);
 
 
 /* Quicrq stream handling.
