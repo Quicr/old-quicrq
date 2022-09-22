@@ -116,9 +116,16 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
 
     if (ret == 0) {
         /* Add a test source to the configuration on client #1 (publisher) */
+        quicrq_media_object_source_properties_t properties = { 0 };
         int publish_node = 1;
-        config->object_sources[0] = test_media_object_source_publish(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-            strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time);
+
+        if (test_cache_clear) {
+            properties.use_real_time_caching = 1;
+            quicrq_set_cache_duration(config->nodes[0], 5000000);
+        }
+
+        config->object_sources[0] = test_media_object_source_publish_ex(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+            strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time, &properties);
         if (config->object_sources[0] == NULL) {
             ret = -1;
         }
@@ -327,6 +334,13 @@ int quicrq_triangle_start_point_test()
 int quicrq_triangle_cache_test()
 {
     int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_cache_stream_test()
+{
+    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1);
 
     return ret;
 }

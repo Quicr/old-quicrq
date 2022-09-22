@@ -642,7 +642,7 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
  */
 
 quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
-    void* pub_ctx, int is_local_object_source)
+    void* pub_ctx, int is_local_object_source, int is_cache_real_time)
 {
     quicrq_media_source_ctx_t* srce_ctx = NULL;
     size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
@@ -655,6 +655,7 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
             srce_ctx->media_url = ((uint8_t*)srce_ctx) + sizeof(quicrq_media_source_ctx_t);
             srce_ctx->media_url_length = url_length;
             memcpy(srce_ctx->media_url, url, url_length);
+            srce_ctx->is_cache_real_time = is_cache_real_time;
             if (qr_ctx->last_source == NULL) {
                 qr_ctx->first_source = srce_ctx;
                 qr_ctx->last_source = srce_ctx;

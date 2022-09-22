@@ -177,6 +177,9 @@ uint64_t test_media_object_source_next_time(test_media_object_source_context_t* 
 void test_media_object_source_delete(test_media_object_source_context_t* object_pub_ctx);
 test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length, char const* media_source_path,
     const generation_parameters_t* generation_model, int is_real_time, uint64_t start_time);
+test_media_object_source_context_t* test_media_object_source_publish_ex(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
+    char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
+    uint64_t start_time, quicrq_media_object_source_properties_t* properties);
 int test_media_object_source_set_start(test_media_object_source_context_t* object_pub_ctx, uint64_t start_group, uint64_t start_object);
 
 int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_datagram, int is_real_time, int is_post,

@@ -554,17 +554,18 @@ int test_media_is_audio(const uint8_t* url, size_t url_length)
     return is_audio;
 }
 
-test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
+test_media_object_source_context_t* test_media_object_source_publish_ex(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
-    uint64_t start_time)
+    uint64_t start_time, quicrq_media_object_source_properties_t * properties)
 {
+
     test_media_object_source_context_t* object_pub_ctx = (test_media_object_source_context_t*)malloc(
         sizeof(test_media_object_source_context_t));
     if (object_pub_ctx != NULL) {
         memset(object_pub_ctx, 0, sizeof(test_media_object_source_context_t));
         object_pub_ctx->pub_ctx =
             test_media_publisher_init(media_source_path, generation_model, is_real_time, start_time);
-        object_pub_ctx->object_source_ctx = quicrq_publish_object_source(qr_ctx, url, url_length, NULL);
+        object_pub_ctx->object_source_ctx = quicrq_publish_object_source(qr_ctx, url, url_length, properties);
 
         if (object_pub_ctx->pub_ctx == NULL || object_pub_ctx->object_source_ctx == NULL) {
             test_media_object_source_delete(object_pub_ctx);
@@ -577,6 +578,13 @@ test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_
         }
     }
     return object_pub_ctx;
+}
+
+test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
+    char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
+    uint64_t start_time)
+{
+    return test_media_object_source_publish_ex(qr_ctx, url, url_length, media_source_path, generation_model, is_real_time, start_time, NULL);
 }
 
 int test_media_object_source_set_start(test_media_object_source_context_t* object_pub_ctx, uint64_t start_group, uint64_t start_object)

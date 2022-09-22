@@ -299,6 +299,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(triangle_cache_stream) {
+			int ret = quicrq_triangle_cache_stream_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(pyramid_basic) {
 			int ret = quicrq_pyramid_basic_test();
 

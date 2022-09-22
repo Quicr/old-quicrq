@@ -225,7 +225,7 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
 void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 
 quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
-    void* pub_ctx, int is_local_object_source);
+    void* pub_ctx, int is_local_object_source, int is_cache_real_time);
 
  /* Quicrq per media object source context.
   */
@@ -316,6 +316,7 @@ typedef enum {
     quicrq_sending_repair,
     quicrq_sending_offset,
     quicrq_sending_start_point,
+    quicrq_sending_cache_policy,
     quicrq_sending_fin,
     quicrq_sending_subscribe,
     quicrq_waiting_notify,

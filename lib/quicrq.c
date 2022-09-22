@@ -1239,7 +1239,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     else {
                         /* Queue the media request message to that stream */
                         message->message_size = message_next - message->buffer;
-                        stream_ctx->send_state = quicrq_sending_start_point;
+                        stream_ctx->send_state = quicrq_sending_cache_policy;
                     }
                 }
             }
@@ -1326,6 +1326,11 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         case quicrq_sending_start_point:
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             stream_ctx->is_start_object_id_sent = 1;
+            stream_ctx->send_state = quicrq_sending_ready;
+            break;
+        case quicrq_sending_cache_policy:
+            ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
+            stream_ctx->is_cache_policy_sent = 1;
             stream_ctx->send_state = quicrq_sending_ready;
             break;
         case quicrq_sending_subscribe:
@@ -2157,12 +2162,13 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
         (void)picoquic_add_to_stream(cnx_ctx->cnx, stream_ctx->stream_id, NULL, 0, 1);
     }
     if (stream_ctx->media_ctx != NULL) {
+        uint64_t current_time = picoquic_get_quic_time(cnx_ctx->qr_ctx->quic);
         if (stream_ctx->is_sender) {
-            (void)quicrq_fragment_publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0);
+            (void)quicrq_fragment_publisher_fn(quicrq_media_source_close, stream_ctx->media_ctx, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, current_time);
         }
         else {
             if (stream_ctx->consumer_fn != NULL) {
-                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, 0, NULL, 0, 0, 0, 0, 0, 0, 0, 0);
+                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, current_time, NULL, 0, 0, 0, 0, 0, 0, 0, 0);
             }
         }
     }

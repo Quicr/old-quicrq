@@ -241,7 +241,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
 
         if (ret == 0) {
             /* if succeeded, publish the source */
-            ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0);
+            ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0, 0);
         }
 
         if (ret != 0) {
@@ -295,7 +295,7 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
             cache_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
             if (cache_ctx != NULL) {
                 char buffer[256];
-                ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0);
+                ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0, 0);
                 picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Create cache for URL: %s",
                     quicrq_uint8_t_to_text(url, url_length, buffer, 256));
                 if (ret != 0) {
@@ -511,18 +511,8 @@ uint64_t quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
                 quicrq_fragment_cached_media_t* cached_ctx = (quicrq_fragment_cached_media_t*)srce_ctx->pub_ctx;
 
                 if (srce_ctx->is_cache_real_time) {
-                    uint64_t kept_group_id = cached_ctx->next_group_id;
-                    quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
-
-                    /* Find the smallest GOB not currently read by active connections */
-                    while (stream_ctx != NULL) {
-                        if (stream_ctx->next_group_id < kept_group_id) {
-                            kept_group_id = stream_ctx->next_group_id;
-                        }
-                        stream_ctx = stream_ctx->next_stream_for_source;
-                    }
-                    /* Ask the cache management to purge up to that GOB */
-                    quicrq_fragment_cache_media_purge_to_gob(cached_ctx, kept_group_id);
+                    /* Ask the cache management to purge up to the last useful GOB */
+                    quicrq_fragment_cache_media_purge_to_gob(srce_ctx);
                 }
 
                 if (qr_ctx->cache_duration_max > 0 && cached_ctx->is_closed && srce_ctx->first_stream == NULL) {
@@ -585,7 +575,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
             /* Create a cache context for the URL */
             cache_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
             if (cache_ctx != NULL) {
-                ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0);
+                ret = quicrq_publish_fragment_cached_media(qr_ctx, cache_ctx, url, url_length, 0, 0);
                 if (ret != 0) {
                     /* Could not publish the media, free the resource. */
                     free(cache_ctx);

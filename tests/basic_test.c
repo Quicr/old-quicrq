@@ -223,6 +223,9 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
         if (next_time > config->simulated_time) {
             config->simulated_time = next_time;
         }
+        else {
+            next_time = config->simulated_time;
+        }
         switch (next_step_type) {
         case 1:
             /* Simulate arrival of data for an object source */

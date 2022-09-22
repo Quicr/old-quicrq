@@ -47,7 +47,6 @@ typedef struct st_quicrq_fragment_cached_media_t {
     quicrq_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree;
     int is_closed;
-    int use_real_time_caching : 1;
     uint64_t cache_delete_time;
 } quicrq_fragment_cached_media_t;
 
@@ -132,8 +131,7 @@ int quicrq_fragment_cache_set_real_time_cache(quicrq_fragment_cached_media_t* ca
  * - Delete all objects with GOB < first kept.
  */
 void quicrq_fragment_cache_media_purge_to_gob(
-    quicrq_fragment_cached_media_t* cached_ctx,
-    uint64_t kept_group_id);
+    quicrq_media_source_ctx_t* srce_ctx);
 
 /* Purging the old fragments from the cache.
  * There are two modes of operation.
@@ -281,7 +279,7 @@ void quicrq_fragment_publisher_delete(void* v_pub_ctx);
 /* Fragment cache media publish */
 int quicrq_publish_fragment_cached_media(quicrq_ctx_t* qr_ctx,
     quicrq_fragment_cached_media_t* cache_ctx, const uint8_t* url, const size_t url_length,
-    int is_local_object_source);
+    int is_local_object_source, int is_cache_real_time);
 
 #ifdef __cplusplus
 }

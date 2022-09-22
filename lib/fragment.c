@@ -363,7 +363,7 @@ int quicrq_fragment_cache_set_real_time_cache(quicrq_fragment_cached_media_t* ca
     int ret = 0;
     quicrq_stream_ctx_t* stream_ctx = cached_ctx->srce_ctx->first_stream;
     /* remember the policy */
-    cached_ctx->use_real_time_caching = 1;
+    cached_ctx->srce_ctx->is_cache_real_time = 1;
     /* Set the cache policy for the dependent streams. */
     while (stream_ctx != NULL && ret == 0) {
         /* for each client waiting for data on this media,
@@ -385,24 +385,39 @@ int quicrq_fragment_cache_set_real_time_cache(quicrq_fragment_cached_media_t* ca
  * - Delete all objects with GOB < last.
  */
 void quicrq_fragment_cache_media_purge_to_gob(
-    quicrq_fragment_cached_media_t* cached_ctx,
-    uint64_t kept_group_id)
+    quicrq_media_source_ctx_t* srce_ctx)
 {
     picosplay_node_t* fragment_node;
+    quicrq_fragment_cached_media_t* cached_ctx = (quicrq_fragment_cached_media_t*)srce_ctx->pub_ctx;
+    if (cached_ctx != NULL) {
+        uint64_t kept_group_id = cached_ctx->next_group_id;
+        quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
 
-    /* Purge all segments below that GOB. */
-    while ((fragment_node = picosplay_first(&cached_ctx->fragment_tree)) != NULL) {
-        /* Locate the first fragment in object order */
-        quicrq_cached_fragment_t* fragment =
-            (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
-        if (fragment->group_id >= kept_group_id) {
-            /* keep this fragment */
-            cached_ctx->first_group_id = fragment->group_id;
-            cached_ctx->first_object_id = fragment->object_id;
-            break;
+        /* Find the smallest GOB not currently read by active connections */
+        while (stream_ctx != NULL) {
+            quicrq_fragment_publisher_context_t* media_ctx = (quicrq_fragment_publisher_context_t*)stream_ctx->media_ctx;
+            quicrq_fragment_publisher_object_state_t* first_object = quicrq_fragment_cache_node_value(picosplay_first(&media_ctx->publisher_object_tree));
+
+            if (first_object != NULL && first_object->group_id < kept_group_id) {
+                kept_group_id = first_object->group_id;
+            }
+            stream_ctx = stream_ctx->next_stream_for_source;
         }
-        else {
-            picosplay_delete_hint(&cached_ctx->fragment_tree, fragment_node);
+
+        /* Purge all segments below that GOB. */
+        while ((fragment_node = picosplay_first(&cached_ctx->fragment_tree)) != NULL) {
+            /* Locate the first fragment in object order */
+            quicrq_cached_fragment_t* fragment =
+                (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+            if (fragment->group_id >= kept_group_id) {
+                /* keep this fragment */
+                cached_ctx->first_group_id = fragment->group_id;
+                cached_ctx->first_object_id = fragment->object_id;
+                break;
+            }
+            else {
+                picosplay_delete_hint(&cached_ctx->fragment_tree, fragment_node);
+            }
         }
     }
 }
@@ -1115,10 +1130,10 @@ void quicrq_fragment_publisher_delete(void* v_pub_ctx)
 
 int quicrq_publish_fragment_cached_media(quicrq_ctx_t* qr_ctx,
     quicrq_fragment_cached_media_t* cache_ctx, const uint8_t* url, const size_t url_length,
-    int is_local_object_source)
+    int is_local_object_source, int is_cache_real_time)
 {
     int ret = 0;
     /* if succeeded, publish the source */
-    cache_ctx->srce_ctx = quicrq_publish_datagram_source(qr_ctx, url, url_length, cache_ctx, is_local_object_source);
+    cache_ctx->srce_ctx = quicrq_publish_datagram_source(qr_ctx, url, url_length, cache_ctx, is_local_object_source, is_cache_real_time);
     return (cache_ctx->srce_ctx == NULL)?-1:0;
 }
