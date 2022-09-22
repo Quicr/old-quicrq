@@ -91,7 +91,9 @@ int quicrq_relay_consumer_cb(
         /* Document the final object */
         if (cons_ctx->cached_ctx->final_group_id == 0 && cons_ctx->cached_ctx->final_object_id == 0) {
             /* cache delete time set in the future to allow for reconnection. */
-            cons_ctx->cached_ctx->cache_delete_time = current_time + 30000000;
+            cons_ctx->cached_ctx->cache_delete_time = current_time + 
+                (cons_ctx->qr_ctx->cache_duration_max > QUICRQ_CACHE_INITIAL_DURATION)?
+                cons_ctx->qr_ctx->cache_duration_max:QUICRQ_CACHE_INITIAL_DURATION;
             /* Document the last group_id and object_id that were fully received. */
             if (cons_ctx->cached_ctx->next_offset == 0) {
                 cons_ctx->cached_ctx->final_group_id = cons_ctx->cached_ctx->next_group_id;
@@ -128,7 +130,8 @@ int quicrq_relay_consumer_cb(
         }
         else {
             /* cache delete time set at short interval. */
-            cons_ctx->cached_ctx->cache_delete_time = current_time + 3000000;
+            cons_ctx->cached_ctx->cache_delete_time = current_time + 
+                (cons_ctx->qr_ctx->cache_duration_max > 3000000)?cons_ctx->qr_ctx->cache_duration_max:3000000;
         }
         cons_ctx->cached_ctx->is_closed = 1;
         
@@ -182,12 +185,13 @@ int quicrq_relay_check_server_cnx(quicrq_relay_context_t* relay_ctx, quicrq_ctx_
     return ret;
 }
 
-quicrq_relay_consumer_context_t* quicrq_relay_create_cons_ctx()
+quicrq_relay_consumer_context_t* quicrq_relay_create_cons_ctx(quicrq_ctx_t* qr_ctx)
 {
     quicrq_relay_consumer_context_t* cons_ctx = (quicrq_relay_consumer_context_t*)
         malloc(sizeof(quicrq_relay_consumer_context_t));
     if (cons_ctx != NULL) {
         memset(cons_ctx, 0, sizeof(quicrq_relay_consumer_context_t));
+        cons_ctx->qr_ctx = qr_ctx;
     }
     return cons_ctx;
 }
@@ -214,7 +218,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
 
             if (ret == 0) {
                 /* Create a consumer context for the relay to server connection */
-                cons_ctx = quicrq_relay_create_cons_ctx();
+                cons_ctx = quicrq_relay_create_cons_ctx(qr_ctx);
 
                 if (cons_ctx == NULL) {
                     ret = -1;
@@ -308,7 +312,7 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
         }
 
         if (ret == 0) {
-            cons_ctx = quicrq_relay_create_cons_ctx();
+            cons_ctx = quicrq_relay_create_cons_ctx(qr_ctx);
             if (cons_ctx == NULL) {
                 ret = -1;
             }
@@ -557,7 +561,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
     int ret = 0;
     quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
     quicrq_fragment_cached_media_t* cache_ctx = NULL;
-    quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx();
+    quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx(qr_ctx);
     char buffer[256];
 
     if (cons_ctx == NULL) {

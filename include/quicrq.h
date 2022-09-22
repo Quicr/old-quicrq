@@ -49,6 +49,23 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
 void quicrq_delete(quicrq_ctx_t* ctx);
 picoquic_quic_t* quicrq_get_quic_ctx(quicrq_ctx_t* ctx);
 void quicrq_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
+
+/* Cache management.
+ * Media caches are kept in relays as long as a connection uses them, or up to
+ * 'cache_duration_max' if not in use. This value is set using `quicrq_set_cache_duration`. 
+ * If the value is set to zero, the cache will not be purged.
+ * 
+ * The cache will also not be purged for 30 seconds if it was not filled yet. This happens when 
+ * an empty cache entry is created in response to a media request, but the media
+ * source is not connected yet. This mechanism may have to be revised in a future
+ * version.
+ * 
+ * Cache is purged when `quicrq_time_check` is called, and no purge has been
+ * done for half the maximum duration.
+ */
+#define QUICRQ_CACHE_DURATION_DEFAULT 10000000
+#define QUICRQ_CACHE_INITIAL_DURATION 30000000
+
 void quicrq_set_cache_duration(quicrq_ctx_t* qr_ctx, uint64_t cache_duration_max);
 uint64_t quicrq_time_check(quicrq_ctx_t* qr_ctx, uint64_t current_time);
 
