@@ -74,6 +74,7 @@ static const quicrq_test_def_t test_table[] =
     { "triangle_cache_loss", quicrq_triangle_cache_loss_test },
     { "triangle_cache_stream", quicrq_triangle_cache_stream_test },
     { "triangle_intent", quicrq_triangle_intent_test },
+    { "triangle_intent_datagram", quicrq_triangle_intent_datagram_test },
     { "pyramid_basic", quicrq_pyramid_basic_test },
     { "pyramid_datagram", quicrq_pyramid_datagram_test },
     { "pyramid_datagram_loss", quicrq_pyramid_datagram_loss_test },

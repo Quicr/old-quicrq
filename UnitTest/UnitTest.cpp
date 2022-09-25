@@ -288,7 +288,7 @@ namespace UnitTest
 		}
 
 #if 0
-		/* Start point function is superceded by "receiver intent" */
+		/* Start point function needs to be revised after "subscriber intent" */
 		TEST_METHOD(triangle_start_point) {
 			int ret = quicrq_triangle_start_point_test();
 
@@ -315,6 +315,12 @@ namespace UnitTest
 
 		TEST_METHOD(triangle_intent) {
 			int ret = quicrq_triangle_intent_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_datagram) {
+			int ret = quicrq_triangle_intent_datagram_test();
 
 			Assert::AreEqual(ret, 0);
 		}

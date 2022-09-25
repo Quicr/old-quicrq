@@ -56,6 +56,7 @@ extern "C" {
     int quicrq_triangle_cache_loss_test();
     int quicrq_triangle_cache_stream_test();
     int quicrq_triangle_intent_test();
+    int quicrq_triangle_intent_datagram_test();
     int quicrq_pyramid_basic_test();
     int quicrq_pyramid_datagram_test();
     int quicrq_pyramid_datagram_loss_test();

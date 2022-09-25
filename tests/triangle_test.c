@@ -353,6 +353,13 @@ int quicrq_triangle_datagram_extra_test()
     return ret;
 }
 
+/* The start point test verifies what happens if a source does not start
+ * at Group=0, Object=0. That would be, for example, a source resuming
+ * after a hiatus. This test will have to be rewritten after we change
+ * the "object source" API to let publishers explicitly specify the
+ * group and object ID.
+ * It is disabled for now.
+ */
 int quicrq_triangle_start_point_test()
 {
     int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 12345, 0, 0);
@@ -382,6 +389,13 @@ int quicrq_triangle_cache_stream_test()
 }
 
 int quicrq_triangle_intent_test()
+{
+    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_datagram_test()
 {
     int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 1);
 
