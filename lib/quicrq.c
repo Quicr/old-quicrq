@@ -512,11 +512,6 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
                 picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
                     object_id, datagram_stream_id, stream_ctx->stream_id);
             }
-#if 1
-            if (cnx_ctx->qr_ctx->relay_ctx == NULL) {
-                DBG_PRINTF("%s", "bug");
-            }
-#endif
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, group_id, object_id, object_offset, 
                 queue_delay, flags, nb_objects_previous_group, is_last_fragment, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
@@ -1137,11 +1132,6 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
      */
 
     while (stream_ctx != NULL) {
-#if 1
-        if (cnx_ctx->qr_ctx->relay_ctx != NULL) {
-            DBG_PRINTF("%s", "Bug");
-        }
-#endif
         if (stream_ctx->is_datagram && stream_ctx->is_sender && stream_ctx->is_active_datagram && stream_ctx->datagram_stream_id < UINT64_MAX) {
             int media_was_sent = 0;
             ret = quicrq_fragment_datagram_publisher_fn(stream_ctx, context, space, &media_was_sent, &at_least_one_active, current_time);
@@ -1875,7 +1865,6 @@ quicrq_stream_ctx_t* quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx, con
                 stream_ctx->media_notify_fn = media_notify_fn;
                 stream_ctx->notify_ctx = notify_ctx;
                 /* Queue the media request message to that stream */
-                stream_ctx->is_client = 1;
                 message->message_size = message_next - message->buffer;
                 stream_ctx->send_state = quicrq_sending_subscribe;
                 stream_ctx->receive_state = quicrq_receive_notify;

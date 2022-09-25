@@ -411,7 +411,6 @@ struct st_quicrq_stream_ctx_t {
     /* Stream state */
     quicrq_stream_sending_state_enum send_state;
     quicrq_stream_receive_state_enum receive_state;
-    unsigned int is_client : 1;
     unsigned int is_sender : 1;
     /* Indicates whether local cache management follows the "real time" logic,
      * in which only recent objects are kept. By default, cache management 
@@ -432,9 +431,6 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_start_object_id_sent : 1;
     unsigned int is_final_object_id_sent : 1;
     unsigned int is_cache_policy_sent : 1;
-
-    size_t bytes_sent;
-    size_t bytes_received;
 
     quicrq_message_buffer_t message_sent;
     quicrq_message_buffer_t message_receive;

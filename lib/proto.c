@@ -919,7 +919,6 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
             } else {
                 char buffer[256];
                 /* Queue the media request message to that stream */
-                stream_ctx->is_client = 1;
                 stream_ctx->is_datagram = (use_datagrams != 0);
                 stream_ctx->datagram_stream_id = datagram_stream_id;
                 message->message_size = message_next - message->buffer;
@@ -1002,8 +1001,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
                     ret = -1;
                 }
                 else {
-                    /* Queue the post messageto that stream */
-                    stream_ctx->is_client = 0;
+                    /* Queue the post message to that stream */
                     stream_ctx->is_sender = 1;
                     stream_ctx->is_cache_policy_sent = stream_ctx->is_cache_real_time;
                     message->message_size = message_next - message->buffer;
@@ -1055,7 +1053,6 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
         else {
             /* Queue the accept message to that stream */
             char buffer[256];
-            stream_ctx->is_client = 1;
             stream_ctx->is_datagram = use_datagrams;
             message->message_size = message_next - message->buffer;
             stream_ctx->send_state = quicrq_sending_initial;
