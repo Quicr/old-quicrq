@@ -325,6 +325,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(triangle_intent_loss) {
+			int ret = quicrq_triangle_intent_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(pyramid_basic) {
 			int ret = quicrq_pyramid_basic_test();
 

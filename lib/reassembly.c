@@ -336,7 +336,7 @@ static int quicrq_reassembly_object_reassemble(quicrq_reassembly_object_t* objec
     return ret;
 }
 
-int quicrq_reassembly_update_next_object_id(quicrq_reassembly_context_t* reassembly_ctx,
+int quicrq_reassembly_update_start_point(quicrq_reassembly_context_t* reassembly_ctx,
     uint64_t current_time,
     quicrq_reassembly_object_ready_fn ready_fn,
     void* app_media_ctx)
@@ -471,7 +471,7 @@ int quicrq_reassembly_input(
                         /* update the next_object id */
                         reassembly_ctx->next_object_id++;
                         /* try processing all objects that might now be ready */
-                        ret = quicrq_reassembly_update_next_object_id(reassembly_ctx, current_time, ready_fn, app_media_ctx);
+                        ret = quicrq_reassembly_update_start_point(reassembly_ctx, current_time, ready_fn, app_media_ctx);
                     }
                 }
             }
@@ -483,20 +483,24 @@ int quicrq_reassembly_input(
 
 int quicrq_reassembly_learn_start_point(
     quicrq_reassembly_context_t* reassembly_ctx,
+    uint64_t start_group_id,
     uint64_t start_object_id,
     uint64_t current_time,
     quicrq_reassembly_object_ready_fn ready_fn,
     void* app_media_ctx)
 {
     int ret = 0;
-    if (start_object_id <= reassembly_ctx->next_object_id) {
+    if (start_group_id < reassembly_ctx->next_group_id ||
+        (start_group_id == reassembly_ctx->next_group_id &&
+        start_object_id <= reassembly_ctx->next_object_id)) {
         /* No need for this object. */
     }
     else {
         /* TODO: more complex if stream can be "repaired" from alternative source */
         /* If packets have been received after that point, they may be considered repaired */
+        reassembly_ctx->next_group_id = start_group_id;
         reassembly_ctx->next_object_id = start_object_id;
-        ret = quicrq_reassembly_update_next_object_id(reassembly_ctx, current_time, ready_fn, app_media_ctx);
+        ret = quicrq_reassembly_update_start_point(reassembly_ctx, current_time, ready_fn, app_media_ctx);
     }
     return ret;
 }

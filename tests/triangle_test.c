@@ -397,7 +397,14 @@ int quicrq_triangle_intent_test()
 
 int quicrq_triangle_intent_datagram_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 1);
+    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_loss_test()
+{
+    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0, 0, 0, 1);
 
     return ret;
 }

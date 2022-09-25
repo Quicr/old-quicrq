@@ -315,7 +315,7 @@ typedef enum {
     quicrq_sending_stream,
     quicrq_sending_initial,
     quicrq_sending_repair,
-    quicrq_sending_offset,
+    quicrq_sending_final_point,
     quicrq_sending_start_point,
     quicrq_sending_cache_policy,
     quicrq_sending_fin,

@@ -815,7 +815,7 @@ int test_media_object_consumer_cb(
         }
         break;
     case quicrq_media_start_point:
-        ret = quicrq_reassembly_learn_start_point(&cons_ctx->reassembly_ctx, object_id, current_time,
+        ret = quicrq_reassembly_learn_start_point(&cons_ctx->reassembly_ctx, group_id, object_id, current_time,
             test_media_consumer_object_ready, cons_ctx);
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
