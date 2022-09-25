@@ -276,7 +276,7 @@ int quicrq_congestion_test_one(int is_real_time, int use_datagrams, uint64_t sim
             int observed_drops = 0;
             uint8_t observed_min_loss = 0xff;
 
-            ret = quicrq_compare_media_file_ex(result_file_name, media_source_path, &observed_drops, &observed_min_loss);
+            ret = quicrq_compare_media_file_ex(result_file_name, media_source_path, &observed_drops, &observed_min_loss, 0, 0);
 
             if (ret == 0) {
                 if (observed_drops > max_drops) {

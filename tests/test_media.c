@@ -1000,7 +1000,8 @@ test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx
 /* Compare media file.
  * These are binary files composed of sequences of objects.
  */
-int quicrq_compare_media_file_ex(char const* media_result_file, char const* media_reference_file, int * nb_losses, uint8_t * loss_flag)
+int quicrq_compare_media_file_ex(char const* media_result_file, char const* media_reference_file,
+    int * nb_losses, uint8_t * loss_flag, uint64_t start_group_id, uint64_t start_object_id)
 {
     int ret = 0;
     /* Open contexts for each file */
@@ -1024,6 +1025,9 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
     else {
         int is_audio = test_media_is_audio((const uint8_t*)media_reference_file, strlen(media_reference_file));
         int nb_object = 0;
+        int nb_ref_object = 0;
+        uint64_t ref_group_id = 0;
+        uint64_t ref_object_id = 0;
 
         /* Read the objects on both. They should match, or both should come to an end */
         while (ret == 0 && !result_ctx->is_finished && !ref_ctx->is_finished) {
@@ -1032,7 +1036,25 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
             if (ret != 0) {
                 DBG_PRINTF("Could not read object from results, ret=%d", ret);
             } else {
-                ret = test_media_read_object_from_file(ref_ctx);
+                /* Get the next object, skipping to the start point if necessary */
+                do {
+                    ret = test_media_read_object_from_file(ref_ctx);
+                    if (ret == 0) {
+                        if (nb_ref_object > 0) {
+                            /* Mimic here the generation of group id and object id in the test publisher */
+                            if (ref_ctx->current_header.length > 5000) {
+                                ref_group_id++;
+                                ref_object_id = 0;
+                            }
+                            else {
+                                ref_object_id++;
+                            }
+                        }
+                        nb_ref_object++;
+                    }
+                } while (ret == 0 && (ref_group_id < start_group_id ||
+                    (ref_group_id == start_group_id && ref_object_id < start_object_id)));
+                /* Compare values */
                 if (ret == 0) {
                     /* Compare the media objects */
                     if (result_ctx->is_finished) {
@@ -1103,7 +1125,7 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
 
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file)
 {
-    return quicrq_compare_media_file_ex(media_result_file, media_reference_file, NULL, NULL);
+    return quicrq_compare_media_file_ex(media_result_file, media_reference_file, NULL, NULL, 0, 0);
 }
 
 /* Compare log file to reference log file  

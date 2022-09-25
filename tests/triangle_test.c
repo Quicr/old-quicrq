@@ -85,6 +85,8 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     int partial_closure = 0;
     uint64_t client2_close_time = UINT64_MAX;
     int subscribed = 0;
+    uint64_t start_group_intent = 0;
+    uint64_t start_object_intent = 0;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx-%llu-%llu-%d-%d.txt", is_real_time, use_datagrams,
         (unsigned long long)simulate_losses, (unsigned long long) extra_delay, (unsigned long long) start_point, test_cache_clear, test_intent);
@@ -200,6 +202,10 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
                 subscribed = 1;
             }
             config->next_test_event_time = UINT64_MAX;
+            if (intent.intent_mode == quicrq_subscribe_intent_current_group) {
+                start_group_intent = 1;
+                start_object_intent = 0;
+            }
         }
 
         ret = quicrq_test_loop_step(config, &is_active, UINT64_MAX);
@@ -303,7 +309,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     }
     /* Verify that media file was received correctly */
     if (ret == 0) {
-        ret = quicrq_compare_media_file(result_file_name, media_source_path);
+        ret = quicrq_compare_media_file_ex(result_file_name, media_source_path, NULL, NULL, start_group_intent, start_object_intent);
     }
     else {
         DBG_PRINTF("Test failed before getting results, ret = %d", ret);
