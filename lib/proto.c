@@ -673,7 +673,7 @@ const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t
  */
 
 quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
-    void* pub_ctx, int is_local_object_source, int is_cache_real_time)
+    void* cache_ctx, int is_local_object_source, int is_cache_real_time)
 {
     quicrq_media_source_ctx_t* srce_ctx = NULL;
     size_t source_ctx_size = sizeof(quicrq_media_source_ctx_t) + url_length;
@@ -696,7 +696,7 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
                 srce_ctx->previous_source = qr_ctx->last_source;
                 qr_ctx->last_source = srce_ctx;
             }
-            srce_ctx->pub_ctx = pub_ctx;
+            srce_ctx->cache_ctx = cache_ctx;
             srce_ctx->is_local_object_source = is_local_object_source;
 
             if (quicrq_notify_url_to_all(qr_ctx, url, url_length) < 0) {
@@ -743,7 +743,7 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
         srce_ctx->next_source->previous_source = srce_ctx->previous_source;
     }
     /* We support only one kind of source, so we just call the delete function */
-    quicrq_fragment_publisher_delete(srce_ctx->pub_ctx);
+    quicrq_fragment_publisher_delete(srce_ctx->cache_ctx);
 
     free(srce_ctx);
 }
@@ -813,7 +813,7 @@ int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t*
         /* set the cache policy */
         stream_ctx->is_cache_real_time = srce_ctx->is_cache_real_time;
         /* Create a subscribe media context */
-        stream_ctx->media_ctx = quicrq_fragment_publisher_subscribe(srce_ctx->pub_ctx, stream_ctx);
+        stream_ctx->media_ctx = quicrq_fragment_publisher_subscribe(srce_ctx->cache_ctx, stream_ctx);
         if (stream_ctx->media_ctx == NULL) {
             ret = -1;
             quicrq_log_message(stream_ctx->cnx_ctx, "No media available for URL: %s",
@@ -1010,6 +1010,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
                     stream_ctx->send_state = quicrq_sending_initial;
                     stream_ctx->receive_state = quicrq_receive_confirmation;
                     stream_ctx->datagram_stream_id = UINT64_MAX;
+                    stream_ctx->is_datagram = (use_datagrams) ? 1 : 0;
                     picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
                 }
             }

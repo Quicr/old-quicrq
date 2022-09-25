@@ -50,8 +50,7 @@
 
 typedef struct st_quicrq_relay_consumer_context_t {
     quicrq_ctx_t* qr_ctx;
-    uint64_t last_object_id;
-    quicrq_fragment_cached_media_t* cached_ctx;
+    quicrq_fragment_cache_t* cache_ctx;
 } quicrq_relay_consumer_context_t;
 
 typedef struct st_quicrq_relay_context_t {

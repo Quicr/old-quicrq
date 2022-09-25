@@ -55,53 +55,53 @@ int quicrq_relay_consumer_cb(
         /* Check that this datagram was not yet received.
          * This requires accessing the cache by object_id, offset and length. */
          /* Add fragment (or fragments) to cache */
-        ret = quicrq_fragment_propose_to_cache(cons_ctx->cached_ctx, data, 
+        ret = quicrq_fragment_propose_to_cache(cons_ctx->cache_ctx, data, 
             group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
         /* Manage fin of transmission */
         if (ret == 0) {
             /* If the final group id and object id are known, and the next expected
              * values match, then the transmission is finished. */
-            if ((cons_ctx->cached_ctx->final_group_id > 0 || cons_ctx->cached_ctx->final_object_id > 0) &&
-                cons_ctx->cached_ctx->next_group_id == cons_ctx->cached_ctx->final_group_id &&
-                cons_ctx->cached_ctx->next_object_id == cons_ctx->cached_ctx->final_object_id) {
+            if ((cons_ctx->cache_ctx->final_group_id > 0 || cons_ctx->cache_ctx->final_object_id > 0) &&
+                cons_ctx->cache_ctx->next_group_id == cons_ctx->cache_ctx->final_group_id &&
+                cons_ctx->cache_ctx->next_object_id == cons_ctx->cache_ctx->final_object_id) {
                 ret = quicrq_consumer_finished;
             }
         }
         break;
     case quicrq_media_final_object_id:
         /* Document the final group-ID and object-ID in context */
-        ret = quicrq_fragment_cache_learn_end_point(cons_ctx->cached_ctx, group_id, object_id);
+        ret = quicrq_fragment_cache_learn_end_point(cons_ctx->cache_ctx, group_id, object_id);
         if (ret == 0) {
             /* Manage fin of transmission on the consumer connection */
-            if (cons_ctx->cached_ctx->next_group_id == cons_ctx->cached_ctx->final_group_id &&
-                cons_ctx->cached_ctx->next_object_id == cons_ctx->cached_ctx->final_object_id) {
+            if (cons_ctx->cache_ctx->next_group_id == cons_ctx->cache_ctx->final_group_id &&
+                cons_ctx->cache_ctx->next_object_id == cons_ctx->cache_ctx->final_object_id) {
                 ret = quicrq_consumer_finished;
             }
         }
         break;
     case quicrq_media_real_time_cache:
         /* Set the cache policy to real time for the media, and then for all subscribed groups */
-        ret = quicrq_fragment_cache_set_real_time_cache(cons_ctx->cached_ctx);
+        ret = quicrq_fragment_cache_set_real_time_cache(cons_ctx->cache_ctx);
         break;
     case quicrq_media_start_point:
         /* Document the start point, and clean the cache of data before that point */
-        ret = quicrq_fragment_cache_learn_start_point(cons_ctx->cached_ctx, group_id, object_id);
+        ret = quicrq_fragment_cache_learn_start_point(cons_ctx->cache_ctx, group_id, object_id);
         break;
     case quicrq_media_close:
         /* Document the final object */
-        if (cons_ctx->cached_ctx->final_group_id == 0 && cons_ctx->cached_ctx->final_object_id == 0) {
+        if (cons_ctx->cache_ctx->final_group_id == 0 && cons_ctx->cache_ctx->final_object_id == 0) {
             /* cache delete time set in the future to allow for reconnection. */
-            cons_ctx->cached_ctx->cache_delete_time = current_time + 
+            cons_ctx->cache_ctx->cache_delete_time = current_time + 
                 (cons_ctx->qr_ctx->cache_duration_max > QUICRQ_CACHE_INITIAL_DURATION)?
                 cons_ctx->qr_ctx->cache_duration_max:QUICRQ_CACHE_INITIAL_DURATION;
             /* Document the last group_id and object_id that were fully received. */
-            if (cons_ctx->cached_ctx->next_offset == 0) {
-                cons_ctx->cached_ctx->final_group_id = cons_ctx->cached_ctx->next_group_id;
-                cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->next_object_id;
+            if (cons_ctx->cache_ctx->next_offset == 0) {
+                cons_ctx->cache_ctx->final_group_id = cons_ctx->cache_ctx->next_group_id;
+                cons_ctx->cache_ctx->final_object_id = cons_ctx->cache_ctx->next_object_id;
             }
-            else  if (cons_ctx->cached_ctx->next_object_id > 1) {
-                cons_ctx->cached_ctx->final_group_id = cons_ctx->cached_ctx->next_group_id;
-                cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->next_object_id - 1;
+            else  if (cons_ctx->cache_ctx->next_object_id > 1) {
+                cons_ctx->cache_ctx->final_group_id = cons_ctx->cache_ctx->next_group_id;
+                cons_ctx->cache_ctx->final_object_id = cons_ctx->cache_ctx->next_object_id - 1;
             }
             else {
                 /* find the last object that was fully received. If there is none,
@@ -111,33 +111,31 @@ int quicrq_relay_consumer_cb(
                 picosplay_node_t* fragment_node = NULL;
                 quicrq_cached_fragment_t* fragment = NULL;
 
-                key.group_id = cons_ctx->cached_ctx->next_group_id;
+                key.group_id = cons_ctx->cache_ctx->next_group_id;
                 key.object_id = 0;
                 key.offset = 0;
-                fragment_node = picosplay_find_previous(&cons_ctx->cached_ctx->fragment_tree, &key);
+                fragment_node = picosplay_find_previous(&cons_ctx->cache_ctx->fragment_tree, &key);
                 if (fragment_node != NULL) {
                     fragment = (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
                 }
                 if (fragment != NULL) {
-                    cons_ctx->cached_ctx->final_group_id = fragment->group_id;
-                    cons_ctx->cached_ctx->final_object_id = fragment->object_id;
+                    cons_ctx->cache_ctx->final_group_id = fragment->group_id;
+                    cons_ctx->cache_ctx->final_object_id = fragment->object_id;
                 }
                 else {
-                    cons_ctx->cached_ctx->final_group_id = cons_ctx->cached_ctx->first_group_id;
-                    cons_ctx->cached_ctx->final_object_id = cons_ctx->cached_ctx->first_object_id;
+                    cons_ctx->cache_ctx->final_group_id = cons_ctx->cache_ctx->first_group_id;
+                    cons_ctx->cache_ctx->final_object_id = cons_ctx->cache_ctx->first_object_id;
                 }
             }
         }
         else {
-            /* cache delete time set at short interval. */
-            cons_ctx->cached_ctx->cache_delete_time = current_time + 
-                (cons_ctx->qr_ctx->cache_duration_max > 3000000)?cons_ctx->qr_ctx->cache_duration_max:3000000;
+            /* Nothing? */
         }
-        cons_ctx->cached_ctx->is_closed = 1;
+        cons_ctx->cache_ctx->is_feed_closed = 1;
         
         /* Set the target delete date */
         /* Notify consumers of the stream */
-        quicrq_source_wakeup(cons_ctx->cached_ctx->srce_ctx);
+        quicrq_source_wakeup(cons_ctx->cache_ctx->srce_ctx);
         /* Free the media context resource */
         free(media_ctx);
         break;
@@ -207,7 +205,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
         quicrq_set_default_source(qr_ctx, NULL, NULL);
     }
     else {
-        quicrq_fragment_cached_media_t* cache_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
+        quicrq_fragment_cache_t* cache_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
         quicrq_relay_consumer_context_t* cons_ctx = NULL;
         if (cache_ctx == NULL) {
             ret = -1;
@@ -224,7 +222,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
                     ret = -1;
                 }
                 else {
-                    cons_ctx->cached_ctx = cache_ctx;
+                    cons_ctx->cache_ctx = cache_ctx;
 
                     /* Request a URL on a new stream on that connection */
                     ret = quicrq_cnx_subscribe_media(relay_ctx->cnx_ctx, url, url_length,
@@ -273,7 +271,7 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
     quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
     quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)qr_ctx->default_source_ctx;
 
-    quicrq_fragment_cached_media_t* cache_ctx = NULL;
+    quicrq_fragment_cache_t* cache_ctx = NULL;
     quicrq_relay_consumer_context_t* cons_ctx = NULL;
 
     /* If there is no valid connection to the server, create one. */
@@ -282,7 +280,7 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
         quicrq_media_source_ctx_t* srce_ctx = quicrq_find_local_media_source(qr_ctx, url, url_length);
 
         if (srce_ctx != NULL) {
-            cache_ctx = (quicrq_fragment_cached_media_t*)srce_ctx->pub_ctx;
+            cache_ctx = srce_ctx->cache_ctx;
             if (cache_ctx == NULL) {
                 ret = -1;
             }
@@ -326,7 +324,7 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
                     /* set the parameter in the stream context. */
                     char buffer[256];
 
-                    cons_ctx->cached_ctx = cache_ctx;
+                    cons_ctx->cache_ctx = cache_ctx;
                     ret = quicrq_set_media_stream_ctx(stream_ctx, quicrq_relay_consumer_cb, cons_ctx);
                     picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Posting URL: %s to server on stream %" PRIu64,
                         quicrq_uint8_t_to_text(url, url_length, buffer, 256), stream_ctx->stream_id);
@@ -512,21 +510,21 @@ uint64_t quicrq_manage_relay_cache(quicrq_ctx_t* qr_ctx, uint64_t current_time)
             quicrq_media_source_ctx_t* srce_to_delete = NULL;
             if (!srce_ctx->is_local_object_source) {
                 /* This is a source created by the relay */
-                quicrq_fragment_cached_media_t* cached_ctx = (quicrq_fragment_cached_media_t*)srce_ctx->pub_ctx;
+                quicrq_fragment_cache_t* cache_ctx = srce_ctx->cache_ctx;
 
                 if (srce_ctx->is_cache_real_time) {
                     /* Ask the cache management to purge up to the last useful GOB */
                     quicrq_fragment_cache_media_purge_to_gob(srce_ctx);
                 }
 
-                if (qr_ctx->cache_duration_max > 0 && cached_ctx->is_closed && srce_ctx->first_stream == NULL) {
+                if (qr_ctx->cache_duration_max > 0 && cache_ctx->is_feed_closed && srce_ctx->first_stream == NULL) {
                     /* If the source is closed and has no reader, delete at scheduled time. */
-                    if (current_time >= cached_ctx->cache_delete_time) {
+                    if (current_time >= cache_ctx->cache_delete_time) {
                         srce_to_delete = srce_ctx;
                     }
-                    else if (cached_ctx->cache_delete_time < next_time) {
+                    else if (cache_ctx->cache_delete_time < next_time) {
                         /* Not ready to delete yet, ask for a wake up on timer */
-                        next_time = cached_ctx->cache_delete_time;
+                        next_time = cache_ctx->cache_delete_time;
                         is_cache_closing_still_needed = 1;
                     }
                 }
@@ -560,7 +558,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
 {
     int ret = 0;
     quicrq_ctx_t* qr_ctx = stream_ctx->cnx_ctx->qr_ctx;
-    quicrq_fragment_cached_media_t* cache_ctx = NULL;
+    quicrq_fragment_cache_t* cache_ctx = NULL;
     quicrq_relay_consumer_context_t* cons_ctx = quicrq_relay_create_cons_ctx(qr_ctx);
     char buffer[256];
 
@@ -571,7 +569,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
         quicrq_media_source_ctx_t* srce_ctx = quicrq_find_local_media_source(qr_ctx, url, url_length);
 
         if (srce_ctx != NULL) {
-            cache_ctx = (quicrq_fragment_cached_media_t*)srce_ctx->pub_ctx;
+            cache_ctx = srce_ctx->cache_ctx;
             picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Found cache context for URL: %s",
                 quicrq_uint8_t_to_text(url, url_length, buffer, 256));
         }
@@ -596,7 +594,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
 
         if (ret == 0) {
             /* set the parameter in the stream context. */
-            cons_ctx->cached_ctx = cache_ctx;
+            cons_ctx->cache_ctx = cache_ctx;
             ret = quicrq_set_media_stream_ctx(stream_ctx, quicrq_relay_consumer_cb, cons_ctx);
         }
 

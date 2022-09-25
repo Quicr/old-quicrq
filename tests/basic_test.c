@@ -178,7 +178,7 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
     int ret = 0;
     int next_step_type = 0;
     int next_step_index = 0;
-    uint64_t next_time = UINT64_MAX;
+    uint64_t next_time = config->next_test_event_time;
 
     /* Check which object source has the lowest time */
     for (int i = 0; i < config->nb_object_sources; i++) {
@@ -223,10 +223,10 @@ int quicrq_test_loop_step(quicrq_test_config_t* config, int* is_active, uint64_t
         if (next_time > config->simulated_time) {
             config->simulated_time = next_time;
         }
-        else {
-            next_time = config->simulated_time;
-        }
+        next_time = config->simulated_time;
         switch (next_step_type) {
+        case 0:
+            break;
         case 1:
             /* Simulate arrival of data for an object source */
             ret = test_media_object_source_iterate(config->object_sources[next_step_index], next_time, is_active);
@@ -345,6 +345,7 @@ quicrq_test_config_t* quicrq_test_config_create(int nb_nodes, int nb_links, int 
 
         memset(config, 0, sizeof(quicrq_test_config_t));
         memset(config->ticket_encryption_key, 0x55, sizeof(config->ticket_encryption_key));
+        config->next_test_event_time = UINT64_MAX;
 
         /* Locate the default cert, key and root in the certs folder */
         if (picoquic_get_input_path(config->test_server_cert_file, sizeof(config->test_server_cert_file),

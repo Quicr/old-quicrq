@@ -5,6 +5,7 @@
 #include "quicrq_relay.h"
 #include "quicrq_internal.h"
 #include "quicrq_test_internal.h"
+#include "quicrq_fragment.h"
 
 /* Four legs test:
  * Four clients, attached to two relays, one of the clients is the publisher.
@@ -110,7 +111,142 @@ quicrq_test_config_t* quicrq_test_fourlegs_config_create(uint64_t simulate_loss)
     return config;
 }
 
-/* Basic relay test */
+/* For debugging: print the state of a data source.
+ * This is only used during tests, after modifying the code.
+ */
+void quicrq_debug_source_test(quicrq_ctx_t* node, int node_id)
+{
+    quicrq_media_source_ctx_t* source = node->first_source;
+    int source_id = 0;
+    
+    while (source != NULL) {
+        quicrq_fragment_cache_t* cache_ctx = source->cache_ctx;
+        if (cache_ctx == NULL) {
+            DBG_PRINTF("No cache for node{%d], source[%d]", node_id, source_id);
+        } else {
+            quicrq_cached_fragment_t* fragment = (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(picosplay_first(&source->cache_ctx->fragment_tree));
+
+            if (fragment == NULL) {
+                DBG_PRINTF("Empty cache for node{%d], source[%d]", node_id, source_id);
+            }
+            else {
+                int ret = 0;
+                uint64_t current_group_id = fragment->group_id;
+                uint64_t current_object_id = fragment->object_id;
+                uint64_t current_offset = 0;
+                int is_new_object = 1;
+                int is_last_fragment = 0;
+
+                if (current_group_id != cache_ctx->first_group_id || current_object_id != cache_ctx->first_object_id) {
+                    DBG_PRINTF("Cache[%d,%d] starts a %" PRIu64 "/%" PRIu64 " vs %" PRIu64 "/%" PRIu64, node_id, source_id,
+                        current_group_id, current_object_id, cache_ctx->first_group_id, cache_ctx->first_object_id);
+                }
+                while (fragment != NULL) {
+                    if (fragment->offset != current_offset) {
+                        DBG_PRINTF("Cache[%d,%d] object %" PRIu64 "/%" PRIu64 " offset %zu instead of %zu", node_id, source_id,
+                            current_group_id, current_object_id, fragment->offset, current_offset);
+                        ret = -1;
+                        break;
+                    }
+                    current_offset += fragment->data_length;
+                    is_last_fragment = fragment->is_last_fragment;
+                    fragment = (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(picosplay_next(&fragment->fragment_node));
+                    if (fragment == NULL){
+                        if (!is_last_fragment) {
+                            DBG_PRINTF("Cache[%d,%d] last object %" PRIu64 "/%" PRIu64 " offset %zu, incomplete", node_id, source_id,
+                                current_group_id, current_object_id, current_offset);
+                            ret = -1;
+                        }
+                        break;
+                    }
+                    if (fragment->group_id != current_group_id || fragment->object_id != current_object_id){
+                        if (!is_last_fragment) {
+                            DBG_PRINTF("Cache[%d,%d] object %" PRIu64 "/%" PRIu64 " offset %zu, incomplete", node_id, source_id,
+                                current_group_id, current_object_id, current_offset);
+                            ret = -1;
+                        }
+                        if (fragment->group_id == current_group_id){
+                            if (fragment->object_id != current_object_id + 1) {
+                                DBG_PRINTF("Cache[%d,%d] missing object %" PRIu64 "/%" PRIu64, node_id, source_id,
+                                    current_group_id, current_object_id + 1);
+                                ret = -1;
+                                break;
+                            }
+                        }
+                        else if (fragment->group_id == current_group_id + 1) {
+                            if (current_object_id + 1 != fragment->nb_objects_previous_group) {
+                                DBG_PRINTF("Cache[%d,%d] missing object %" PRIu64 "/%" PRIu64, node_id, source_id,
+                                    current_group_id, fragment->nb_objects_previous_group);
+                                ret = -1;
+                                break;
+                            }
+                            else if (fragment->object_id != 0) {
+                                DBG_PRINTF("Cache[%d,%d] missing object %" PRIu64 "/%" PRIu64, node_id, source_id,
+                                    current_group_id + 1, 0);
+                                ret = -1;
+                                break;
+                            }
+                        }
+                        else {
+                            DBG_PRINTF("Cache[%d,%d] missing object %" PRIu64 "/%" PRIu64, node_id, source_id,
+                                current_group_id + 1, 0);
+                            ret = -1;
+                            break;
+                        }
+                        current_group_id = fragment->group_id;
+                        current_object_id = fragment->object_id;
+                        current_offset = 0;
+                    }
+                }
+                if (ret == 0) {
+                    if (cache_ctx->final_group_id == 0 && cache_ctx->final_object_id == 0) {
+                        DBG_PRINTF("Cache[%d,%d] final object not yet known.", node_id, source_id);
+                        ret = -1;
+                    }
+                    else if (current_group_id != cache_ctx->final_group_id && current_object_id + 1 != cache_ctx->final_object_id) {
+                        DBG_PRINTF("Cache[%d,%d] missing last object before %" PRIu64 "/%" PRIu64, node_id, source_id,
+                            cache_ctx->final_group_id, cache_ctx->final_object_id);
+                        ret = -1;
+                    }
+                    else if (!is_last_fragment) {
+                        DBG_PRINTF("Cache[%d,%d] last object incomplete before %" PRIu64 "/%" PRIu64, node_id, source_id,
+                            cache_ctx->final_group_id, cache_ctx->final_object_id);
+                        ret = -1;
+                    }
+                }
+                if (1) {
+                    /* Check that the send chain include a description of the first object */
+                    size_t size_first_object = 0;
+                    size_t received_first_object = 0;
+                    int rank_first_object = 0;
+                    int nb_first_object = 0;
+                    int rank = 0;
+                    fragment = cache_ctx->first_fragment;
+                    while (fragment != NULL) {
+                        rank++;
+                        if (fragment->object_id == 0 && fragment->group_id == 0) {
+                            nb_first_object++;
+                            if (rank > rank_first_object) {
+                                rank_first_object = rank;
+                            }
+                            if (fragment->is_last_fragment) {
+                                size_first_object = fragment->offset + fragment->data_length;
+                            }
+                            received_first_object += fragment->data_length;
+                        }
+                        fragment = fragment->next_in_order;
+                    }
+                    DBG_PRINTF("First: %d segments(last %d), %zu bytes (received %zu)",
+                        nb_first_object, rank_first_object, size_first_object, received_first_object);
+                }
+            }
+        }
+        source_id++;
+        source = source->next_source;
+    }
+}
+
+/* Four legs tests: One origin, two relays, 3 receivers and one sender. */
 int quicrq_fourlegs_test_one(int use_datagrams, uint64_t simulate_losses, int publish_last)
 {
     int ret = 0;

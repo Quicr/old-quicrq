@@ -228,7 +228,7 @@ void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_
 void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 
 quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
-    void* pub_ctx, int is_local_object_source, int is_cache_real_time);
+    void* cache_ctx, int is_local_object_source, int is_cache_real_time);
 
  /* Quicrq per media object source context.
   */
@@ -238,7 +238,7 @@ struct st_quicrq_media_object_source_ctx_t {
     struct st_quicrq_media_object_source_ctx_t* previous_in_qr_ctx;
     struct st_quicrq_media_object_source_ctx_t* next_in_qr_ctx;
 
-    struct st_quicrq_fragment_cached_media_t* cached_ctx;
+    struct st_quicrq_fragment_cache_t* cache_ctx;
     uint64_t next_group_id;
     uint64_t next_object_id;
     quicrq_media_object_source_properties_t properties;
@@ -255,10 +255,7 @@ struct st_quicrq_media_source_ctx_t {
     struct st_quicrq_stream_ctx_t* last_stream;
     uint8_t* media_url;
     size_t media_url_length;
-
-    struct st_quicrq_fragment_cached_media_t* fragment_cache;
-
-    void* pub_ctx;
+    struct st_quicrq_fragment_cache_t* cache_ctx;
     int is_local_object_source;
     int is_cache_real_time;
 };
@@ -443,7 +440,7 @@ struct st_quicrq_stream_ctx_t {
     quicrq_message_buffer_t message_receive;
 
     quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
-    void* media_ctx; /* Callback argument for receiving or sending data */
+    struct st_quicrq_fragment_publisher_context_t* media_ctx; /* Callback argument for receiving or sending data */
 };
 
 int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_consumer_fn media_fn, void* media_ctx);
@@ -467,6 +464,7 @@ struct st_quicrq_cnx_ctx_t {
     struct sockaddr_storage addr;
     picoquic_cnx_t* cnx;
     int is_server;
+    int is_client;
     quicrq_cnx_congestion_state_t congestion;
 
     uint64_t next_datagram_stream_id; /* only used for receiving */

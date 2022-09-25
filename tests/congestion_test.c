@@ -305,7 +305,7 @@ int quicrq_congestion_test_one(int is_real_time, int use_datagrams, uint64_t sim
 
 int quicrq_congestion_basic_test()
 {
-    int ret = quicrq_congestion_test_one(1, 0, 0, 0, 80, 0x82);
+    int ret = quicrq_congestion_test_one(1, 0, 0, 0, 85, 0x82);
 
     return ret;
 }
@@ -319,7 +319,7 @@ int quicrq_congestion_basic_recv_test()
 
 int quicrq_congestion_basic_loss_test()
 {
-    int ret = quicrq_congestion_test_one(1, 0, 0x7080, 0, 161, 0x82);
+    int ret = quicrq_congestion_test_one(1, 0, 0x7080, 0, 180, 0x82);
 
     return ret;
 }
@@ -333,7 +333,7 @@ int quicrq_congestion_datagram_test()
 
 int quicrq_congestion_datagram_loss_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 0, 110, 0x82);
+    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 0, 115, 0x82);
 
     return ret;
 }
@@ -347,7 +347,7 @@ int quicrq_congestion_datagram_recv_test()
 
 int quicrq_congestion_datagram_rloss_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 1, 110, 0x82);
+    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 1, 115, 0x82);
 
     return ret;
 }

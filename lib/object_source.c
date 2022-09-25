@@ -41,12 +41,12 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
         /* create and initialize fragment cache, publish the corresponding source,
         * then publish the corresponding source.
         */
-        object_source_ctx->cached_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
-        if (object_source_ctx->cached_ctx != NULL) {
-            ret = quicrq_publish_fragment_cached_media(qr_ctx, object_source_ctx->cached_ctx, url, url_length, 1, object_source_ctx->properties.use_real_time_caching);
+        object_source_ctx->cache_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
+        if (object_source_ctx->cache_ctx != NULL) {
+            ret = quicrq_publish_fragment_cached_media(qr_ctx, object_source_ctx->cache_ctx, url, url_length, 1, object_source_ctx->properties.use_real_time_caching);
         }
         /* If the API fails, close the media object source */
-        if (object_source_ctx->cached_ctx == NULL || ret != 0) {
+        if (object_source_ctx->cache_ctx == NULL || ret != 0) {
             DBG_PRINTF("%s", "Could not publish media source for media object source");
             quicrq_delete_object_source(object_source_ctx);
             object_source_ctx = NULL;
@@ -58,7 +58,7 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
 int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id)
 {
     int ret = 0;
-    ret = quicrq_fragment_cache_learn_start_point(object_source_ctx->cached_ctx, start_group_id, start_object_id);
+    ret = quicrq_fragment_cache_learn_start_point(object_source_ctx->cache_ctx, start_group_id, start_object_id);
     if (ret == 0) {
         if (object_source_ctx->next_group_id < start_group_id ||
             (object_source_ctx->next_group_id == start_group_id &&
@@ -89,7 +89,7 @@ int quicrq_publish_object(
         object_source_ctx->next_object_id = 0;
     }
 
-    ret = quicrq_fragment_propose_to_cache(object_source_ctx->cached_ctx,
+    ret = quicrq_fragment_propose_to_cache(object_source_ctx->cache_ctx,
         object_data, object_source_ctx->next_group_id, object_source_ctx->next_object_id,
         /* offset */ 0, /* queue delay */ 0, properties->flags, nb_objects_previous_group,
         /* is_last_fragment */ 1, object_length, current_time);
@@ -102,22 +102,22 @@ int quicrq_publish_object(
 void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_ctx)
 {
     /* Document the final group-ID and object-ID in context */
-    (void) quicrq_fragment_cache_learn_end_point(object_source_ctx->cached_ctx,
+    (void) quicrq_fragment_cache_learn_end_point(object_source_ctx->cache_ctx,
         object_source_ctx->next_group_id, object_source_ctx->next_object_id);
 }
 
 void quicrq_delete_object_source(quicrq_media_object_source_ctx_t* object_source_ctx)
 {
-    if (object_source_ctx->cached_ctx != NULL) {
+    if (object_source_ctx->cache_ctx != NULL) {
         /* Close the corresponding source context */
-        if (object_source_ctx->cached_ctx->srce_ctx != NULL) {
-            quicrq_delete_source(object_source_ctx->cached_ctx->srce_ctx, object_source_ctx->qr_ctx);
+        if (object_source_ctx->cache_ctx->srce_ctx != NULL) {
+            quicrq_delete_source(object_source_ctx->cache_ctx->srce_ctx, object_source_ctx->qr_ctx);
         }
         else {
             /* Explicitly delete cache in rare cases where not yet connected to fragment source */
-            quicrq_fragment_cache_delete_ctx(object_source_ctx->cached_ctx);
+            quicrq_fragment_cache_delete_ctx(object_source_ctx->cache_ctx);
         }
-        object_source_ctx->cached_ctx = NULL;
+        object_source_ctx->cache_ctx = NULL;
     }
     /* Unlink from Quicr context */
     if (object_source_ctx->qr_ctx->first_object_source == object_source_ctx) {
