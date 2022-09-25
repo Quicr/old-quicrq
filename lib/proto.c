@@ -895,7 +895,7 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
     uint64_t stream_id = picoquic_get_next_local_stream_id(cnx_ctx->cnx, 0);
     quicrq_stream_ctx_t* stream_ctx = quicrq_create_stream_context(cnx_ctx, stream_id);
     quicrq_message_buffer_t* message = &stream_ctx->message_sent;
-    static const quicrq_subscribe_intent_t default_intent = { 0 };
+    static const quicrq_subscribe_intent_t default_intent = { quicrq_subscribe_intent_start_point, 0, 0 };
 
     if (intent == NULL) {
         intent = &default_intent;

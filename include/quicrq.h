@@ -195,7 +195,7 @@ typedef struct st_quicrq_object_stream_consumer_ctx quicrq_object_stream_consume
 
 typedef enum {
     quicrq_subscribe_intent_current_group = 0,
-    quicrq_subscribe_intent_current_object = 1,
+    quicrq_subscribe_intent_next_group = 1,
     quicrq_subscribe_intent_start_point = 2
 } quicrq_subscribe_intent_enum;
 

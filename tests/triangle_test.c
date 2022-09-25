@@ -192,6 +192,25 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             /* Create a subscription to the test source on client # 2*/
             test_object_stream_ctx_t* object_stream_ctx = NULL;
             quicrq_subscribe_intent_t intent = { 0 };
+            intent.intent_mode = (quicrq_subscribe_intent_enum)(test_intent - 1);
+            switch (intent.intent_mode) {
+            case quicrq_subscribe_intent_current_group:
+                start_group_intent = 1;
+                start_object_intent = 0;
+                break;
+            case quicrq_subscribe_intent_next_group:
+                start_group_intent = 2;
+                start_object_intent = 0;
+                break;
+            case quicrq_subscribe_intent_start_point:
+                intent.start_group_id = 1;
+                intent.start_object_id = 2;
+                start_group_intent =  intent.start_group_id;
+                start_object_intent = intent.start_object_id;
+                break;
+            default:
+                break;
+            }
             object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
                 strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, &intent, result_file_name, result_log_name);
             if (object_stream_ctx == NULL) {
@@ -202,10 +221,6 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
                 subscribed = 1;
             }
             config->next_test_event_time = UINT64_MAX;
-            if (intent.intent_mode == quicrq_subscribe_intent_current_group) {
-                start_group_intent = 1;
-                start_object_intent = 0;
-            }
         }
 
         ret = quicrq_test_loop_step(config, &is_active, UINT64_MAX);
@@ -404,7 +419,14 @@ int quicrq_triangle_intent_datagram_test()
 
 int quicrq_triangle_intent_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0, 0, 0, 1);
+    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0, 0, 1, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_next_test()
+{
+    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1, 2);
 
     return ret;
 }

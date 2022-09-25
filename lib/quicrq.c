@@ -1336,18 +1336,19 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             break;
         case quicrq_sending_final_point:
             /* Send available buffer data and repair data. Mark offset sent and mark state ready after sent. */
-            more_to_send = 0;
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 stream_ctx->is_final_object_id_sent = 1;
             }
             break;
         case quicrq_sending_start_point:
+            more_to_send |= (!stream_ctx->is_cache_policy_sent && stream_ctx->is_cache_real_time);
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             stream_ctx->is_start_object_id_sent = 1;
             stream_ctx->send_state = quicrq_sending_ready;
             break;
         case quicrq_sending_cache_policy:
+            more_to_send |= (!stream_ctx->is_start_object_id_sent && (stream_ctx->start_group_id > 0 || stream_ctx->start_object_id > 0));
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             stream_ctx->is_cache_policy_sent = 1;
             stream_ctx->send_state = quicrq_sending_ready;
@@ -1532,6 +1533,9 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         }
                         else {
                             char url_text[256];
+                            uint64_t intent_group = 0;
+                            uint64_t intent_object = 0;
+
                             /* Process initial request */
                             stream_ctx->is_datagram = (incoming.message_type == QUICRQ_ACTION_REQUEST_DATAGRAM);
                             /* Open the media -- TODO, variants with different actions. */
@@ -1542,24 +1546,54 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             if (ret == 0) {
                                 quicrq_wakeup_media_stream(stream_ctx);
                             }
-                            stream_ctx->is_sender = 1;
-                            if (stream_ctx->start_group_id > 0 || stream_ctx->start_object_id > 0) {
-                                if (stream_ctx->start_group_id > stream_ctx->next_group_id ||
-                                    (stream_ctx->start_group_id == stream_ctx->next_group_id &&
-                                        stream_ctx->start_object_id > stream_ctx->next_object_id)) {
-                                    stream_ctx->next_group_id = stream_ctx->start_group_id;
-                                    stream_ctx->next_object_id = stream_ctx->start_object_id;
+                            if (ret == 0) {
+                                /* Apply the preferences based on intent */
+                                stream_ctx->is_sender = 1;
+                                switch (incoming.subscribe_intent) {
+                                case quicrq_subscribe_intent_current_group:
+                                    intent_group = stream_ctx->media_ctx->cache_ctx->next_group_id;
+                                    intent_object = 0;
+                                    break;
+                                case quicrq_subscribe_intent_next_group:
+                                    intent_group = stream_ctx->media_ctx->cache_ctx->next_group_id + 1;
+                                    intent_object = 0;
+                                    break;
+                                case quicrq_subscribe_intent_start_point:
+                                    intent_group = incoming.group_id;
+                                    intent_object = incoming.object_id;
+                                    break;
+                                default:
+                                    break;
                                 }
+                                /* Override the intent if impossible to meet */
+                                if (stream_ctx->start_group_id > 0 || stream_ctx->start_object_id > 0) {
+                                    if (intent_group < stream_ctx->next_group_id ||
+                                        (intent_group == stream_ctx->next_group_id &&
+                                            intent_object < stream_ctx->next_object_id)) {
+                                        intent_group = stream_ctx->start_group_id;
+                                        intent_object = stream_ctx->start_object_id;
+                                    }
+                                }
+                            }
+                            if (intent_group > 0 || intent_object > 0){
+                                /* apply the intent, prepare a start point message */
+                                stream_ctx->start_group_id = intent_group;
+                                stream_ctx->start_object_id = intent_object;
+                                stream_ctx->next_group_id = intent_group;
+                                stream_ctx->next_object_id = intent_object;
+
                                 ret = quicrq_prepare_start_point(stream_ctx);
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
                             else if (incoming.message_type == QUICRQ_ACTION_REQUEST_STREAM) {
+                                /* Start sending stream without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_stream;
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
                             else {
+                                /* Start sending datagrams without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 stream_ctx->datagram_stream_id = incoming.datagram_stream_id;

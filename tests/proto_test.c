@@ -69,7 +69,7 @@ static uint8_t datagram_rq_bytes[] = {
     0x44, 0xd2
 };
 
-static quicrq_message_t datagram_rq_current_object = {
+static quicrq_message_t datagram_rq_next_group = {
     QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1),
     url1,
@@ -84,10 +84,10 @@ static quicrq_message_t datagram_rq_current_object = {
     NULL,
     0,
     0,
-    quicrq_subscribe_intent_current_object
+    quicrq_subscribe_intent_next_group
 };
 
-static uint8_t datagram_rq_current_object_bytes[] = {
+static uint8_t datagram_rq_next_group_bytes[] = {
     QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1),
     URL1_BYTES,
@@ -413,7 +413,7 @@ typedef struct st_proto_test_case_t {
 static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(stream_rq, stream_rq_bytes),
     PROTO_TEST_ITEM(datagram_rq, datagram_rq_bytes),
-    PROTO_TEST_ITEM(datagram_rq_current_object, datagram_rq_current_object_bytes),
+    PROTO_TEST_ITEM(datagram_rq_next_group, datagram_rq_next_group_bytes),
     PROTO_TEST_ITEM(datagram_rq_start_point, datagram_rq_start_point_bytes),
     PROTO_TEST_ITEM(fin_msg, fin_msg_bytes),
     PROTO_TEST_ITEM(repair_request_msg, repair_request_msg_bytes),
