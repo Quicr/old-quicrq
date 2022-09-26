@@ -437,3 +437,17 @@ int quicrq_triangle_intent_next_s_test()
 
     return ret;
 }
+
+int quicrq_triangle_intent_that_test()
+{
+    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1, 3);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_that_s_test()
+{
+    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 3);
+
+    return ret;
+}
