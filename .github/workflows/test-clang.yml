@@ -28,7 +28,6 @@ jobs:
       - name: Build quicrq
         run: |
           # brew reinstall openssl
-          apt reinstall openssl
           export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
           cmake -S . -B build
           cmake --build build
