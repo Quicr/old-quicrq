@@ -88,9 +88,6 @@ typedef struct st_quicrq_media_object_header_t {
 } quicrq_media_object_header_t;
 
 /* Media object publisher.
- * The media object publisher is a simpler, object based version of the 
- * media object API described below. It is push based, while the media
- * API is pull based.
  * 
  * The API has three components:
  * - Publish media object source: declare the URL of the source, and 
@@ -108,8 +105,21 @@ typedef struct st_quicrq_media_object_header_t {
  * is posted. The cache management policy is specified upon opening
  * the object.
  * 
- * The API is implemented using the "media publisher" API. It defines
- * generic media_publisher_subscribe_fn and media_publisher_fn.
+ * In the "quicrq_publish_object" function, the application provides
+ * the group_id and object_id of the published object. The application
+ * MUST generate these numbers according to the following rules:
+ * 
+ * - if this is the first call to the API, the application
+ *   can pick any value it wants. This is equivalent to
+ *   calling the `quicrq_object_source_set_start` function
+ *   with the same values.
+ * - For subsequent calls, either the group_id or the object_id
+ *   MUST be incremented in sequence, as follow:
+ *     * If the group_id does not match the previous value,
+ *       it MUST be set to previous group ID plus 1, and the
+ *       object ID MUST be set to 0.
+ *     * if the group_id matches the previous value, the
+ *       object ID MUST be set to previous value + 1.
  */
 
 typedef struct st_quicrq_media_object_source_properties_t {
@@ -132,10 +142,9 @@ int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
     uint8_t* object,
     size_t object_length,
-    int is_new_group,
     quicrq_media_object_properties_t * properties,
-    uint64_t* published_group_id,
-    uint64_t* published_object_id);
+    uint64_t group_id,
+    uint64_t object_id);
 
 void quicrq_publish_object_fin(quicrq_media_object_source_ctx_t* object_source_ctx);
 

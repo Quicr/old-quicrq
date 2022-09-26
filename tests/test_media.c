@@ -461,8 +461,8 @@ int test_media_object_source_iterate(
 {
     int ret = 0;
     test_media_publisher_context_t* pub_ctx = object_pub_ctx->pub_ctx;
-    uint64_t published_group_id = 0;
-    uint64_t published_object_id = 0;
+    uint64_t published_group_id = object_pub_ctx->object_source_ctx->next_group_id;
+    uint64_t published_object_id = object_pub_ctx->object_source_ctx->next_object_id;
 
     ret = test_media_object_source_check(object_pub_ctx);
 
@@ -482,9 +482,13 @@ int test_media_object_source_iterate(
                 /* Special case of audio: small packets, group by itself. */
                 int is_new_group = (pub_ctx->media_object_size > 10000 || pub_ctx->media_object_size < 200);
                 quicrq_media_object_properties_t properties = { 0 };
+                if (is_new_group && published_object_id > 0) {
+                    published_group_id++;
+                    published_object_id = 0;
+                }
                 properties.flags = test_media_set_flags(pub_ctx->is_real_time, pub_ctx->is_audio, pub_ctx->media_object_size);
                 ret = quicrq_publish_object(object_pub_ctx->object_source_ctx, pub_ctx->media_object, pub_ctx->media_object_size, 
-                    is_new_group, &properties, &published_group_id, &published_object_id);
+                    &properties, published_group_id, published_object_id);
                 object_pub_ctx->object_is_published = 1;
                 *is_active |= 1;
             }
@@ -1041,8 +1045,10 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
                     ret = test_media_read_object_from_file(ref_ctx);
                     if (ret == 0) {
                         if (nb_ref_object > 0) {
-                            /* Mimic here the generation of group id and object id in the test publisher */
-                            if (ref_ctx->current_header.length > 5000) {
+                            /* Mimic here the generation of group id and object id in the test publisher,
+                             * see test_media_object_source_iterate
+                             */
+                            if (ref_ctx->current_header.length > 10000 || ref_ctx->current_header.length < 200) {
                                 ref_group_id++;
                                 ref_object_id = 0;
                             }
