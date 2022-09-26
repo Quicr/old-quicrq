@@ -52,6 +52,7 @@ extern "C" {
     int quicrq_triangle_datagram_loss_test();
     int quicrq_triangle_datagram_extra_test();
     int quicrq_triangle_start_point_test();
+    int quicrq_triangle_start_point_s_test();
     int quicrq_triangle_cache_test();
     int quicrq_triangle_cache_loss_test();
     int quicrq_triangle_cache_stream_test();

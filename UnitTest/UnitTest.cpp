@@ -287,14 +287,18 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-#if 0
-		/* Start point function needs to be revised after "subscriber intent" */
 		TEST_METHOD(triangle_start_point) {
 			int ret = quicrq_triangle_start_point_test();
 
 			Assert::AreEqual(ret, 0);
 		}
-#endif
+
+		TEST_METHOD(triangle_start_point_s) {
+			int ret = quicrq_triangle_start_point_s_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(triangle_cache) {
 			int ret = quicrq_triangle_cache_test();
 

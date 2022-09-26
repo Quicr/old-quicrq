@@ -70,31 +70,59 @@ int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_sour
     return ret;
 }
 
+static int quicrq_object_source_check_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id)
+{
+    int ret = 0;
+    if (object_source_ctx->next_group_id != 0 ||
+        object_source_ctx->next_object_id != 0) {
+        /* start point was already set */
+        ret = -1;
+    }
+    else {
+        ret = quicrq_object_source_set_start(object_source_ctx, start_group_id, start_object_id);
+    }
+
+    return ret;
+}
+
 int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
     uint8_t* object_data,
     size_t object_length,
-    int is_new_group,
     quicrq_media_object_properties_t* properties,
-    uint64_t * published_group_id,
-    uint64_t  * published_object_id)
+    uint64_t group_id,
+    uint64_t object_id)
 {
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(object_source_ctx->qr_ctx->quic);
     uint64_t nb_objects_previous_group = 0;
+    int is_new_group = 0;
 
-    if (is_new_group && object_source_ctx->next_object_id > 0) {
-        nb_objects_previous_group = object_source_ctx->next_object_id;
-        object_source_ctx->next_group_id++;
-        object_source_ctx->next_object_id = 0;
+    /* Verify that the progression of numbers by the application matches the rules */
+    if (group_id != object_source_ctx->next_group_id) {
+        if (group_id != object_source_ctx->next_group_id + 1 ||
+            object_id != 0) {
+            ret = quicrq_object_source_check_start(object_source_ctx, group_id, object_id);
+        }
+        else {
+            is_new_group = 1;
+            nb_objects_previous_group = object_source_ctx->next_object_id;
+            object_source_ctx->next_group_id++;
+            object_source_ctx->next_object_id = 0;
+        }
+    }
+    else if (object_id !=  object_source_ctx->next_object_id){
+        ret = quicrq_object_source_check_start(object_source_ctx, group_id, object_id);
     }
 
-    ret = quicrq_fragment_propose_to_cache(object_source_ctx->cache_ctx,
-        object_data, object_source_ctx->next_group_id, object_source_ctx->next_object_id,
-        /* offset */ 0, /* queue delay */ 0, properties->flags, nb_objects_previous_group,
-        /* is_last_fragment */ 1, object_length, current_time);
     if (ret == 0) {
-        object_source_ctx->next_object_id++;
+        ret = quicrq_fragment_propose_to_cache(object_source_ctx->cache_ctx,
+            object_data, object_source_ctx->next_group_id, object_source_ctx->next_object_id,
+            /* offset */ 0, /* queue delay */ 0, properties->flags, nb_objects_previous_group,
+            /* is_last_fragment */ 1, object_length, current_time);
+        if (ret == 0) {
+            object_source_ctx->next_object_id++;
+        }
     }
     return ret;
 }
