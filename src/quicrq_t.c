@@ -66,10 +66,8 @@ static const quicrq_test_def_t test_table[] =
     { "triangle_datagram", quicrq_triangle_datagram_test },
     { "triangle_datagram_loss", quicrq_triangle_datagram_loss_test },
     { "triangle_datagram_extra", quicrq_triangle_datagram_extra_test },
-#if 0
-    /* Start point function is superceded by "subscribe intent" */
     { "triangle_start_point", quicrq_triangle_start_point_test },
-#endif
+    { "triangle_start_point_s", quicrq_triangle_start_point_s_test },
     { "triangle_cache", quicrq_triangle_cache_test },
     { "triangle_cache_loss", quicrq_triangle_cache_loss_test },
     { "triangle_cache_stream", quicrq_triangle_cache_stream_test },

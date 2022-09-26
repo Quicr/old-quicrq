@@ -133,8 +133,10 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
         if (config->object_sources[0] == NULL) {
             ret = -1;
         }
-        else if (start_point > 0) {
-            ret = test_media_object_source_set_start(config->object_sources[0], 0, start_point);
+        else if (start_point != 0) {
+            ret = test_media_object_source_set_start(config->object_sources[0], 1, 1);
+            start_group_intent = 1;
+            start_object_intent = 1;
         }
     }
 
@@ -377,7 +379,14 @@ int quicrq_triangle_datagram_extra_test()
  */
 int quicrq_triangle_start_point_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 12345, 0, 0);
+    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 1, 0, 0);
+
+    return ret;
+}
+
+int quicrq_triangle_start_point_s_test()
+{
+    int ret = quicrq_triangle_test_one(1, 0, 0x7080, 10000, 1, 0, 0);
 
     return ret;
 }

@@ -1090,7 +1090,10 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
         stream_ctx->datagram_stream_id = datagram_stream_id;
         stream_ctx->send_state = quicrq_sending_ready;
         stream_ctx->receive_state = quicrq_receive_done;
-        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
+        /* Maybe we need to send policy messages, in which case the stream should be active! */
+        int more_to_send = (!stream_ctx->is_start_object_id_sent && (stream_ctx->start_group_id > 0 || stream_ctx->start_object_id > 0));
+        more_to_send |= (!stream_ctx->is_cache_policy_sent && stream_ctx->is_cache_real_time);
+        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, more_to_send, stream_ctx);
     }
     else {
         stream_ctx->is_datagram = 0;

@@ -455,6 +455,13 @@ static int test_media_object_source_check(test_media_object_source_context_t* ob
     return ret;
 }
 
+int test_media_is_new_group(size_t media_object_size)
+{
+    /* For test purpose, we consider objects larger than 10000 bytes as starting a new group */
+    /* Special case of audio: small packets, group by itself. */
+    return (media_object_size > 10000 || media_object_size < 200);
+}
+
 int test_media_object_source_iterate(
     test_media_object_source_context_t* object_pub_ctx,
     uint64_t current_time, int * is_active)
@@ -478,9 +485,7 @@ int test_media_object_source_iterate(
             else if (!pub_ctx->is_real_time ||
                 current_time >= pub_ctx->start_time + pub_ctx->current_header.timestamp) {
                 /* else if the data is not published, publish it */
-                /* For test purpose, we consider objects larger than 10000 bytes as starting a new group */
-                /* Special case of audio: small packets, group by itself. */
-                int is_new_group = (pub_ctx->media_object_size > 10000 || pub_ctx->media_object_size < 200);
+                int is_new_group = test_media_is_new_group(pub_ctx->media_object_size);
                 quicrq_media_object_properties_t properties = { 0 };
                 if (is_new_group && published_object_id > 0) {
                     published_group_id++;
@@ -591,11 +596,33 @@ test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_
     return test_media_object_source_publish_ex(qr_ctx, url, url_length, media_source_path, generation_model, is_real_time, start_time, NULL);
 }
 
+/* In order to test the "start point" function, we start the reference source at a specific start point.
+ */
 int test_media_object_source_set_start(test_media_object_source_context_t* object_pub_ctx, uint64_t start_group, uint64_t start_object)
 {
     int ret = 0;
-    if (object_pub_ctx->object_source_ctx != NULL) {
-        ret = quicrq_object_source_set_start(object_pub_ctx->object_source_ctx, start_group, start_object);
+
+    if (object_pub_ctx->object_source_ctx != NULL && object_pub_ctx->pub_ctx != NULL && object_pub_ctx->pub_ctx->F != NULL) {
+        uint64_t group_id = object_pub_ctx->object_source_ctx->next_group_id;
+        uint64_t object_id = object_pub_ctx->object_source_ctx->next_object_id;
+
+        if (group_id != 0 || object_id != 0) {
+            ret = -1;
+        }
+        else {
+            /* Read the media file until the context matches */
+            while (ret == 0 && (group_id < start_group || (group_id == start_group && object_id + 1 < start_object))) {
+                ret = test_media_read_object_from_file(object_pub_ctx->pub_ctx);
+                if (object_id > 0 && test_media_is_new_group(object_pub_ctx->pub_ctx->current_header.length)) {
+                    group_id++;
+                    object_id = 0;
+                } else {
+                    object_id++;
+                }
+            }
+            /* set the start point */
+            ret = quicrq_object_source_set_start(object_pub_ctx->object_source_ctx, start_group, start_object);
+        }
     }
     else {
         ret = -1;
@@ -1048,7 +1075,7 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
                             /* Mimic here the generation of group id and object id in the test publisher,
                              * see test_media_object_source_iterate
                              */
-                            if (ref_ctx->current_header.length > 10000 || ref_ctx->current_header.length < 200) {
+                            if (test_media_is_new_group(ref_ctx->current_header.length)) {
                                 ref_group_id++;
                                 ref_object_id = 0;
                             }
