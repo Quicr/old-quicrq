@@ -31,24 +31,24 @@ typedef struct st_quicrq_cached_fragment_t {
     uint8_t* data;
 } quicrq_cached_fragment_t;
 
-typedef struct st_quicrq_fragment_cached_media_t {
-    quicrq_media_source_ctx_t* srce_ctx;
-    quicrq_ctx_t* qr_ctx;
-    uint64_t final_group_id;
-    uint64_t final_object_id;
-    uint64_t nb_object_received;
-    uint64_t subscribe_stream_id;
-    uint64_t first_group_id;
-    uint64_t first_object_id;
-    uint64_t next_group_id;
-    uint64_t next_object_id;
-    uint64_t next_offset;
-    quicrq_cached_fragment_t* first_fragment;
+typedef struct st_quicrq_fragment_cache_t {
+    quicrq_media_source_ctx_t* srce_ctx; /* Back pointer to source context */
+    quicrq_ctx_t* qr_ctx; /* back pointer to quicrq context */
+    uint64_t final_group_id; /* 0 if unknown, value if known */
+    uint64_t final_object_id; /* 0 if unknown, value if known */
+    uint64_t nb_object_received; /* For statistics only */
+    uint64_t subscribe_stream_id; /* ID of stream in connection to origin, or UINT64_MAX */
+    uint64_t first_group_id; /* First group in cache, start at 0, modifies if start point learned or after objects removed from cache */
+    uint64_t first_object_id; /* First object in first group, see first_group_id */
+    uint64_t next_group_id; /* Updated as objects are added sequentially to cache */
+    uint64_t next_object_id; /* Updated as objects are added sequentially to cache */
+    uint64_t next_offset; /* Updated as objects are added sequentially to cache */
+    quicrq_cached_fragment_t* first_fragment; /* Fragments in order of arrival */
     quicrq_cached_fragment_t* last_fragment;
-    picosplay_tree_t fragment_tree;
-    int is_closed;
+    picosplay_tree_t fragment_tree; /* Splay ordered by group_id/object_id/offset */
+    int is_feed_closed; /* Whether the data providing connection is closed. */
     uint64_t cache_delete_time;
-} quicrq_fragment_cached_media_t;
+} quicrq_fragment_cache_t;
 
 typedef struct st_quicrq_fragment_publisher_object_state_t {
     picosplay_node_t publisher_object_node;
@@ -62,7 +62,7 @@ typedef struct st_quicrq_fragment_publisher_object_state_t {
 } quicrq_fragment_publisher_object_state_t;
 
 typedef struct st_quicrq_fragment_publisher_context_t {
-    quicrq_fragment_cached_media_t* cache_ctx;
+    quicrq_fragment_cache_t* cache_ctx;
     uint64_t current_group_id;
     uint64_t current_object_id;
     size_t current_offset;
@@ -80,20 +80,20 @@ typedef struct st_quicrq_fragment_publisher_context_t {
 
 void* quicrq_fragment_cache_node_value(picosplay_node_t* fragment_node);
 
-quicrq_cached_fragment_t* quicrq_fragment_cache_get_fragment(quicrq_fragment_cached_media_t* cached_ctx,
+quicrq_cached_fragment_t* quicrq_fragment_cache_get_fragment(quicrq_fragment_cache_t* cached_ctx,
     uint64_t group_id, uint64_t object_id, uint64_t offset);
 
-void quicrq_fragment_cache_media_clear(quicrq_fragment_cached_media_t* cached_media);
+void quicrq_fragment_cache_media_clear(quicrq_fragment_cache_t* cached_media);
 
-void quicrq_fragment_cache_media_init(quicrq_fragment_cached_media_t* cached_media);
+void quicrq_fragment_cache_media_init(quicrq_fragment_cache_t* cached_media);
 
 /* Fragment cache progress.
  * Manage the "next_group" and "next_object" items.
  */
-void quicrq_fragment_cache_progress(quicrq_fragment_cached_media_t* cached_ctx,
+void quicrq_fragment_cache_progress(quicrq_fragment_cache_t* cached_ctx,
     quicrq_cached_fragment_t* fragment);
 
-int quicrq_fragment_add_to_cache(quicrq_fragment_cached_media_t* cached_ctx,
+int quicrq_fragment_add_to_cache(quicrq_fragment_cache_t* cached_ctx,
     const uint8_t* data,
     uint64_t group_id,
     uint64_t object_id,
@@ -105,7 +105,7 @@ int quicrq_fragment_add_to_cache(quicrq_fragment_cached_media_t* cached_ctx,
     size_t data_length,
     uint64_t current_time);
 
-int quicrq_fragment_propose_to_cache(quicrq_fragment_cached_media_t* cached_ctx,
+int quicrq_fragment_propose_to_cache(quicrq_fragment_cache_t* cached_ctx,
     const uint8_t* data,
     uint64_t group_id,
     uint64_t object_id,
@@ -117,10 +117,21 @@ int quicrq_fragment_propose_to_cache(quicrq_fragment_cached_media_t* cached_ctx,
     size_t data_length,
     uint64_t current_time);
 
-int quicrq_fragment_cache_learn_start_point(quicrq_fragment_cached_media_t* cached_ctx,
+int quicrq_fragment_cache_learn_start_point(quicrq_fragment_cache_t* cached_ctx,
     uint64_t start_group_id, uint64_t start_object_id);
 
-int quicrq_fragment_cache_learn_end_point(quicrq_fragment_cached_media_t* cached_ctx, uint64_t final_group_id, uint64_t final_object_id);
+int quicrq_fragment_cache_learn_end_point(quicrq_fragment_cache_t* cached_ctx, uint64_t final_group_id, uint64_t final_object_id);
+
+int quicrq_fragment_cache_set_real_time_cache(quicrq_fragment_cache_t* cached_ctx);
+
+/* Purging old fragments from the cache. 
+ * This should only be done for caches of type "real time".
+ * - Compute the first kept GOB.
+ *   - lowest of current read point for any reader and last GOB in cache.
+ * - Delete all objects with GOB < first kept.
+ */
+void quicrq_fragment_cache_media_purge_to_gob(
+    quicrq_media_source_ctx_t* srce_ctx);
 
 /* Purging the old fragments from the cache.
  * There are two modes of operation.
@@ -138,14 +149,14 @@ int quicrq_fragment_cache_learn_end_point(quicrq_fragment_cached_media_t* cached
  */
 
 void quicrq_fragment_cache_media_purge(
-    quicrq_fragment_cached_media_t* cached_media,
+    quicrq_fragment_cache_t* cached_media,
     uint64_t current_time,
     uint64_t cache_duration_max,
     uint64_t first_object_id_kept);
 
-void quicrq_fragment_cache_delete_ctx(quicrq_fragment_cached_media_t* cache_ctx);
+void quicrq_fragment_cache_delete_ctx(quicrq_fragment_cache_t* cache_ctx);
 
-quicrq_fragment_cached_media_t* quicrq_fragment_cache_create_ctx(quicrq_ctx_t* qr_ctx);
+quicrq_fragment_cache_t* quicrq_fragment_cache_create_ctx(quicrq_ctx_t* qr_ctx);
 
 /* Fragment publisher
  * 
@@ -185,6 +196,8 @@ int quicrq_fragment_publisher_fn(
     int* is_still_active,
     int* has_backlog,
     uint64_t current_time);
+
+int quicrq_fragment_is_ready_to_send(void* v_media_ctx, size_t data_max_size, uint64_t current_time);
 
 
 /* Evaluate whether the media context has backlog, and check
@@ -261,14 +274,14 @@ int quicrq_fragment_datagram_publisher_fn(
     int* at_least_one_active,
     uint64_t current_time);
 
-void* quicrq_fragment_publisher_subscribe(void* v_srce_ctx, quicrq_stream_ctx_t* stream_ctx);
+void* quicrq_fragment_publisher_subscribe(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t* stream_ctx);
 
 void quicrq_fragment_publisher_delete(void* v_pub_ctx);
 
 /* Fragment cache media publish */
 int quicrq_publish_fragment_cached_media(quicrq_ctx_t* qr_ctx,
-    quicrq_fragment_cached_media_t* cache_ctx, const uint8_t* url, const size_t url_length,
-    int is_local_object_source);
+    quicrq_fragment_cache_t* cache_ctx, const uint8_t* url, const size_t url_length,
+    int is_local_object_source, int is_cache_real_time);
 
 #ifdef __cplusplus
 }

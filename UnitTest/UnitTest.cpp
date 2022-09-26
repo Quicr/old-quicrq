@@ -287,18 +287,73 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+#if 0
+		/* Start point function needs to be revised after "subscriber intent" */
 		TEST_METHOD(triangle_start_point) {
 			int ret = quicrq_triangle_start_point_test();
 
 			Assert::AreEqual(ret, 0);
 		}
-
+#endif
 		TEST_METHOD(triangle_cache) {
 			int ret = quicrq_triangle_cache_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(triangle_cache_loss) {
+			int ret = quicrq_triangle_cache_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_cache_stream) {
+			int ret = quicrq_triangle_cache_stream_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent) {
+			int ret = quicrq_triangle_intent_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_datagram) {
+			int ret = quicrq_triangle_intent_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_loss) {
+			int ret = quicrq_triangle_intent_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_next) {
+			int ret = quicrq_triangle_intent_next_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_next_s) {
+			int ret = quicrq_triangle_intent_next_s_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_that) {
+			int ret = quicrq_triangle_intent_that_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_that_s) {
+			int ret = quicrq_triangle_intent_that_s_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 		TEST_METHOD(pyramid_basic) {
 			int ret = quicrq_pyramid_basic_test();
 

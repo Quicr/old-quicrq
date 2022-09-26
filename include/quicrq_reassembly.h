@@ -60,7 +60,8 @@ int quicrq_reassembly_input(
     quicrq_reassembly_object_ready_fn ready_fn,
     void * app_media_ctx);
 
-int quicrq_reassembly_learn_start_point(quicrq_reassembly_context_t* reassembly_ctx, uint64_t start_object_id, uint64_t current_time,
+int quicrq_reassembly_learn_start_point(quicrq_reassembly_context_t* reassembly_ctx,
+    uint64_t start_group_id, uint64_t start_object_id, uint64_t current_time,
     quicrq_reassembly_object_ready_fn ready_fn, void* app_media_ctx);
 
 /* Obtain the final object ID */

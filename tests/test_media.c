@@ -554,17 +554,18 @@ int test_media_is_audio(const uint8_t* url, size_t url_length)
     return is_audio;
 }
 
-test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
+test_media_object_source_context_t* test_media_object_source_publish_ex(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
-    uint64_t start_time)
+    uint64_t start_time, quicrq_media_object_source_properties_t * properties)
 {
+
     test_media_object_source_context_t* object_pub_ctx = (test_media_object_source_context_t*)malloc(
         sizeof(test_media_object_source_context_t));
     if (object_pub_ctx != NULL) {
         memset(object_pub_ctx, 0, sizeof(test_media_object_source_context_t));
         object_pub_ctx->pub_ctx =
             test_media_publisher_init(media_source_path, generation_model, is_real_time, start_time);
-        object_pub_ctx->object_source_ctx = quicrq_publish_object_source(qr_ctx, url, url_length, NULL);
+        object_pub_ctx->object_source_ctx = quicrq_publish_object_source(qr_ctx, url, url_length, properties);
 
         if (object_pub_ctx->pub_ctx == NULL || object_pub_ctx->object_source_ctx == NULL) {
             test_media_object_source_delete(object_pub_ctx);
@@ -577,6 +578,13 @@ test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_
         }
     }
     return object_pub_ctx;
+}
+
+test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
+    char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
+    uint64_t start_time)
+{
+    return test_media_object_source_publish_ex(qr_ctx, url, url_length, media_source_path, generation_model, is_real_time, start_time, NULL);
 }
 
 int test_media_object_source_set_start(test_media_object_source_context_t* object_pub_ctx, uint64_t start_group, uint64_t start_object)
@@ -807,7 +815,7 @@ int test_media_object_consumer_cb(
         }
         break;
     case quicrq_media_start_point:
-        ret = quicrq_reassembly_learn_start_point(&cons_ctx->reassembly_ctx, object_id, current_time,
+        ret = quicrq_reassembly_learn_start_point(&cons_ctx->reassembly_ctx, group_id, object_id, current_time,
             test_media_consumer_object_ready, cons_ctx);
         if (ret == 0 && cons_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;
@@ -815,6 +823,9 @@ int test_media_object_consumer_cb(
         break;
     case quicrq_media_close:
         ret = test_media_consumer_close(media_ctx);
+        break;
+    case quicrq_media_real_time_cache:
+        /* Ignore that for now */
         break;
     default:
         ret = -1;
@@ -945,7 +956,8 @@ int test_object_stream_consumer_cb(
     return ret;
 }
 
-test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log)
+test_object_stream_ctx_t* test_object_stream_subscribe_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams,
+    quicrq_subscribe_intent_t * intent, char const* media_result_file, char const* media_result_log)
 {
     int ret = 0;
     /* Open and initialize result file and log file */
@@ -964,7 +976,7 @@ test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx
             ret = -1;
         }
         else {
-            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, use_datagrams, 1, test_object_stream_consumer_cb, cons_ctx);
+            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, use_datagrams, 1, intent, test_object_stream_consumer_cb, cons_ctx);
             if (cons_ctx->media_ctx == NULL) {
                 ret = -1;
             }
@@ -978,11 +990,18 @@ test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx
     return cons_ctx;
 }
 
+test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams,
+    char const* media_result_file, char const* media_result_log)
+{
+    return test_object_stream_subscribe_ex(cnx_ctx, url, url_length, use_datagrams,
+        NULL, media_result_file, media_result_log);
+}
 
 /* Compare media file.
  * These are binary files composed of sequences of objects.
  */
-int quicrq_compare_media_file_ex(char const* media_result_file, char const* media_reference_file, int * nb_losses, uint8_t * loss_flag)
+int quicrq_compare_media_file_ex(char const* media_result_file, char const* media_reference_file,
+    int * nb_losses, uint8_t * loss_flag, uint64_t start_group_id, uint64_t start_object_id)
 {
     int ret = 0;
     /* Open contexts for each file */
@@ -1006,6 +1025,9 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
     else {
         int is_audio = test_media_is_audio((const uint8_t*)media_reference_file, strlen(media_reference_file));
         int nb_object = 0;
+        int nb_ref_object = 0;
+        uint64_t ref_group_id = 0;
+        uint64_t ref_object_id = 0;
 
         /* Read the objects on both. They should match, or both should come to an end */
         while (ret == 0 && !result_ctx->is_finished && !ref_ctx->is_finished) {
@@ -1014,7 +1036,25 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
             if (ret != 0) {
                 DBG_PRINTF("Could not read object from results, ret=%d", ret);
             } else {
-                ret = test_media_read_object_from_file(ref_ctx);
+                /* Get the next object, skipping to the start point if necessary */
+                do {
+                    ret = test_media_read_object_from_file(ref_ctx);
+                    if (ret == 0) {
+                        if (nb_ref_object > 0) {
+                            /* Mimic here the generation of group id and object id in the test publisher */
+                            if (ref_ctx->current_header.length > 5000) {
+                                ref_group_id++;
+                                ref_object_id = 0;
+                            }
+                            else {
+                                ref_object_id++;
+                            }
+                        }
+                        nb_ref_object++;
+                    }
+                } while (ret == 0 && (ref_group_id < start_group_id ||
+                    (ref_group_id == start_group_id && ref_object_id < start_object_id)));
+                /* Compare values */
                 if (ret == 0) {
                     /* Compare the media objects */
                     if (result_ctx->is_finished) {
@@ -1085,7 +1125,7 @@ int quicrq_compare_media_file_ex(char const* media_result_file, char const* medi
 
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file)
 {
-    return quicrq_compare_media_file_ex(media_result_file, media_reference_file, NULL, NULL);
+    return quicrq_compare_media_file_ex(media_result_file, media_reference_file, NULL, NULL, 0, 0);
 }
 
 /* Compare log file to reference log file  

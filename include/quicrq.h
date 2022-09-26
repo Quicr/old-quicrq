@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.22"
+#define QUICRQ_VERSION "0.23"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
@@ -22,7 +22,7 @@ extern "C" {
  * different protocol versions will not be compatible, and connections attempts
  * between such binaries will fail, forcing deployments of compatible versions.
  */
-#define QUICRQ_ALPN "quicr-h22"
+#define QUICRQ_ALPN "quicr-h23"
 #define QUICRQ_PORT 853
 
 /* QUICR error codes */
@@ -49,6 +49,23 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
 void quicrq_delete(quicrq_ctx_t* ctx);
 picoquic_quic_t* quicrq_get_quic_ctx(quicrq_ctx_t* ctx);
 void quicrq_init_transport_parameters(picoquic_tp_t* tp, int client_mode);
+
+/* Cache management.
+ * Media caches are kept in relays as long as a connection uses them, or up to
+ * 'cache_duration_max' if not in use. This value is set using `quicrq_set_cache_duration`. 
+ * If the value is set to zero, the cache will not be purged.
+ * 
+ * The cache will also not be purged for 30 seconds if it was not filled yet. This happens when 
+ * an empty cache entry is created in response to a media request, but the media
+ * source is not connected yet. This mechanism may have to be revised in a future
+ * version.
+ * 
+ * Cache is purged when `quicrq_time_check` is called, and no purge has been
+ * done for half the maximum duration.
+ */
+#define QUICRQ_CACHE_DURATION_DEFAULT 10000000
+#define QUICRQ_CACHE_INITIAL_DURATION 30000000
+
 void quicrq_set_cache_duration(quicrq_ctx_t* qr_ctx, uint64_t cache_duration_max);
 uint64_t quicrq_time_check(quicrq_ctx_t* qr_ctx, uint64_t current_time);
 
@@ -96,6 +113,7 @@ typedef struct st_quicrq_media_object_header_t {
  */
 
 typedef struct st_quicrq_media_object_source_properties_t {
+    unsigned int use_real_time_caching : 1;
     int tbd;
 } quicrq_media_object_source_properties_t;
 
@@ -155,6 +173,7 @@ typedef enum {
     quicrq_media_datagram_ready = 0,
     quicrq_media_start_point,
     quicrq_media_final_object_id,
+    quicrq_media_real_time_cache,
     quicrq_media_close
 } quicrq_media_consumer_enum;
 
@@ -174,8 +193,21 @@ typedef int (*quicrq_object_stream_consumer_fn)(
 
 typedef struct st_quicrq_object_stream_consumer_ctx quicrq_object_stream_consumer_ctx;
 
+typedef enum {
+    quicrq_subscribe_intent_current_group = 0,
+    quicrq_subscribe_intent_next_group = 1,
+    quicrq_subscribe_intent_start_point = 2
+} quicrq_subscribe_intent_enum;
+
+typedef struct st_quicrq_subscribe_intent_t {
+    quicrq_subscribe_intent_enum intent_mode;
+    uint64_t start_group_id;
+    uint64_t start_object_id;
+} quicrq_subscribe_intent_t;
+
 quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
     const uint8_t* url, size_t url_length, int use_datagrams, int in_order_required,
+    quicrq_subscribe_intent_t * intent,
     quicrq_object_stream_consumer_fn media_object_consumer_fn, void* media_object_ctx);
 
 void quicrq_unsubscribe_object_stream(quicrq_object_stream_consumer_ctx* subscribe_ctx);

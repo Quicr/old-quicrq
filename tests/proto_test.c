@@ -31,13 +31,16 @@ static quicrq_message_t stream_rq = {
     0,
     0,
     NULL,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t stream_rq_bytes[] = {
     QUICRQ_ACTION_REQUEST_STREAM,
     sizeof(url1),
-    URL1_BYTES
+    URL1_BYTES,
+    0x00
 };
 
 static quicrq_message_t datagram_rq = {
@@ -53,13 +56,70 @@ static quicrq_message_t datagram_rq = {
     0,
     0,
     NULL,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t datagram_rq_bytes[] = {
     QUICRQ_ACTION_REQUEST_DATAGRAM,
     sizeof(url1),
     URL1_BYTES,
+    0x00,
+    0x44, 0xd2
+};
+
+static quicrq_message_t datagram_rq_next_group = {
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
+    sizeof(url1),
+    url1,
+    1234,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    0,
+    0,
+    quicrq_subscribe_intent_next_group
+};
+
+static uint8_t datagram_rq_next_group_bytes[] = {
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
+    sizeof(url1),
+    URL1_BYTES,
+    0x01,
+    0x44, 0xd2
+};
+
+static quicrq_message_t datagram_rq_start_point = {
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
+    sizeof(url1),
+    url1,
+    1234,
+    4,
+    9,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    0,
+    0,
+    quicrq_subscribe_intent_start_point
+};
+
+static uint8_t datagram_rq_start_point_bytes[] = {
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
+    sizeof(url1),
+    URL1_BYTES,
+    0x02,
+    0x04,
+    0x09,
     0x44, 0xd2
 };
 
@@ -76,7 +136,9 @@ static quicrq_message_t fin_msg = {
     0,
     0,
     NULL,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t fin_msg_bytes[] = {
@@ -100,7 +162,9 @@ static quicrq_message_t repair_request_msg = {
     1,
     sizeof(repair_bytes),
     NULL,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t repair_request_msg_bytes[] = {
@@ -123,7 +187,9 @@ static quicrq_message_t fragment_msg = {
     1,
     sizeof(repair_bytes),
     repair_bytes,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t fragment_msg_bytes[] = {
@@ -149,7 +215,9 @@ static quicrq_message_t fragment_msg2 = {
     1,
     sizeof(repair_bytes),
     repair_bytes,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t fragment_msg2_bytes[] = {
@@ -176,14 +244,17 @@ static quicrq_message_t post_msg = {
     0,
     0,
     NULL,
-    3
+    3,
+    1,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t post_msg_bytes[] = {
     QUICRQ_ACTION_POST,
     sizeof(url1),
     URL1_BYTES,
-    3
+    3,
+    1
 };
 
 static quicrq_message_t accept_dg = {
@@ -199,7 +270,9 @@ static quicrq_message_t accept_dg = {
     0,
     0,
     NULL,
-    1
+    1,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t accept_dg_bytes[] = {
@@ -222,14 +295,15 @@ static quicrq_message_t accept_st = {
     0,
     0,
     NULL,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t accept_st_bytes[] = {
     QUICRQ_ACTION_ACCEPT,
     0
 };
-
 
 static quicrq_message_t start_msg = {
     QUICRQ_ACTION_START_POINT,
@@ -244,7 +318,9 @@ static quicrq_message_t start_msg = {
     0,
     0,
     NULL,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t start_msg_bytes[] = {
@@ -266,7 +342,9 @@ static quicrq_message_t subscribe_msg = {
     0,
     0,
     NULL,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t subscribe_msg_bytes[] = {
@@ -288,7 +366,9 @@ static quicrq_message_t notify_msg = {
     0,
     0,
     NULL,
-    0
+    0,
+    0,
+    quicrq_subscribe_intent_current_group
 };
 
 static uint8_t notify_msg_bytes[] = {
@@ -296,6 +376,32 @@ static uint8_t notify_msg_bytes[] = {
     sizeof(url1),
     URL1_BYTES
 };
+
+
+static quicrq_message_t cache_policy_msg = {
+    QUICRQ_ACTION_CACHE_POLICY,
+    0,
+    NULL,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    0,
+    1,
+    quicrq_subscribe_intent_current_group
+};
+
+static uint8_t cache_policy_bytes[] = {
+    QUICRQ_ACTION_CACHE_POLICY,
+    1
+};
+
+
 
 typedef struct st_proto_test_case_t {
     uint8_t* const data;
@@ -307,6 +413,8 @@ typedef struct st_proto_test_case_t {
 static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(stream_rq, stream_rq_bytes),
     PROTO_TEST_ITEM(datagram_rq, datagram_rq_bytes),
+    PROTO_TEST_ITEM(datagram_rq_next_group, datagram_rq_next_group_bytes),
+    PROTO_TEST_ITEM(datagram_rq_start_point, datagram_rq_start_point_bytes),
     PROTO_TEST_ITEM(fin_msg, fin_msg_bytes),
     PROTO_TEST_ITEM(repair_request_msg, repair_request_msg_bytes),
     PROTO_TEST_ITEM(fragment_msg, fragment_msg_bytes),
@@ -316,43 +424,50 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(accept_st, accept_st_bytes),
     PROTO_TEST_ITEM(start_msg, start_msg_bytes),
     PROTO_TEST_ITEM(subscribe_msg, subscribe_msg_bytes),
-    PROTO_TEST_ITEM(notify_msg, notify_msg_bytes)
+    PROTO_TEST_ITEM(notify_msg, notify_msg_bytes),
+    PROTO_TEST_ITEM(cache_policy_msg, cache_policy_bytes)
 };
 
 static uint8_t bad_bytes1[] = {
     0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     sizeof(url1),
-    URL1_BYTES
+    URL1_BYTES,
+    0x00
 };
 
 static uint8_t bad_bytes2[] = {
     QUICRQ_ACTION_REQUEST_STREAM,
     0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    URL1_BYTES
+    URL1_BYTES,
+    0x00
 };
 
 static uint8_t bad_bytes3[] = {
     QUICRQ_ACTION_REQUEST_STREAM,
     0x8f, 0xff, 0xff, 0xff,
-    URL1_BYTES
+    URL1_BYTES,
+    0x00
 };
 
 static uint8_t bad_bytes4[] = {
     QUICRQ_ACTION_REQUEST_STREAM,
     0x4f, 0xff,
-    URL1_BYTES
+    URL1_BYTES,
+    0x00
 };
 
 static uint8_t bad_bytes5[] = {
     QUICRQ_ACTION_REQUEST_STREAM,
     sizeof(url1) + 1,
     URL1_BYTES,
+    0x00
 };
 
 static uint8_t bad_bytes6[] = {
     QUICRQ_ACTION_REQUEST_DATAGRAM,
     0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     URL1_BYTES,
+    0x00,
     0x44, 0xd2
 };
 
@@ -360,6 +475,7 @@ static uint8_t bad_bytes7[] = {
     QUICRQ_ACTION_REQUEST_DATAGRAM,
     0x8f, 0xff, 0xff, 0xff,
     URL1_BYTES,
+    0x00,
     0x44, 0xd2
 };
 
@@ -419,6 +535,51 @@ static uint8_t bad_bytes15[] = {
     0xff, 0xff
 };
 
+static uint8_t bad_bytes16[] = {
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
+    sizeof(url1),
+    URL1_BYTES,
+    0x44, 0xd2
+};
+
+static uint8_t bad_bytes17[] = {
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
+    sizeof(url1),
+    URL1_BYTES,
+    0x02,
+    0x44, 0xd2
+};
+
+static uint8_t bad_bytes18[] = {
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
+    sizeof(url1),
+    URL1_BYTES,
+    0x02,
+    0x04,
+    0x44, 0xd2
+};
+
+static uint8_t bad_bytes19[] = {
+    QUICRQ_ACTION_REQUEST_DATAGRAM,
+    sizeof(url1),
+    URL1_BYTES,
+    0x03,
+    0x44, 0xd2
+};
+
+static uint8_t bad_bytes20[] = {
+    QUICRQ_ACTION_REQUEST_STREAM,
+    sizeof(url1),
+    URL1_BYTES
+};
+
+static uint8_t bad_bytes21[] = {
+    QUICRQ_ACTION_REQUEST_STREAM,
+    sizeof(url1),
+    URL1_BYTES,
+    0x03
+};
+
 typedef struct st_proto_test_bad_case_t {
     uint8_t* const data;
     size_t data_length;
@@ -443,7 +604,13 @@ static proto_test_bad_case_t proto_bad_cases[] = {
     PROTO_TEST_BAD_ITEM(bad_bytes12),
     PROTO_TEST_BAD_ITEM(bad_bytes13),
     PROTO_TEST_BAD_ITEM(bad_bytes14),
-    PROTO_TEST_BAD_ITEM(bad_bytes15)
+    PROTO_TEST_BAD_ITEM(bad_bytes15),
+    PROTO_TEST_BAD_ITEM(bad_bytes16),
+    PROTO_TEST_BAD_ITEM(bad_bytes17),
+    PROTO_TEST_BAD_ITEM(bad_bytes18),
+    PROTO_TEST_BAD_ITEM(bad_bytes19),
+    PROTO_TEST_BAD_ITEM(bad_bytes20),
+    PROTO_TEST_BAD_ITEM(bad_bytes21)
 };
 
 int proto_msg_test()
@@ -489,6 +656,9 @@ int proto_msg_test()
             ret = -1;
         }
         else if (result.is_last_fragment != proto_cases[i].result->is_last_fragment) {
+            ret = -1;
+        }
+        else if (result.subscribe_intent != proto_cases[i].result->subscribe_intent) {
             ret = -1;
         }
         else if (result.length != proto_cases[i].result->length) {
