@@ -77,6 +77,7 @@ static const quicrq_test_def_t test_table[] =
     { "triangle_intent_datagram", quicrq_triangle_intent_datagram_test },
     { "triangle_intent_loss", quicrq_triangle_intent_loss_test },
     { "triangle_intent_next", quicrq_triangle_intent_next_test },
+    { "triangle_intent_next_s", quicrq_triangle_intent_next_s_test },
     { "pyramid_basic", quicrq_pyramid_basic_test },
     { "pyramid_datagram", quicrq_pyramid_datagram_test },
     { "pyramid_datagram_loss", quicrq_pyramid_datagram_loss_test },

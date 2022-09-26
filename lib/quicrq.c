@@ -1575,13 +1575,15 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                     }
                                 }
                             }
-                            if (intent_group > 0 || intent_object > 0){
+                            if (intent_group > 0 || intent_object > 0) {
                                 /* apply the intent, prepare a start point message */
                                 stream_ctx->start_group_id = intent_group;
                                 stream_ctx->start_object_id = intent_object;
                                 stream_ctx->next_group_id = intent_group;
                                 stream_ctx->next_object_id = intent_object;
-
+                                stream_ctx->media_ctx->current_group_id = intent_group;
+                                stream_ctx->media_ctx->current_object_id = intent_object;
+                                stream_ctx->media_ctx->current_offset = 0;
                                 ret = quicrq_prepare_start_point(stream_ctx);
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
