@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.24"
+#define QUICRQ_VERSION "0.24a"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
@@ -129,7 +129,6 @@ typedef struct st_quicrq_media_object_source_properties_t {
 
 typedef struct st_quicrq_media_object_properties_t {
     uint8_t flags;
-    int is_new_group;
 } quicrq_media_object_properties_t;
 
 typedef struct st_quicrq_media_object_source_ctx_t quicrq_media_object_source_ctx_t;
