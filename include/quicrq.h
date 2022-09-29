@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.24a"
+#define QUICRQ_VERSION "0.24b"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
