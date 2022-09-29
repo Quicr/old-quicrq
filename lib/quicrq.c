@@ -496,10 +496,10 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
         /* Find the stream context by datagram ID */
         stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 0);
         if (stream_ctx == NULL) {
-            DBG_PRINTF("Unexpected datagram on stream %" PRIu64 ", object id %" PRIu64 ", max: % " PRIu64, 
-                datagram_stream_id, object_id, cnx_ctx->next_datagram_stream_id);
-            picoquic_log_app_message(cnx_ctx->cnx, "Unexpected datagram on stream %" PRIu64 ", object id %" PRIu64 ", max: % " PRIu64,
-                datagram_stream_id, object_id, cnx_ctx->next_datagram_stream_id);
+            DBG_PRINTF("Unexpected datagram on stream %" PRIu64 ", object id %" PRIu64 "/%" PRIu64 ", max: % " PRIu64, 
+                datagram_stream_id, group_id, object_id, cnx_ctx->next_datagram_stream_id);
+            picoquic_log_app_message(cnx_ctx->cnx, "Unexpected datagram on stream %" PRIu64 ", object id %" PRIu64 "/%" PRIu64 ", max: % " PRIu64,
+                datagram_stream_id, group_id, object_id, cnx_ctx->next_datagram_stream_id);
             if (datagram_stream_id >= cnx_ctx->next_datagram_stream_id) {
                 ret = -1;
                 picoquic_log_app_message(cnx_ctx->cnx, "Error, unexpected datagram stream %" PRIu64,
@@ -509,8 +509,8 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
         else {
             /* Pass data to the media context. */
             if (is_last_fragment) {
-                picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
-                    object_id, datagram_stream_id, stream_ctx->stream_id);
+                picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 "/%" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
+                    group_id, object_id, datagram_stream_id, stream_ctx->stream_id);
             }
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, group_id, object_id, object_offset, 
                 queue_delay, flags, nb_objects_previous_group, is_last_fragment, bytes_max - next_bytes);
@@ -518,7 +518,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
                 ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
             }
             if (ret != 0) {
-                DBG_PRINTF("Error found on dg stream id %" PRIu64 ", object id %" PRIu64, datagram_stream_id, object_id);
+                DBG_PRINTF("Error found on dg stream id %" PRIu64 ", object id %" PRIu64 "/%", datagram_stream_id, group_id, object_id);
             }
         }
     }
@@ -1201,6 +1201,9 @@ int quicrq_prepare_start_point(quicrq_stream_ctx_t* stream_ctx)
             /* Queue the media request message to that stream */
             message->message_size = message_next - message->buffer;
             stream_ctx->send_state = quicrq_sending_start_point;
+
+            picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Sending start point on stream %" PRIu64 ", object id %" PRIu64 "/%" PRIu64,
+                stream_ctx->stream_id, stream_ctx->start_group_id, stream_ctx->start_object_id);
         }
     }
     return ret;
@@ -1637,7 +1640,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         else {
                             /* Pass the start point to the media consumer. */
                             quicrq_log_message(stream_ctx->cnx_ctx,
-                                "Stream %" PRIu64 ", start point notified: %" PRIu64 ", %" PRIu64,
+                                "Stream %" PRIu64 ", start point notified: %" PRIu64 "/%" PRIu64,
                                 stream_ctx->stream_id, incoming.group_id, incoming.object_id);
                             stream_ctx->start_group_id = incoming.group_id;
                             stream_ctx->start_object_id = incoming.object_id;
@@ -1654,6 +1657,9 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             ret = -1;
                         }
                         else {
+                            quicrq_log_message(stream_ctx->cnx_ctx,
+                                "Stream %" PRIu64 ", final point notified: %" PRIu64 "/%" PRIu64,
+                                stream_ctx->stream_id, incoming.group_id, incoming.object_id);
                             /* Pass the final offset to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_final_object_id, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic), NULL,
                                 incoming.group_id, incoming.object_id, 0, 0, 0, 0, 0, 0);
