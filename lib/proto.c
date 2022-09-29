@@ -1001,6 +1001,11 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
                     ret = -1;
                 }
                 else {
+                    char url_text[256];
+
+                    quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", post media url %s, mode = %s",
+                        stream_ctx->stream_id, quicrq_uint8_t_to_text(url, url_length, url_text, 256),
+                        (use_datagrams) ? "datagram" : "stream");
                     /* Queue the post message to that stream */
                     stream_ctx->is_sender = 1;
                     stream_ctx->is_cache_policy_sent = stream_ctx->is_cache_real_time;
@@ -1093,6 +1098,9 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
         /* Maybe we need to send policy messages, in which case the stream should be active! */
         int more_to_send = (!stream_ctx->is_start_object_id_sent && (stream_ctx->start_group_id > 0 || stream_ctx->start_object_id > 0));
         more_to_send |= (!stream_ctx->is_cache_policy_sent && stream_ctx->is_cache_real_time);
+        quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", post accepted, start= %" PRIu64 "/%" PRIu64 " %s",
+            stream_ctx->stream_id, stream_ctx->start_group_id, stream_ctx->start_object_id,
+            (stream_ctx->is_start_object_id_sent) ? "(already sent)":"");
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, more_to_send, stream_ctx);
     }
     else {
