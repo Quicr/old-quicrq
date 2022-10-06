@@ -563,20 +563,64 @@ int test_media_is_audio(const uint8_t* url, size_t url_length)
     return is_audio;
 }
 
+/* In order to test the "start point" function, we start the reference source at a specific start point.
+*/
+static int test_media_object_source_set_start(test_media_object_source_context_t* object_pub_ctx, uint64_t start_group_id, uint64_t start_object_id)
+{
+    int ret = 0;
+
+    if (object_pub_ctx->pub_ctx != NULL && object_pub_ctx->pub_ctx->F != NULL) {
+        uint64_t group_id = 0;
+        uint64_t object_id = 0;
+
+        /* Read the media file until the context matches */
+        while (ret == 0 && (group_id < start_group_id || (group_id == start_group_id && object_id < start_object_id))) {
+            ret = test_media_read_object_from_file(object_pub_ctx->pub_ctx);
+            if (ret == 0 && object_id > 0 && test_media_is_new_group(object_pub_ctx->pub_ctx->current_header.length)) {
+                group_id++;
+                object_id = 0;
+            }
+            else {
+                object_id++;
+            }
+        }
+        if (ret == 0) {
+            /* mark the segment as available */
+            object_pub_ctx->object_is_ready = 1;
+        }
+    }
+    else {
+        ret = -1;
+    }
+    return ret;
+}
+
 test_media_object_source_context_t* test_media_object_source_publish_ex(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
     uint64_t start_time, quicrq_media_object_source_properties_t * properties)
 {
-
+    int ret = 0;
     test_media_object_source_context_t* object_pub_ctx = (test_media_object_source_context_t*)malloc(
         sizeof(test_media_object_source_context_t));
     if (object_pub_ctx != NULL) {
         memset(object_pub_ctx, 0, sizeof(test_media_object_source_context_t));
         object_pub_ctx->pub_ctx =
             test_media_publisher_init(media_source_path, generation_model, is_real_time, start_time);
-        object_pub_ctx->object_source_ctx = quicrq_publish_object_source(qr_ctx, url, url_length, properties);
+        if (object_pub_ctx->pub_ctx == NULL) {
+            ret = -1;
+        }
+        else if (properties != NULL && (properties->start_group_id != 0 || properties->start_object_id != 0)) {
+            ret = test_media_object_source_set_start(object_pub_ctx, properties->start_group_id, properties->start_object_id);
+        }
 
-        if (object_pub_ctx->pub_ctx == NULL || object_pub_ctx->object_source_ctx == NULL) {
+        if (ret == 0) {
+            object_pub_ctx->object_source_ctx = quicrq_publish_object_source(qr_ctx, url, url_length, properties);
+            if (object_pub_ctx->pub_ctx == NULL) {
+                ret = -1;
+            }
+        }
+
+        if (ret != 0) {
             test_media_object_source_delete(object_pub_ctx);
             object_pub_ctx = NULL;
         }
@@ -596,44 +640,6 @@ test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_
     return test_media_object_source_publish_ex(qr_ctx, url, url_length, media_source_path, generation_model, is_real_time, start_time, NULL);
 }
 
-/* In order to test the "start point" function, we start the reference source at a specific start point.
- */
-int test_media_object_source_set_start(test_media_object_source_context_t* object_pub_ctx, uint64_t start_group, uint64_t start_object)
-{
-    int ret = 0;
-
-    if (object_pub_ctx->object_source_ctx != NULL && object_pub_ctx->pub_ctx != NULL && object_pub_ctx->pub_ctx->F != NULL) {
-        uint64_t group_id = object_pub_ctx->object_source_ctx->next_group_id;
-        uint64_t object_id = object_pub_ctx->object_source_ctx->next_object_id;
-
-        if (group_id != 0 || object_id != 0) {
-            ret = -1;
-        }
-        else {
-            /* Read the media file until the context matches */
-            while (ret == 0 && (group_id < start_group || (group_id == start_group && object_id < start_object))) {
-                ret = test_media_read_object_from_file(object_pub_ctx->pub_ctx);
-                if (object_id > 0 && test_media_is_new_group(object_pub_ctx->pub_ctx->current_header.length)) {
-                    group_id++;
-                    object_id = 0;
-                }
-                else {
-                    object_id++;
-                }
-            }
-            if (ret == 0) {
-                /* mark the segment as available */
-                object_pub_ctx->object_is_ready = 1;
-                /* set the start point */
-                ret = quicrq_object_source_set_start(object_pub_ctx->object_source_ctx, start_group, start_object);
-            }
-        }
-    }
-    else {
-        ret = -1;
-    }
-    return ret;
-}
 /* Media receiver definitions.
  * Manage a list of objects being reassembled. The list is organized as a splay,
  * indexed by the object id and object offset. When a new fragment is received

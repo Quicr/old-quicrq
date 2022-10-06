@@ -42,11 +42,26 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
         * then publish the corresponding source.
         */
         object_source_ctx->cache_ctx = quicrq_fragment_cache_create_ctx(qr_ctx);
-        if (object_source_ctx->cache_ctx != NULL) {
+        if (object_source_ctx->cache_ctx == NULL) {
+            ret = -1;
+        } else {
             ret = quicrq_publish_fragment_cached_media(qr_ctx, object_source_ctx->cache_ctx, url, url_length, 1, object_source_ctx->properties.use_real_time_caching);
+            /* If needs be, set the media start point. */
+            if (ret == 0 && (object_source_ctx->properties.start_group_id != 0 || object_source_ctx->properties.start_object_id != 0)) {
+                ret = quicrq_fragment_cache_learn_start_point(object_source_ctx->cache_ctx, object_source_ctx->properties.start_group_id,
+                    object_source_ctx->properties.start_object_id);
+                if (ret == 0) {
+                    if (object_source_ctx->next_group_id < object_source_ctx->properties.start_group_id ||
+                        (object_source_ctx->next_group_id == object_source_ctx->properties.start_group_id &&
+                            object_source_ctx->next_object_id < object_source_ctx->properties.start_object_id)) {
+                        object_source_ctx->next_group_id = object_source_ctx->properties.start_group_id;
+                        object_source_ctx->next_object_id = object_source_ctx->properties.start_object_id;
+                    }
+                }
+            }
         }
         /* If the API fails, close the media object source */
-        if (object_source_ctx->cache_ctx == NULL || ret != 0) {
+        if (ret != 0) {
             DBG_PRINTF("%s", "Could not publish media source for media object source");
             quicrq_delete_object_source(object_source_ctx);
             object_source_ctx = NULL;
@@ -54,7 +69,7 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
     }
     return(object_source_ctx);
 }
-
+#if 0
 int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id)
 {
     int ret = 0;
@@ -84,6 +99,7 @@ static int quicrq_object_source_check_start(quicrq_media_object_source_ctx_t* ob
 
     return ret;
 }
+#endif
 
 int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
@@ -101,8 +117,8 @@ int quicrq_publish_object(
     /* Verify that the progression of numbers by the application matches the rules */
     if (group_id != object_source_ctx->next_group_id) {
         if (group_id != object_source_ctx->next_group_id + 1 ||
-            object_id != 0) {
-            ret = quicrq_object_source_check_start(object_source_ctx, group_id, object_id);
+            object_id != 0 || object_source_ctx->next_object_id == 0) {
+            ret = -1;
         }
         else {
             is_new_group = 1;
@@ -112,7 +128,7 @@ int quicrq_publish_object(
         }
     }
     else if (object_id !=  object_source_ctx->next_object_id){
-        ret = quicrq_object_source_check_start(object_source_ctx, group_id, object_id);
+        ret = -1;
     }
 
     if (ret == 0) {

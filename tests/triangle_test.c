@@ -128,15 +128,17 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             quicrq_set_cache_duration(config->nodes[0], 5000000);
         }
 
+        if (start_point != 0) {
+            properties.start_group_id = 1;
+            properties.start_object_id = 0;
+            start_group_intent = 1;
+            start_object_intent = 0;
+        }
+
         config->object_sources[0] = test_media_object_source_publish_ex(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
             strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time, &properties);
         if (config->object_sources[0] == NULL) {
             ret = -1;
-        }
-        else if (start_point != 0) {
-            ret = test_media_object_source_set_start(config->object_sources[0], 1, 0);
-            start_group_intent = 1;
-            start_object_intent = 0;
         }
     }
 
