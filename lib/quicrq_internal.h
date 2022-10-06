@@ -126,8 +126,12 @@ uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t messa
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url,
     quicrq_subscribe_intent_enum * intent_mode, uint64_t * start_group_id,  uint64_t * start_object_id, uint64_t* datagram_stream_id);
 size_t quicrq_post_msg_reserve(size_t url_length);
-uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url, unsigned int datagram_capable, uint8_t cache_policy);
-const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url, unsigned int* datagram_capable, uint8_t* cache_policy);
+uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, 
+    const uint8_t* url, unsigned int datagram_capable, uint8_t cache_policy,
+    uint64_t start_group_id, uint64_t start_object_id);
+const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+    size_t* url_length, const uint8_t** url, unsigned int* datagram_capable, uint8_t* cache_policy,
+    uint64_t* start_group_id, uint64_t* start_object_id);
 size_t quicrq_fin_msg_reserve(uint64_t final_group_id, uint64_t final_object_id);
 uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, 
     uint64_t final_group_id, uint64_t final_object_id);
