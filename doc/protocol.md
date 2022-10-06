@@ -57,7 +57,11 @@ The prototype uses the following control messages:
 * FRAGMENT: carry a media fragment
 * POST: publish a media stream towards the origin
 * ACCEPT: indicates that the POST requests has been accepted by the next relay or by the origin
-* START_POINT: indicates group_id and object_id of first object sent on stream
+* START_POINT: indicates group_id and object_id of first object sent on media stream in response to a request
+* CACHE_POLICY: indicates whether to use real time cache pruning or not. 
+* SUBSCRIBE: subscribe to an URL pattern
+* NOTIFY: announce availabiity of a media with URL matching the pattern
+
 
 The description of messages in the following subsections use the same conventions as RFC 9000.
 
@@ -70,6 +74,9 @@ quicrq_request_message {
     message_type(i),
     url_length(i),
     url(...),
+    intent_mode(i),
+    [ start_group_id(i),
+      start_object_id(i),]
     [datagram_stream_id(i)]
 }
 ```
@@ -77,6 +84,16 @@ quicrq_request_message {
 The message type will be set to REQUEST_STREAM (1) if the client wants to receive the media in
 stream mode, or REQUEST_DATAGRAM (2) if receiving in datagram mode. If in datagram mode,
 the client must select a datagram stream id that is not yet used for any other media stream.
+
+The intent mode indicates at which point in the media the receiver wants to start receiving data.
+It can be set to:
+
+* `current_group (0)`, starting at the beginning of the current group of objects,
+* `next_group (1)`, starting at the beginning of the next group of objects,
+* `start_point (2)`, starting at the specified starting group ID and object ID.
+
+The elements `start_group_id` and `start_object_id` are only present
+if the intent is set to `start_point`.
 
 ### Post Message. 
 
@@ -86,8 +103,11 @@ The POST message is used to indicate intent to publish a media stream:
 quicrq_post_message { 
     message_type(i),
     url_length(i),
-    url(...)
-    datagram_capable(i)
+    url(...),
+    datagram_capable(i),
+    cache_policy(8),
+    start_group_id(i),
+    start_object_id(i)
 }
 ```
 
@@ -95,6 +115,16 @@ The message type will be set to POST (6).
 The `datagram_capable` flag is set to 0 if the client can only post data in stream
 mode, to 1 if the client is also capable of posting media fragments as datagrams.
 
+The `cache_policy` value is set to either `real_time (1)`
+or `not real time (0)`. If the cache policy is set to real time,
+the relays can purge old media objects from their caches as soon
+as they are not any more needed. If not real time, the caches are
+only purged when the transmission completes.
+
+The start point for the numbering of group of objects and objects
+within groups is set through the parameters `start_group_id` and
+`start_object_id`.
+_
 ### Accept Message
 
 The Accept message is sent in response to the Post message, on the server side of
@@ -113,12 +143,25 @@ server wants to receive data in stream mode, and to 1 if the server selects to
 receive data fragments as datagrams. In that case, the server must select a
 datagram stream id that is not yet used to receive any other media stream.
 
+### Cache Policy Message
+ 
+The Cache Policy message may be sent by the server that received a Request message.
+This message is optional: by default, the cache policy is set to `not_real_time`.
+
+```
+quicrq_group_policy_message {
+    message_type(i),
+    cache_policy (8)
+}
+```
+The message id is set to CAHE POLICY (11). 
+
+
 ### Start Point Message
  
 The Start Point message indicates the
 Group ID and Object ID of the first object that will be sent for the media.
-If may be sent by the server that received a Request message, or by the
-client that sent a Post message. This message is optional: by default,
+If may be sent by the server that received a Request message. This message is optional: by default,
 media streams start with Group ID and Object ID set to 0.
 
 ```
@@ -217,6 +260,46 @@ quicrq_fin_message {
 The message type will be set to FIN (3). The final `group_id` is set to the `group_id`
 of the last fragment sent. The final `object_id` is set to the object_id of the last
 fragment sent, plus 1. This message is not sent when fragments are sent on stream.
+
+### Subscribe Message
+
+The subscribe message creates a subscription context, asking relay or
+origin to notify the client when matching URL become available.
+The stream is closed when the client is not anymore 
+interested by responses to this subscription.
+```
+quicrq_subscribe_message {
+    message_type(i),
+    url_length(i),
+    url(...)
+}
+```
+
+The message is sent on a dedicated QUIC Stream. 
+
+The message type will be set to SUBSCRIBE (9)
+
+### Notify Message
+
+The Notify message is sent in response to a Subscribe, when
+a media with matching URL becomes available. 
+```
+quicrq_notify_message {
+    message_type(i),
+    url_length(i),
+    url(...)
+}
+```
+The  message is sent on the stream opened by the Subscribe message.
+There may be multiple Notify message sent on that stream.
+The stream is closed either after the client closes it, or
+if the server is not anymore able to send responses to the
+subscription.
+
+The first bytes of the URL must match the URL specified in
+the subscription.
+
+The message type will be set to NOTIFY (10)
 
 ## Sending Datagrams
 
