@@ -69,37 +69,6 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
     }
     return(object_source_ctx);
 }
-#if 0
-int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id)
-{
-    int ret = 0;
-    ret = quicrq_fragment_cache_learn_start_point(object_source_ctx->cache_ctx, start_group_id, start_object_id);
-    if (ret == 0) {
-        if (object_source_ctx->next_group_id < start_group_id ||
-            (object_source_ctx->next_group_id == start_group_id &&
-                object_source_ctx->next_object_id < start_object_id)) {
-            object_source_ctx->next_group_id = start_group_id;
-            object_source_ctx->next_object_id = start_object_id;
-        }
-    }
-    return ret;
-}
-
-static int quicrq_object_source_check_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id)
-{
-    int ret = 0;
-    if (object_source_ctx->next_group_id != 0 ||
-        object_source_ctx->next_object_id != 0) {
-        /* start point was already set */
-        ret = -1;
-    }
-    else {
-        ret = quicrq_object_source_set_start(object_source_ctx, start_group_id, start_object_id);
-    }
-
-    return ret;
-}
-#endif
 
 int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,

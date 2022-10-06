@@ -136,9 +136,6 @@ typedef struct st_quicrq_media_object_source_ctx_t quicrq_media_object_source_ct
 
 quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
     quicrq_media_object_source_properties_t * properties);
-#if 0
-int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id);
-#endif
 
 int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
