@@ -548,7 +548,7 @@ uint8_t* quicr_encode_object_header(uint8_t* fh, const uint8_t* fh_max, const qu
 
 /* Process a receive POST command */
 int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, uint8_t cache_policy);
+    int use_datagrams, uint8_t cache_policy, uint64_t start_group_id, uint64_t start_object_id);
 
 /*  Process a received ACCEPT response */
 int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_datagrams, uint64_t datagram_stream_id);

@@ -134,9 +134,9 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             ret = -1;
         }
         else if (start_point != 0) {
-            ret = test_media_object_source_set_start(config->object_sources[0], 1, 1);
+            ret = test_media_object_source_set_start(config->object_sources[0], 1, 0);
             start_group_intent = 1;
-            start_object_intent = 1;
+            start_object_intent = 0;
         }
     }
 
@@ -206,7 +206,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
                 break;
             case quicrq_subscribe_intent_start_point:
                 intent.start_group_id = 1;
-                intent.start_object_id = 2;
+                intent.start_object_id = 0;
                 start_group_intent =  intent.start_group_id;
                 start_object_intent = intent.start_object_id;
                 break;

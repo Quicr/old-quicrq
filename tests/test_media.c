@@ -611,17 +611,22 @@ int test_media_object_source_set_start(test_media_object_source_context_t* objec
         }
         else {
             /* Read the media file until the context matches */
-            while (ret == 0 && (group_id < start_group || (group_id == start_group && object_id + 1 < start_object))) {
+            while (ret == 0 && (group_id < start_group || (group_id == start_group && object_id < start_object))) {
                 ret = test_media_read_object_from_file(object_pub_ctx->pub_ctx);
                 if (object_id > 0 && test_media_is_new_group(object_pub_ctx->pub_ctx->current_header.length)) {
                     group_id++;
                     object_id = 0;
-                } else {
+                }
+                else {
                     object_id++;
                 }
             }
-            /* set the start point */
-            ret = quicrq_object_source_set_start(object_pub_ctx->object_source_ctx, start_group, start_object);
+            if (ret == 0) {
+                /* mark the segment as available */
+                object_pub_ctx->object_is_ready = 1;
+                /* set the start point */
+                ret = quicrq_object_source_set_start(object_pub_ctx->object_source_ctx, start_group, start_object);
+            }
         }
     }
     else {

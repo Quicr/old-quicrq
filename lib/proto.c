@@ -876,6 +876,11 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
         if (stream_ctx->is_datagram) {
             stream_ctx->is_active_datagram = 1;
             picoquic_mark_datagram_ready(stream_ctx->cnx_ctx->cnx, 1);
+            if (((stream_ctx->start_group_id != 0 || stream_ctx->start_object_id != 0) &&
+                !stream_ctx->is_start_object_id_sent) ||
+                (stream_ctx->is_cache_real_time && !stream_ctx->is_cache_policy_sent)) {
+                picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+            }
         }
         else if (stream_ctx->cnx_ctx->cnx != NULL) {
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
@@ -1024,11 +1029,14 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
                     /* Queue the post message to that stream */
                     stream_ctx->is_sender = 1;
                     stream_ctx->is_cache_policy_sent = stream_ctx->is_cache_real_time;
+                    stream_ctx->is_start_object_id_sent = (stream_ctx->start_group_id > 0 || stream_ctx->start_object_id > 0);
                     message->message_size = message_next - message->buffer;
                     stream_ctx->send_state = quicrq_sending_initial;
                     stream_ctx->receive_state = quicrq_receive_confirmation;
                     stream_ctx->datagram_stream_id = UINT64_MAX;
                     stream_ctx->is_datagram = (use_datagrams) ? 1 : 0;
+                    stream_ctx->next_group_id = stream_ctx->start_group_id;
+                    stream_ctx->next_object_id = stream_ctx->start_object_id;
                     picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
                 }
             }
@@ -1054,7 +1062,7 @@ int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_co
 
 /* Accept a media post and connect it to the local consumer */
 int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, uint8_t cache_policy)
+    int use_datagrams, uint8_t cache_policy, uint64_t start_group_id, uint64_t start_object_id)
 {
     int ret = 0;
     quicrq_message_buffer_t* message = &stream_ctx->message_sent;
@@ -1091,6 +1099,16 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             if (ret == 0 && cache_policy != 0) {
                 ret = stream_ctx->consumer_fn(quicrq_media_real_time_cache, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
                     NULL, 0, 0, 0, 0, 0, 0, 0, 0);
+            }
+            /* Set the initial group and object id for the local media */
+            if (start_group_id != 0 || start_object_id != 0) {
+                quicrq_log_message(stream_ctx->cnx_ctx,
+                    "Stream %" PRIu64 ", start point notified: %" PRIu64 "/%" PRIu64,
+                    stream_ctx->stream_id, start_group_id, start_object_id);
+                stream_ctx->start_group_id = start_group_id;
+                stream_ctx->start_object_id = start_object_id;
+                ret = stream_ctx->consumer_fn(quicrq_media_start_point, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
+                    NULL, start_group_id, start_object_id, 0, 0, 0, 0, 0, 0);
             }
         }
     }

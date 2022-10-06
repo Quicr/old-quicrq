@@ -1218,7 +1218,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
         quicrq_message_buffer_t* message = &stream_ctx->message_sent;
         /* Ready to send next message */
         if (stream_ctx->is_sender) {
-            if (stream_ctx->start_object_id > 0 && !stream_ctx->is_start_object_id_sent) {
+            if ((stream_ctx->start_group_id > 0 || stream_ctx->start_object_id > 0) && !stream_ctx->is_start_object_id_sent) {
                 ret = quicrq_prepare_start_point(stream_ctx);
             }
             else if ((stream_ctx->final_group_id > 0 || stream_ctx->final_object_id > 0) &&
@@ -1621,7 +1621,8 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 (incoming.use_datagram) ? "datagram" : "stream");
                             /* Decide whether to receive the data as stream or as datagrams */
                             /* Prepare a consumer for the data. */
-                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.use_datagram, incoming.cache_policy);
+                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.use_datagram,
+                                incoming.cache_policy, incoming.group_id, incoming.object_id);
                         }
                         break;
                     case QUICRQ_ACTION_ACCEPT:
