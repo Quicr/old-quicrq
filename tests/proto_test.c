@@ -236,8 +236,8 @@ static quicrq_message_t post_msg = {
     sizeof(url1),
     url1,
     0,
-    0,
-    0,
+    1,
+    12,
     0,
     0,
     0,
@@ -254,7 +254,9 @@ static uint8_t post_msg_bytes[] = {
     sizeof(url1),
     URL1_BYTES,
     3,
-    1
+    1,
+    1,
+    12
 };
 
 static quicrq_message_t accept_dg = {
@@ -505,7 +507,9 @@ static uint8_t bad_bytes11[] = {
     0x4F,
     0xFF,
     URL1_BYTES,
-    17
+    17,
+    1,
+    12
 };
 
 static uint8_t bad_bytes12[] = {

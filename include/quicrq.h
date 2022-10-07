@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.24b"
+#define QUICRQ_VERSION "0.25"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
@@ -22,7 +22,7 @@ extern "C" {
  * different protocol versions will not be compatible, and connections attempts
  * between such binaries will fail, forcing deployments of compatible versions.
  */
-#define QUICRQ_ALPN "quicr-h24"
+#define QUICRQ_ALPN "quicr-h25"
 #define QUICRQ_PORT 853
 
 /* QUICR error codes */
@@ -124,7 +124,8 @@ typedef struct st_quicrq_media_object_header_t {
 
 typedef struct st_quicrq_media_object_source_properties_t {
     unsigned int use_real_time_caching : 1;
-    int tbd;
+    uint64_t start_group_id;
+    uint64_t start_object_id;
 } quicrq_media_object_source_properties_t;
 
 typedef struct st_quicrq_media_object_properties_t {
@@ -135,7 +136,6 @@ typedef struct st_quicrq_media_object_source_ctx_t quicrq_media_object_source_ct
 
 quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
     quicrq_media_object_source_properties_t * properties);
-int quicrq_object_source_set_start(quicrq_media_object_source_ctx_t* object_source_ctx, uint64_t start_group_id, uint64_t start_object_id);
 
 int quicrq_publish_object(
     quicrq_media_object_source_ctx_t* object_source_ctx,
