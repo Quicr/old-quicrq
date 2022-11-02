@@ -494,7 +494,7 @@ quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, in
 }
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client, int min_packet_size, uint64_t extra_delay)
+int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client, int min_packet_size, uint64_t extra_delay, int unsubscribe)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -509,9 +509,10 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     char result_log_name[512];
     char text_log_name[512];
     size_t nb_log_chars = 0;
+    test_object_stream_ctx_t* object_stream_ctx = NULL;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%" PRIx64 "-%d-%" PRIu64 ".txt", is_real_time, use_datagrams, is_from_client, 
-        simulate_losses, min_packet_size, extra_delay);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%" PRIx64 "-%d-%" PRIu64 "-%d.txt", is_real_time, use_datagrams, is_from_client, 
+        simulate_losses, min_packet_size, extra_delay, unsubscribe);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         use_datagrams, is_real_time, is_from_client,
         result_file_name, result_log_name, sizeof(result_file_name));
@@ -561,7 +562,6 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         else {
             /* Create a subscription to the test source on client */
             if (ret == 0) {
-                test_object_stream_ctx_t* object_stream_ctx = NULL;
                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE, 
                     strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
                 if (object_stream_ctx == NULL) {
@@ -581,6 +581,11 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
 
         nb_steps++;
+
+        if (unsubscribe && object_stream_ctx != NULL && config->simulated_time > 5000000) {
+            test_object_stream_unsubscribe(object_stream_ctx);
+            object_stream_ctx = NULL;
+        }
 
         if (is_active) {
             nb_inactive = 0;
@@ -610,7 +615,9 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         }
     }
 
-    if (ret == 0 && (!is_closed || config->simulated_time > 12000000)) {
+    if (ret == 0 &&
+        ((!unsubscribe && (!is_closed || config->simulated_time > 12000000)) ||
+            (unsubscribe && config->simulated_time > 5100000))) {
         DBG_PRINTF("Session was not properly closed, time = %" PRIu64, config->simulated_time);
         ret = -1;
     }
@@ -620,8 +627,10 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         quicrq_test_config_delete(config);
     }
     /* Verify that media file was received correctly */
-    if (ret == 0) {
-        ret = quicrq_compare_media_file(result_file_name, media_source_path);
+    if (ret == 0){
+        if (!unsubscribe) {
+            ret = quicrq_compare_media_file(result_file_name, media_source_path);
+        }
     }
     else {
         DBG_PRINTF("Test failed before getting results, ret = %d", ret);
@@ -633,49 +642,55 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 /* Basic connection test, using streams, not real time. */
 int quicrq_basic_test()
 {
-    return quicrq_basic_test_one(0, 0, 0, 0, 0, 0);
+    return quicrq_basic_test_one(0, 0, 0, 0, 0, 0, 0);
 }
 
 /* Basic connection test, using streams, real time. */
 int quicrq_basic_rt_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 0, 0, 0);
+    return quicrq_basic_test_one(1, 0, 0, 0, 0, 0, 0);
 }
 
 /* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
 int quicrq_datagram_basic_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0, 0, 0);
+    return quicrq_basic_test_one(1, 1, 0, 0, 0, 0, 0);
 }
 
 /* Datagram test, with forced packet losses. */
 int quicrq_datagram_loss_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 0);
+    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 0, 0);
 }
 
 /* Datagram test, with forced packet losses and extra repeat */
 int quicrq_datagram_extra_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 10000);
+    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 10000, 0);
 }
 
 /* Publish from client, using streams */
 int quicrq_basic_client_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 1, 0, 0);
+    return quicrq_basic_test_one(1, 0, 0, 1, 0, 0, 0);
 }
 
 /* Publish from client, using datagrams */
 int quicrq_datagram_client_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 1, 0, 0);
+    return quicrq_basic_test_one(1, 1, 0, 1, 0, 0, 0);
 }
 
 /* Datagram test, with datagram limit. */
 int quicrq_datagram_limit_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0, 1100, 0);
+    return quicrq_basic_test_one(1, 1, 0, 0, 1100, 0, 0);
+}
+
+/* Unsubscribe test -- close the receiver mid way, check that nothing breaks */
+int quicrq_datagram_unsubscribe_test()
+{
+    return quicrq_basic_test_one(1, 1, 0, 0, 0, 0, 1);
 }
 
 int quicrq_get_addr_test()

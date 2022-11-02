@@ -42,6 +42,7 @@ static const quicrq_test_def_t test_table[] =
     { "basic_client", quicrq_basic_client_test },
     { "datagram_client", quicrq_datagram_client_test },
     { "datagram_limit", quicrq_datagram_limit_test },
+    { "datagram_unsubscribe", quicrq_datagram_unsubscribe_test },
     { "twomedia", quicrq_twomedia_test },
     { "twomedia_datagram", quicrq_twomedia_datagram_test },
     { "twomedia_datagram_loss", quicrq_twomedia_datagram_loss_test },

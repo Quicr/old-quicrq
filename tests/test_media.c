@@ -1039,6 +1039,14 @@ test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx
         NULL, media_result_file, media_result_log);
 }
 
+void test_object_stream_unsubscribe(test_object_stream_ctx_t* cons_ctx)
+{
+    if (cons_ctx != NULL && cons_ctx->media_ctx != NULL) {
+        quicrq_unsubscribe_object_stream(cons_ctx->media_ctx);
+        cons_ctx->media_ctx = NULL;
+    }
+}
+
 /* Compare media file.
  * These are binary files composed of sequences of objects.
  */
