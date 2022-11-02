@@ -146,7 +146,7 @@ quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx
 
 void quicrq_unsubscribe_object_stream(quicrq_object_stream_consumer_ctx* bridge_ctx)
 {
+    quicrq_delete_stream_ctx(bridge_ctx->stream_ctx->cnx_ctx, bridge_ctx->stream_ctx);
     bridge_ctx->object_stream_consumer_fn = NULL;
     bridge_ctx->object_stream_consumer_ctx = NULL;
-    quicrq_delete_stream_ctx(bridge_ctx->stream_ctx->cnx_ctx, bridge_ctx->stream_ctx);
 }

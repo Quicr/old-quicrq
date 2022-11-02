@@ -27,6 +27,7 @@ extern "C" {
     int quicrq_basic_client_test();
     int quicrq_datagram_client_test();
     int quicrq_datagram_limit_test();
+    int quicrq_datagram_unsubscribe_test();
     int quicrq_twomedia_test();
     int quicrq_twomedia_datagram_test();
     int quicrq_twomedia_datagram_loss_test();

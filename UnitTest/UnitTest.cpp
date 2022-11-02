@@ -144,6 +144,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(datagram_unsubscribe) {
+			int ret = quicrq_datagram_unsubscribe_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(twomedia)
 		{
 			int ret = quicrq_twomedia_test();
