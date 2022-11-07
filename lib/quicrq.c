@@ -507,6 +507,11 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             }
         }
         else {
+            /* Verification that there are no unexpected fragments, used in tests */
+            if (group_id < stream_ctx->start_group_id ||
+                (group_id == stream_ctx->start_group_id && object_id < stream_ctx->start_object_id)) {
+                cnx_ctx->qr_ctx->useless_fragments += 1;
+            }
             /* Pass data to the media context. */
             if (is_last_fragment) {
                 picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 "/%" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
@@ -1542,9 +1547,9 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             /* Process initial request */
                             stream_ctx->is_datagram = (incoming.message_type == QUICRQ_ACTION_REQUEST_DATAGRAM);
                             /* Open the media -- TODO, variants with different actions. */
-                            quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", received a subscribe request for url %s, mode = %s",
+                            quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", received a subscribe request for url %s, mode = %s, id= %" PRIu64,
                                 stream_ctx->stream_id, quicrq_uint8_t_to_text(incoming.url, incoming.url_length, url_text, 256),
-                                (stream_ctx->is_datagram) ? "datagram" : "stream");
+                                (stream_ctx->is_datagram) ? "datagram" : "stream", incoming.datagram_stream_id);
                             ret = quicrq_subscribe_local_media(stream_ctx, incoming.url, incoming.url_length);
                             if (ret == 0) {
                                 quicrq_wakeup_media_stream(stream_ctx);
@@ -1677,6 +1682,12 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             ret = -1;
                         }
                         else {
+                            /* Verification that there are no unexpected fragments, used in tests */
+                            if (incoming.group_id < stream_ctx->start_group_id ||
+                                (incoming.group_id == stream_ctx->start_group_id &&
+                                    incoming.object_id < stream_ctx->start_object_id)) {
+                                stream_ctx->cnx_ctx->qr_ctx->useless_fragments++;
+                            }
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
                                 incoming.data, incoming.group_id, incoming.object_id,
@@ -1834,6 +1845,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_prepare_datagram:
             /* Prepare to send a datagram */ {
             uint64_t current_time = picoquic_get_quic_time(cnx_ctx->qr_ctx->quic);
+
             ret = quicrq_prepare_to_send_datagram(cnx_ctx, bytes, length, current_time);
             break;
         }

@@ -123,7 +123,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
         quicrq_media_object_source_properties_t properties = { 0 };
         int publish_node = 1;
 
-        if (test_cache_clear || test_intent > 0) {
+        if (test_cache_clear) {
             properties.use_real_time_caching = 1;
             quicrq_set_cache_duration(config->nodes[0], 5000000);
         }
@@ -322,6 +322,15 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
         }
     }
 
+    if (ret == 0) {
+        for (int i = 0; i < config->nb_nodes; i++) {
+            if (config->nodes[i]->useless_fragments > 0) {
+                DBG_PRINTF("Received %" PRIu64 " useless fragments at node %i", config->nodes[i]->useless_fragments);
+                ret = -1;
+            }
+        }
+    }
+
     /* Clear everything. */
     if (config != NULL) {
         quicrq_test_config_delete(config);
@@ -421,9 +430,23 @@ int quicrq_triangle_intent_test()
     return ret;
 }
 
+int quicrq_triangle_intent_nc_test()
+{
+    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 0, 1);
+
+    return ret;
+}
+
 int quicrq_triangle_intent_datagram_test()
 {
     int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_dg_nc_test()
+{
+    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 0, 1);
 
     return ret;
 }
