@@ -529,6 +529,8 @@ struct st_quicrq_ctx_t {
     int extra_repeat_on_nack : 1;
     int extra_repeat_after_received_delayed : 1;
     uint64_t extra_repeat_delay;
+    /* Count of media fragments received with numbers < start point */
+    uint64_t useless_fragments;
     /* Control whether to enable congestion control -- mostly for testability */
     unsigned int do_congestion_control : 1;
 };

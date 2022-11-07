@@ -59,6 +59,7 @@ extern "C" {
     int quicrq_triangle_cache_stream_test();
     int quicrq_triangle_intent_test();
     int quicrq_triangle_intent_datagram_test();
+    int quicrq_triangle_intent_dg_nc_test();
     int quicrq_triangle_intent_loss_test();
     int quicrq_triangle_intent_next_test();
     int quicrq_triangle_intent_next_s_test();

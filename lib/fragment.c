@@ -750,12 +750,22 @@ int quicrq_fragment_datagram_publisher_check_fragment(
 {
     int ret = 0;
     quicrq_fragment_publisher_object_state_t* publisher_object = NULL;
-
+#if 1
+    if (stream_ctx->cnx_ctx->is_server) {
+        DBG_PRINTF("%s", "bug");
+    }
+#endif
     *should_skip = 0;
 
     /* The "current fragment" shall never be NULL, unless this is the very first one. */
     if (media_ctx->current_fragment == NULL) {
         media_ctx->current_fragment = media_ctx->cache_ctx->first_fragment;
+        while (media_ctx->current_fragment != NULL &&
+            (media_ctx->current_fragment->group_id < stream_ctx->start_group_id ||
+                (media_ctx->current_fragment->group_id == stream_ctx->start_group_id &&
+                    media_ctx->current_fragment->object_id < stream_ctx->start_object_id))) {
+            media_ctx->current_fragment = media_ctx->current_fragment->next_in_order;
+        }
         media_ctx->is_current_fragment_sent = 0;
     }
     if (media_ctx->current_fragment == NULL) {
@@ -786,7 +796,10 @@ int quicrq_fragment_datagram_publisher_check_fragment(
                     break;
                 }
             }
-            else if (publisher_object->is_dropped){
+            else if (publisher_object->is_dropped ||
+                (media_ctx->current_fragment->group_id < stream_ctx->start_group_id ||
+                (media_ctx->current_fragment->group_id == stream_ctx->start_group_id &&
+                    media_ctx->current_fragment->object_id < stream_ctx->start_object_id))){
                 /* Continue looking for the next object */
                 media_ctx->is_current_fragment_sent = 1;
             }
