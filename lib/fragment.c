@@ -750,11 +750,6 @@ int quicrq_fragment_datagram_publisher_check_fragment(
 {
     int ret = 0;
     quicrq_fragment_publisher_object_state_t* publisher_object = NULL;
-#if 1
-    if (stream_ctx->cnx_ctx->is_server) {
-        DBG_PRINTF("%s", "bug");
-    }
-#endif
     *should_skip = 0;
 
     /* The "current fragment" shall never be NULL, unless this is the very first one. */

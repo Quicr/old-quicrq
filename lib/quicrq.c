@@ -507,6 +507,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             }
         }
         else {
+            /* Verification that there are no unexpected fragments, used in tests */
             if (group_id < stream_ctx->start_group_id ||
                 (group_id == stream_ctx->start_group_id && object_id < stream_ctx->start_object_id)) {
                 cnx_ctx->qr_ctx->useless_fragments += 1;
@@ -1681,6 +1682,12 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             ret = -1;
                         }
                         else {
+                            /* Verification that there are no unexpected fragments, used in tests */
+                            if (incoming.group_id < stream_ctx->start_group_id ||
+                                (incoming.group_id == stream_ctx->start_group_id &&
+                                    incoming.object_id < stream_ctx->start_object_id)) {
+                                stream_ctx->cnx_ctx->qr_ctx->useless_fragments++;
+                            }
                             /* Pass the repair data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
                                 incoming.data, incoming.group_id, incoming.object_id,
@@ -1832,22 +1839,13 @@ int quicrq_callback(picoquic_cnx_t* cnx,
             }
             break;
         case picoquic_callback_datagram:
-#if 1
-            if (!cnx_ctx->is_server) {
-                DBG_PRINTF("%s", "bug");
-            }
-#endif
             /* Receive data in a datagram */
             ret = quicrq_receive_datagram(cnx_ctx, bytes, length, picoquic_get_quic_time(cnx_ctx->qr_ctx->quic));
             break;
         case picoquic_callback_prepare_datagram:
             /* Prepare to send a datagram */ {
             uint64_t current_time = picoquic_get_quic_time(cnx_ctx->qr_ctx->quic);
-#if 1
-            if (cnx_ctx->is_server && current_time > 4000000) {
-                DBG_PRINTF("%s", "Bug");
-            }
-#endif
+
             ret = quicrq_prepare_to_send_datagram(cnx_ctx, bytes, length, current_time);
             break;
         }

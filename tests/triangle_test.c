@@ -122,11 +122,8 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
         /* Add a test source to the configuration on client #1 (publisher) */
         quicrq_media_object_source_properties_t properties = { 0 };
         int publish_node = 1;
-#if 1
+
         if (test_cache_clear) {
-#else
-        if (test_cache_clear || test_intent > 0) {
-#endif
             properties.use_real_time_caching = 1;
             quicrq_set_cache_duration(config->nodes[0], 5000000);
         }
@@ -429,6 +426,13 @@ int quicrq_triangle_cache_stream_test()
 int quicrq_triangle_intent_test()
 {
     int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_nc_test()
+{
+    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 0, 1);
 
     return ret;
 }

@@ -329,6 +329,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(triangle_intent_nc) {
+			int ret = quicrq_triangle_intent_nc_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(triangle_intent_datagram) {
 			int ret = quicrq_triangle_intent_datagram_test();
 
