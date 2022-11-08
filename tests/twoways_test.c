@@ -16,7 +16,7 @@
 /* Create a test network */
 quicrq_test_config_t* quicrq_test_twoways_config_create(uint64_t simulate_loss)
 {
-    /* Create a configuration with three nodes, four links, one source and 8 attachment points.*/
+    /* Create a configuration with three nodes, four links, two source and 4 attachment points.*/
     quicrq_test_config_t* config = quicrq_test_config_create(3, 4, 4, 2);
     if (config != NULL) {
         /* Create the contexts for the origin (0),  client-1 (1) and client-2 (2) */
@@ -55,8 +55,14 @@ quicrq_test_config_t* quicrq_test_twoways_config_create(uint64_t simulate_loss)
     return config;
 }
 
-/* Basic relay test */
-int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses)
+/* Symmetric triangle test
+ * We want to test a couple of different configurations:
+ * 
+ * 0) One source per node, each node gets the data from the other node.
+ * 1) Two sources on one node, the other gets the data.
+ * 2) Same as 1, but the subscriber starts before the publisher.
+ */
+int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int test_mode)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -81,8 +87,8 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
         ret = -1;
     }
     else {
-        (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "twoways-%d-%d-%llx", is_real_time, use_datagrams,
-            (unsigned long long)simulate_losses);
+        (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "twoways-%d-%d-%llx-%d", is_real_time, use_datagrams,
+            (unsigned long long)simulate_losses, test_mode);
         (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "%s_textlog.txt", test_id);
 
         /* Locate the source and reference file */
@@ -93,9 +99,10 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
 
         /* Create the required target references*/
         for (int i = 0; ret == 0 && i < 2; i++) {
-            target[i] = quicrq_test_config_target_create(test_id, url[i^1], i + 1, media_source_path);
+            int client_id = (test_mode == 0) ? i + 1 : 1;
+            target[i] = quicrq_test_config_target_create(test_id, url[i^1], client_id, media_source_path);
             if (target[i] == NULL) {
-                DBG_PRINTF("Cannot create targets for node %d", i=1);
+                DBG_PRINTF("Cannot create targets for target %d", i);
                 ret = -1;
             }
         }
@@ -113,17 +120,23 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }
     }
-
-    if (ret == 0) {
-        /* Add a test source to the configuration on both clients */
-        for (int publish_node = 1; publish_node < 3; publish_node++) {
-            int source_id = publish_node - 1;
+    
+    /* Publish sources either from both nodes if mode = 0 */
+    if (test_mode == 0) {
+        for (int source_id = 0; ret == 0 && source_id < 2; source_id++) {
+            int publish_node = source_id + 1;
             config->object_sources[source_id] = test_media_object_source_publish(config->nodes[publish_node], (uint8_t*)url[source_id],
                 strlen(url[source_id]), media_source_path, NULL, is_real_time, config->simulated_time);
-            if (config->object_sources[0] == NULL) {
+            if (config->object_sources[source_id] == NULL) {
                 ret = -1;
             }
         }
+    }
+
+    /* If mode 2, use reverse version of start delay */
+    if (test_mode == 2) {
+        start_delay[0] = 2500000;
+        start_delay[1] = 0;
     }
 
     while (ret == 0 && nb_inactive < max_inactive && config->simulated_time < max_time) {
@@ -135,7 +148,6 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
                 if (config->simulated_time >= start_delay[i]) {
                     /* Start client i */
                     int c_node_id = i + 1;
-                    char const* local_url = url[i];
 
                     if (ret == 0) {
                         /* Create a quicrq connection context on client */
@@ -145,26 +157,65 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
                             DBG_PRINTF("Cannot create client connection %d, ret = %d", c_node_id, ret);
                         }
                     }
-                    if (ret == 0) {
-                        /* Start pushing from the client */
-                        ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)url[i], strlen(url[i]), use_datagrams);
-                        if (ret != 0) {
-                            DBG_PRINTF("Cannot publish test media %s, ret = %d", local_url, ret);
-                        }
-                    }
 
-                    if (ret == 0) {
-                        /* Create a subscription to the test source on other client*/
+                    if (test_mode == 0) {
                         if (ret == 0) {
-                            test_object_stream_ctx_t* object_stream_ctx = NULL;
-                            object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (const uint8_t*)target[i]->url,
-                                target[i]->url_length, use_datagrams, target[i]->target_bin, target[i]->target_csv);
-                            if (object_stream_ctx == NULL) {
-                                ret = -1;
+                            /* Start pushing from the client */
+                            ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)url[i], strlen(url[i]), use_datagrams);
+                            if (ret != 0) {
+                                DBG_PRINTF("Cannot publish test media %s, ret = %d", url[i], ret);
                             }
                         }
-                        if (ret != 0) {
-                            DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", target[i]->url, ret);
+
+                        if (ret == 0) {
+                            /* Create a subscription to the test source on other client*/
+                            if (ret == 0) {
+                                test_object_stream_ctx_t* object_stream_ctx = NULL;
+                                object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (const uint8_t*)target[i]->url,
+                                    target[i]->url_length, use_datagrams, target[i]->target_bin, target[i]->target_csv);
+                                if (object_stream_ctx == NULL) {
+                                    ret = -1;
+                                }
+                            }
+                            if (ret != 0) {
+                                DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", target[i]->url, ret);
+                            }
+                        }
+                    }
+                    else {
+                        if (i == 0) {
+                            /* This is the receiving client */
+                            for (int source_id = 0; ret == 0 && source_id < 2; source_id++) {
+                                /* Create a subscription to the test source on client*/
+                                test_object_stream_ctx_t* object_stream_ctx = NULL;
+                                quicrq_subscribe_intent_t intent = { quicrq_subscribe_intent_current_group, 0, 0 };
+                                object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx[i], (const uint8_t*)target[source_id]->url,
+                                    target[source_id]->url_length, use_datagrams, &intent, target[source_id]->target_bin, target[source_id]->target_csv);
+                                if (object_stream_ctx == NULL) {
+                                    ret = -1;
+                                }
+                            }
+                        }
+                        else {
+                            /* This is the sending client */
+                            for (int source_id = 0; ret == 0 && source_id < 2; source_id++) {
+                                /* Create a source on the publisher */
+                                int publish_node = 2;
+                                quicrq_media_object_source_properties_t properties = { 1, 0, 0 };
+                                config->object_sources[source_id] = test_media_object_source_publish_ex(config->nodes[publish_node], (uint8_t*)url[source_id],
+                                    strlen(url[source_id]), media_source_path, NULL, is_real_time, config->simulated_time, &properties);
+                                if (config->object_sources[source_id] == NULL) {
+                                    DBG_PRINTF("Cannot publish test media %s, ret = %d", url[source_id], ret);
+                                    ret = -1;
+                                }
+                                else {
+                                    /* Start pushing from the client */
+                                    ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)url[source_id], strlen(url[source_id]), use_datagrams);
+                                    if (ret != 0) {
+                                        DBG_PRINTF("Cannot publish test media %s, ret = %d", url[source_id], ret);
+                                    }
+                                }
+                            }
                         }
                     }
                     client_is_started[i] = 1;
@@ -236,7 +287,15 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
     }
     else {
         for (int i = 0; ret == 0 && i < 2; i++) {
-            ret = quicrq_compare_media_file(target[i]->target_bin, target[i]->ref);
+            if (test_mode == 2) {
+                /* For that test, expect transmission to start at GOB=1 */
+                int nb_losses = 0;
+                uint8_t loss_flag = 0;
+                ret = quicrq_compare_media_file_ex(target[i]->target_bin, target[i]->ref, &nb_losses, &loss_flag, 1, 0);
+            }
+            else {
+                ret = quicrq_compare_media_file(target[i]->target_bin, target[i]->ref);
+            }
         }
     }
 
@@ -256,22 +315,42 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
 
 int quicrq_twoways_basic_test()
 {
-    int ret = quicrq_twoways_test_one(1, 0, 0);
+    int ret = quicrq_twoways_test_one(1, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_twoways_datagram_test()
 {
-    int ret = quicrq_twoways_test_one(1, 1, 0);
+    int ret = quicrq_twoways_test_one(1, 1, 0, 0);
 
     return ret;
 }
 
 int quicrq_twoways_datagram_loss_test()
 {
-    int ret = quicrq_twoways_test_one(1, 1, 0x7080);
+    int ret = quicrq_twoways_test_one(1, 1, 0x7080, 0);
 
     return ret;
 }
 
+int quicrq_twomedia_tri_stream_test()
+{
+    int ret = quicrq_twoways_test_one(1, 0, 0, 1);
+
+    return ret;
+}
+
+int quicrq_twomedia_tri_datagram_test()
+{
+    int ret = quicrq_twoways_test_one(1, 1, 0, 1);
+
+    return ret;
+}
+
+int quicrq_twomedia_tri_later_test()
+{
+    int ret = quicrq_twoways_test_one(1, 1, 0, 2);
+
+    return ret;
+}

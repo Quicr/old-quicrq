@@ -191,6 +191,29 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+
+		TEST_METHOD(twomedia_tri_stream)
+		{
+			int ret = quicrq_twomedia_tri_stream_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(twomedia_tri_datagram)
+		{
+			int ret = quicrq_twomedia_tri_datagram_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(twomedia_tri_later)
+		{
+			int ret = quicrq_twomedia_tri_later_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(proto_msg) {
 			int ret = proto_msg_test();
 

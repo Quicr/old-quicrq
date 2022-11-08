@@ -1583,6 +1583,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                     }
                                 }
                             }
+                            stream_ctx->datagram_stream_id = incoming.datagram_stream_id;
                             if (intent_group > 0 || intent_object > 0) {
                                 /* apply the intent, prepare a start point message */
                                 stream_ctx->start_group_id = intent_group;
@@ -1606,7 +1607,6 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 /* Start sending datagrams without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
-                                stream_ctx->datagram_stream_id = incoming.datagram_stream_id;
                             }
                         }
                         break;
