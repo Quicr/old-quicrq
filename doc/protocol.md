@@ -355,3 +355,62 @@ errors, which means that the same fragment could very well be received multiple 
 Relays may forward fragments even if they arrive out of order.
 
 
+# Common Encoding For Media over QUIC Streams
+
+Media data can be sent over QUIC Streams in one of the following ways of grouping the media
+
+- One Stream per Group of Pictures/Group of Obejcts (like with WARP)
+- One Stream per frame (like with RUSH)
+- One Stream per Track/Rendition (like with QUICR)
+
+In all these cases, following elements are needed to ensure for publishers to produce unique media objects, for relays to group/cache them at segment/group boundaries
+and for consumers to request at aggregate as well as individual object level of granularity:
+1. TrackId/MediaId/RenditionId : Represents a unique codec bistream and identifies a combination of media type and a set of quality attributes (such as video resolution, framerate, bitrate, profile for video media type)
+2. GroupId/SegmentId - Identifies a depedency boundary  (ex. GOP )
+3.  ObjectId/MediaElementId - Identifies elements within a group that corresponds to an encoded and encrtypted codec transformation 
+4. Flags
+
+## RUSH
+
+For mapping with RUSH, each QUIC Stream shall have the following elements
+
+
+```
+quicrq_media_object {
+    message_type(i),
+    flags (8),
+    object_id(i),
+    length(i),
+    data(...)
+}
+```
+
+```
+quicrq_media_message {
+    message_type(i),
+    media_id(i),
+    group_id(i),
+    quicrq_media_object(...) ...,
+}
+```
+
+In this case, there exists atmost one ``` quicrq_media_object ```  with the  ```quicrq_media_message```
+
+## Warp
+
+```
+quicrq_media_message {
+    message_type(i),
+    media_id(i),
+    group_id(i),
+    quicrq_media_object(...) ...,
+}
+```
+
+In this case, there exists zero or more  ``` quicrq_media_object ``` with the  ```quicrq_media_message```
+
+
+
+
+
+
