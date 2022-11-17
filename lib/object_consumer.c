@@ -51,7 +51,7 @@ int quicrq_media_object_bridge_ready(
             quicrq_media_datagram_ready,
             bridge_ctx->object_stream_consumer_ctx,
             current_time, group_id, object_id,
-            data, data_length,  &properties);
+            data, data_length,  &properties, 0, 0);
     }
        
     return ret;
@@ -105,7 +105,7 @@ int quicrq_media_object_bridge_fn(
             quicrq_media_close,
             bridge_ctx->object_stream_consumer_ctx,
             current_time, group_id, object_id,
-            NULL, 0, NULL);
+            NULL, 0, NULL, 0, 0);
         quicrq_reassembly_release(&bridge_ctx->reassembly_ctx);
         free(media_ctx);
         break;
@@ -146,6 +146,10 @@ quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx
 
 void quicrq_unsubscribe_object_stream(quicrq_object_stream_consumer_ctx* bridge_ctx)
 {
+
+    if (bridge_ctx->stream_ctx->close_reason == quicrq_media_close_reason_unknown) {
+        bridge_ctx->stream_ctx->close_reason = quicrq_media_close_local_application;
+    }
     quicrq_delete_stream_ctx(bridge_ctx->stream_ctx->cnx_ctx, bridge_ctx->stream_ctx);
     bridge_ctx->object_stream_consumer_fn = NULL;
     bridge_ctx->object_stream_consumer_ctx = NULL;

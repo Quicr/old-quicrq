@@ -1155,6 +1155,9 @@ int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_
         DBG_PRINTF("Stream %"PRIu64" finished after %s, ret=%d", stream_ctx->stream_id, (is_final)?"final offset":((is_datagram)?"datagram":"repair"), ret);
         stream_ctx->is_receive_complete = 1;
         stream_ctx->send_state = quicrq_sending_fin;
+        if (stream_ctx->close_reason == quicrq_media_close_reason_unknown) {
+            stream_ctx->close_reason = quicrq_media_close_finished;
+        }
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
         ret = 0;
     }

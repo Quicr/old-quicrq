@@ -383,9 +383,12 @@ struct st_quicrq_stream_ctx_t {
     /* queue of datagrams that qualify for extra transmission */
     struct st_quicrq_datagram_ack_state_t* extra_first;
     struct st_quicrq_datagram_ack_state_t* extra_last;
-    /* stream identifier */
+    /* stream_id: control stream identifier */
     uint64_t stream_id;
+    /* datagram_stream_id: local identifier of media stream.
+     * TODO: rename to media_stream_id as part of RUSH/WARP development. */
     uint64_t datagram_stream_id;
+    /* Designation of next expected object, start object, final object */
     uint64_t next_group_id;
     uint64_t next_object_id;
     uint64_t next_object_offset;
@@ -415,13 +418,19 @@ struct st_quicrq_stream_ctx_t {
     /* Stream state */
     quicrq_stream_sending_state_enum send_state;
     quicrq_stream_receive_state_enum receive_state;
+    /* Close reason and diagnostic code */
+    quicrq_media_close_reason_enum close_reason;
+    uint64_t close_error_code;
+    /* Control flags */
     unsigned int is_sender : 1;
-    /* Indicates whether local cache management follows the "real time" logic,
+    /* is_cache_real_time:
+     * Indicates whether local cache management follows the "real time" logic,
      * in which only recent objects are kept. By default, cache management 
      * follows the "streaming" logic, in which everything is kept -- or nothing.
      */
     unsigned int is_cache_real_time : 1;
-    /* For the sender, receiver finished happens if the client closes the control stream.
+    /* is_peer_finished, is_local_finished, is_receive_complete:
+     * For the sender, receiver finished happens if the client closes the control stream.
      * In that case, the server should close the stream and mark itself finished.
      * For the receiver, the transfer finishes if everything was received. In that
      * case, the receiver shall close the control stream. If the sender closes the
@@ -430,6 +439,10 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_peer_finished : 1;
     unsigned int is_local_finished : 1;
     unsigned int is_receive_complete: 1;
+    /* is_datagram:
+     * A single flag indicates whether the media is sent as as series of datagram
+     * or as a single stream.
+     * TODO: this will have to be updated as add support for RUSH and WARP. */
     unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
     unsigned int is_start_object_id_sent : 1;
