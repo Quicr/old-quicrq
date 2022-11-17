@@ -926,7 +926,9 @@ int test_object_stream_consumer_cb(
     uint64_t object_id,
     const uint8_t* data,
     size_t data_length,
-    quicrq_object_stream_consumer_properties_t* properties)
+    quicrq_object_stream_consumer_properties_t* properties,
+    quicrq_media_close_reason_enum close_reason,
+    uint64_t close_error_number)
 {
     int ret = 0;
     test_object_stream_ctx_t* cons_ctx = (test_object_stream_ctx_t*)object_consumer_ctx;
@@ -986,6 +988,7 @@ int test_object_stream_consumer_cb(
         }
         break;
     case quicrq_media_close:
+        DBG_PRINTF("Closing media stream, reason code %d, error_number %" PRIu64 "\n", close_reason, close_error_number);
         /* Remove the reference to the media context, as the caller will free it. */
         cons_ctx->media_ctx = NULL;
         /* Close streams and other resource */

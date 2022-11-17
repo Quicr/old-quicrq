@@ -30,6 +30,18 @@ extern "C" {
 #define QUICRQ_ERROR_INTERNAL 0x01
 #define QUICRQ_ERROR_PROTOCOL 0x02
 
+/* Media close error codes. */
+typedef enum {
+    quicrq_media_close_reason_unknown = 0,
+    quicrq_media_close_finished,
+    quicrq_media_close_unsubscribe,
+    quicrq_media_close_delete_context,
+    quicrq_media_close_internal_error,
+    quicrq_media_close_local_application,
+    quicrq_media_close_remote_application,
+    quicrq_media_close_quic_connection
+} quicrq_media_close_reason_enum;
+
 /* Connection context management functions.
  * The type quicrq_ctx_t is treated here as an opaque pointer, to
  * provide isolation between the app and the stack.
@@ -72,7 +84,7 @@ uint64_t quicrq_time_check(quicrq_ctx_t* qr_ctx, uint64_t current_time);
 quicrq_cnx_ctx_t* quicrq_create_cnx_context(quicrq_ctx_t* qr_ctx, picoquic_cnx_t* cnx);
 quicrq_cnx_ctx_t* quicrq_create_client_cnx(quicrq_ctx_t* qr_ctx,
     const char* sni, struct sockaddr* addr);
-void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx);
+void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx, quicrq_media_close_reason_enum close_reason, uint64_t close_error_code);
 
 void quicrq_get_peer_address(quicrq_cnx_ctx_t* cnx_ctx, struct sockaddr_storage* stored_addr);
 
@@ -197,7 +209,9 @@ typedef int (*quicrq_object_stream_consumer_fn)(
     uint64_t object_id,
     const uint8_t* data,
     size_t data_length,
-    quicrq_object_stream_consumer_properties_t* properties);
+    quicrq_object_stream_consumer_properties_t* properties,
+    quicrq_media_close_reason_enum close_reason,
+    uint64_t close_error_number );
 
 typedef struct st_quicrq_object_stream_consumer_ctx quicrq_object_stream_consumer_ctx;
 

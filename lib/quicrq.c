@@ -375,6 +375,9 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         stream_header[1] = (uint8_t)(m_size & 0xff);
                         memcpy(buffer, stream_header, h_size);
                         stream_ctx->is_final_object_id_sent = 1;
+                        if (stream_ctx->close_reason == quicrq_media_close_reason_unknown) {
+                            stream_ctx->close_reason = quicrq_media_close_finished;
+                        }
                     }
                 }
             }
@@ -1347,6 +1350,9 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             ret = quicrq_msg_buffer_prepare_to_send(stream_ctx, context, space, more_to_send);
             if (stream_ctx->send_state == quicrq_sending_ready){
                 stream_ctx->is_final_object_id_sent = 1;
+                if (stream_ctx->close_reason == quicrq_media_close_reason_unknown) {
+                    stream_ctx->close_reason = quicrq_media_close_finished;
+                }
             }
             break;
         case quicrq_sending_start_point:
@@ -1385,6 +1391,9 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             stream_ctx->send_state = quicrq_sending_no_more;
             stream_ctx->is_local_finished = 1;
             if (stream_ctx->is_peer_finished) {
+                if (stream_ctx->close_reason == quicrq_media_close_reason_unknown) {
+                    stream_ctx->close_reason = quicrq_media_close_remote_application;
+                }
                 quicrq_delete_stream_ctx(stream_ctx->cnx_ctx, stream_ctx);
             }
             break;
@@ -1761,6 +1770,10 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
         stream_ctx->is_peer_finished = 1;
         if (stream_ctx->is_local_finished) {
             quicrq_cnx_ctx_t* cnx_ctx = stream_ctx->cnx_ctx;
+
+            if (stream_ctx->close_reason == quicrq_media_close_reason_unknown) {
+                stream_ctx->close_reason = quicrq_media_close_remote_application;
+            }
             quicrq_delete_stream_ctx(cnx_ctx, stream_ctx);
         }
         else {
@@ -1856,11 +1869,28 @@ int quicrq_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stateless_reset: /* Received an error message */
         case picoquic_callback_close: /* Received connection close */
         case picoquic_callback_application_close: /* Received application close */
+        {
+            /* Document the reason code, so it could be passed to the media producers */
+            quicrq_media_close_reason_enum close_reason = quicrq_media_close_quic_connection;
+            uint64_t close_error_number = 0;
+            if (fin_or_event == picoquic_callback_close) {
+                if (cnx != NULL) {
+                    close_error_number = picoquic_get_remote_error(cnx);
+                }
+            }
+            else if (fin_or_event == picoquic_callback_application_close) {
+                close_reason = quicrq_media_close_remote_application;
+                if (cnx != NULL) {
+                    close_error_number = picoquic_get_application_error(cnx);
+                }
+            }
+
             /* Remove the connection from the context, and then delete it */
             cnx_ctx->cnx = NULL;
-            quicrq_delete_cnx_context(cnx_ctx);
+            quicrq_delete_cnx_context(cnx_ctx, close_reason, close_error_number);
             picoquic_set_callback(cnx, NULL, NULL);
             break;
+        }
         case picoquic_callback_version_negotiation:
             /* The server should never receive a version negotiation response */
             break;
@@ -1911,6 +1941,7 @@ quicrq_stream_ctx_t* quicrq_cnx_subscribe_pattern(quicrq_cnx_ctx_t* cnx_ctx, con
             uint8_t* message_next = quicrq_subscribe_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
                 QUICRQ_ACTION_SUBSCRIBE, url_length, url);
             if (message_next == NULL) {
+                cnx_ctx->first_stream->close_reason = quicrq_media_close_internal_error;
                 quicrq_delete_stream_ctx(cnx_ctx, stream_ctx);
                 stream_ctx = NULL;
             }
@@ -2031,7 +2062,7 @@ void quicrq_delete(quicrq_ctx_t* qr_ctx)
 
     while (cnx_ctx != NULL) {
         next = cnx_ctx->next_cnx;
-        quicrq_delete_cnx_context(cnx_ctx);
+        quicrq_delete_cnx_context(cnx_ctx, quicrq_media_close_delete_context, 0);
         cnx_ctx = next;
     }
 
@@ -2107,10 +2138,13 @@ quicrq_ctx_t* quicrq_create(char const* alpn,
 }
 
 /* Delete a connection context */
-void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx)
+void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx, quicrq_media_close_reason_enum close_reason, uint64_t close_error_code)
 {
     /* Delete the stream contexts */
     while (cnx_ctx->first_stream != NULL) {
+        if (cnx_ctx->first_stream->close_reason == quicrq_media_close_reason_unknown) {
+            cnx_ctx->first_stream->close_reason = quicrq_media_close_delete_context;
+        }
         quicrq_delete_stream_ctx(cnx_ctx, cnx_ctx->first_stream);
     }
 
@@ -2252,7 +2286,7 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
         }
         else {
             if (stream_ctx->consumer_fn != NULL) {
-                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, current_time, NULL, 0, 0, 0, 0, 0, 0, 0, 0);
+                stream_ctx->consumer_fn(quicrq_media_close, stream_ctx->media_ctx, current_time, NULL, 0, 0, 0, 0, 0, 0, stream_ctx->close_reason, stream_ctx->close_error_code);
             }
         }
     }
