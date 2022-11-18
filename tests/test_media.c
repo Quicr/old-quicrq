@@ -685,7 +685,7 @@ int test_media_derive_file_names(const uint8_t* url, size_t url_length, quicrq_t
         result_file_name[name_length + 2] = '_';
         result_file_name[name_length + 3] = (is_real_time) ? 'r' : 'n';
         result_file_name[name_length + 4] = '_';
-        result_file_name[name_length + 5] = quircq_transport_mode_to_letter(transport_mode);
+        result_file_name[name_length + 5] = quicrq_transport_mode_to_letter(transport_mode);
         result_file_name[name_length + 6] = '.';
         result_file_name[name_length + 7] = 'b';
         result_file_name[name_length + 8] = 'i';
@@ -697,7 +697,7 @@ int test_media_derive_file_names(const uint8_t* url, size_t url_length, quicrq_t
         result_log_name[name_length + 2] = '_';
         result_log_name[name_length + 3] = (is_real_time) ? 'r' : 's';
         result_log_name[name_length + 4] = '_';
-        result_log_name[name_length + 5] = quircq_transport_mode_to_letter(transport_mode);
+        result_log_name[name_length + 5] = quicrq_transport_mode_to_letter(transport_mode);
         result_log_name[name_length + 6] = '.';
         result_log_name[name_length + 7] = 'c';
         result_log_name[name_length + 8] = 's';

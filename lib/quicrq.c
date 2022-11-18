@@ -1558,7 +1558,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             /* Open the media -- TODO, variants with different actions. */
                             quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", received a subscribe request for url %s, mode = %s, id= %" PRIu64,
                                 stream_ctx->stream_id, quicrq_uint8_t_to_text(incoming.url, incoming.url_length, url_text, 256),
-                                quircq_transport_mode_to_string(stream_ctx->transport_mode), incoming.media_id);
+                                quicrq_transport_mode_to_string(stream_ctx->transport_mode), incoming.media_id);
                             ret = quicrq_subscribe_local_media(stream_ctx, incoming.url, incoming.url_length);
                             if (ret == 0) {
                                 quicrq_wakeup_media_stream(stream_ctx);
@@ -1632,10 +1632,10 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             char url_text[256];
                             quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", received a publish request for url %s, mode = %s",
                                 stream_ctx->stream_id, quicrq_uint8_t_to_text(incoming.url, incoming.url_length, url_text, 256),
-                                (incoming.use_datagram) ? "datagram" : "stream");
+                                quicrq_transport_mode_to_string(incoming.transport_mode));
                             /* Decide whether to receive the data as stream or as datagrams */
                             /* Prepare a consumer for the data. */
-                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.use_datagram,
+                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.transport_mode,
                                 incoming.cache_policy, incoming.group_id, incoming.object_id);
                         }
                         break;
@@ -1644,8 +1644,8 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         /* Open the media provider */
                         /* Depending on mode, set media ready or datagram ready */
                         quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", publish request accepted, mode = %s",
-                            stream_ctx->stream_id, (incoming.use_datagram) ? "datagram" : "stream");
-                        ret = quicrq_cnx_post_accepted(stream_ctx, incoming.use_datagram, incoming.media_id);
+                            stream_ctx->stream_id, quicrq_transport_mode_to_string(incoming.transport_mode));
+                        ret = quicrq_cnx_post_accepted(stream_ctx, incoming.transport_mode, incoming.media_id);
                         break;
                     case QUICRQ_ACTION_START_POINT:
                         if (stream_ctx->receive_state != quicrq_receive_fragment || stream_ctx->start_group_id != 0 || stream_ctx->start_object_id != 0) {
@@ -2450,7 +2450,7 @@ void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...)
 }
 
 /* Utility function to get names or letters for transport mode */
-char quircq_transport_mode_to_letter(quicrq_transport_mode_enum transport_mode)
+char quicrq_transport_mode_to_letter(quicrq_transport_mode_enum transport_mode)
 {
     char ret = 'u';
 
@@ -2473,7 +2473,7 @@ char quircq_transport_mode_to_letter(quicrq_transport_mode_enum transport_mode)
     return ret;
 }
 
-const char * quircq_transport_mode_to_string(quicrq_transport_mode_enum transport_mode)
+const char * quicrq_transport_mode_to_string(quicrq_transport_mode_enum transport_mode)
 {
     const char * ret = "undefined";
 

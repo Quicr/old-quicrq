@@ -89,7 +89,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
     uint64_t start_object_intent = 0;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%c-%llx-%llu-%llu-%d-%d.txt", is_real_time, 
-        quircq_transport_mode_to_letter(transport_mode),
+        quicrq_transport_mode_to_letter(transport_mode),
         (unsigned long long)simulate_losses, (unsigned long long) extra_delay, (unsigned long long) start_point, test_cache_clear, test_intent);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),

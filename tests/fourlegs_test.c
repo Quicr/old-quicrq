@@ -281,12 +281,12 @@ int quicrq_fourlegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_t
     }
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "fourlegs_textlog-%c-%llx-%d.txt",
-        quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses, publish_last);
+        quicrq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses, publish_last);
     for (int i = 0; i < 3; i++) {
         (void)picoquic_sprintf(result_file_name[i], sizeof(result_file_name_1), &nb_log_chars, "fourlegs-video1-recv-%d-%c-%llx-%d.bin",
-            i+1, quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses, publish_last);
+            i+1, quicrq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses, publish_last);
         (void)picoquic_sprintf(result_log_name[i], sizeof(result_log_name_1), &nb_log_chars, "fourlegs-video1-log-%d-%c-%llx-%d.csv",
-            i+1, quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses, publish_last);
+            i+1, quicrq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses, publish_last);
     }
 
     if (config == NULL) {

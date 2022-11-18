@@ -91,7 +91,7 @@ typedef struct st_quicrq_message_t {
     int is_last_fragment;
     size_t length;
     const uint8_t* data;
-    unsigned int use_datagram;
+    quicrq_transport_mode_enum transport_mode;
     uint8_t cache_policy;
     quicrq_subscribe_intent_enum subscribe_intent;
 } quicrq_message_t;
@@ -127,10 +127,10 @@ const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_m
     quicrq_subscribe_intent_enum * intent_mode, uint64_t * start_group_id,  uint64_t * start_object_id, uint64_t* media_id);
 size_t quicrq_post_msg_reserve(size_t url_length);
 uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, 
-    const uint8_t* url, unsigned int datagram_capable, uint8_t cache_policy,
+    const uint8_t* url, quicrq_transport_mode_enum transport_mode, uint8_t cache_policy,
     uint64_t start_group_id, uint64_t start_object_id);
 const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
-    size_t* url_length, const uint8_t** url, unsigned int* datagram_capable, uint8_t* cache_policy,
+    size_t* url_length, const uint8_t** url, quicrq_transport_mode_enum* transport_mode, uint8_t* cache_policy,
     uint64_t* start_group_id, uint64_t* start_object_id);
 size_t quicrq_fin_msg_reserve(uint64_t final_group_id, uint64_t final_object_id);
 uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, 
@@ -560,10 +560,10 @@ uint8_t* quicr_encode_object_header(uint8_t* fh, const uint8_t* fh_max, const qu
 
 /* Process a receive POST command */
 int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, uint8_t cache_policy, uint64_t start_group_id, uint64_t start_object_id);
+    quicrq_transport_mode_enum transport_mode, uint8_t cache_policy, uint64_t start_group_id, uint64_t start_object_id);
 
 /*  Process a received ACCEPT response */
-int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_datagrams, uint64_t media_id);
+int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, quicrq_transport_mode_enum transport_mode, uint64_t media_id);
 
 /* Handle closure of stream after receiving the last bit of data */
 int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int is_datagram, int ret);
@@ -589,8 +589,8 @@ int quicrq_media_object_bridge_fn(
 /* For logging.. */
 const char* quicrq_uint8_t_to_text(const uint8_t* u, size_t length, char* buffer, size_t buffer_length);
 void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...);
-char quircq_transport_mode_to_letter(quicrq_transport_mode_enum transport_mode);
-const char* quircq_transport_mode_to_string(quicrq_transport_mode_enum transport_mode);
+char quicrq_transport_mode_to_letter(quicrq_transport_mode_enum transport_mode);
+const char* quicrq_transport_mode_to_string(quicrq_transport_mode_enum transport_mode);
 
 /* Evaluation of congestion state */
 int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, int has_backlog, uint64_t current_time);

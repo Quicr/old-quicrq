@@ -69,7 +69,7 @@ int quicrq_relay_test_one(int is_real_time, quicrq_transport_mode_enum transport
     size_t nb_log_chars = 0;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "relay_textlog-%d-%c-%d-%llx.txt", is_real_time,
-        quircq_transport_mode_to_letter(transport_mode), is_from_client, (unsigned long long)simulate_losses);
+        quicrq_transport_mode_to_letter(transport_mode), is_from_client, (unsigned long long)simulate_losses);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         transport_mode, is_real_time, is_from_client,
         result_file_name, result_log_name, sizeof(result_file_name));

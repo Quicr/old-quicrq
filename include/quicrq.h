@@ -48,7 +48,8 @@ typedef enum {
     quicrq_transport_mode_single_stream = 1,
     quicrq_transport_mode_warp = 2, /* One stream per GOP */
     quicrq_transport_mode_rush = 3, /* One stream per object */
-    quicrq_transport_mode_datagram = 4
+    quicrq_transport_mode_datagram = 4,
+    quicrq_transport_mode_max
 } quicrq_transport_mode_enum;
 
 /* Connection context management functions.

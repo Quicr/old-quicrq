@@ -272,14 +272,14 @@ static quicrq_message_t accept_dg = {
     0,
     0,
     NULL,
-    1,
+    quicrq_transport_mode_datagram,
     0,
     quicrq_subscribe_intent_current_group
 };
 
 static uint8_t accept_dg_bytes[] = {
     QUICRQ_ACTION_ACCEPT,
-    1,
+    quicrq_transport_mode_datagram,
     17
 };
 
@@ -297,14 +297,14 @@ static quicrq_message_t accept_st = {
     0,
     0,
     NULL,
-    0,
+    quicrq_transport_mode_single_stream,
     0,
     quicrq_subscribe_intent_current_group
 };
 
 static uint8_t accept_st_bytes[] = {
     QUICRQ_ACTION_ACCEPT,
-    0
+    quicrq_transport_mode_single_stream
 };
 
 static quicrq_message_t start_msg = {
@@ -520,7 +520,7 @@ static uint8_t bad_bytes12[] = {
 
 static uint8_t bad_bytes13[] = {
     QUICRQ_ACTION_ACCEPT,
-    1
+    quicrq_transport_mode_datagram
 };
 
 static uint8_t bad_bytes14[] = {

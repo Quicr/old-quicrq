@@ -122,7 +122,7 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
     uint64_t client2_close_time = UINT64_MAX;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%c-%llx-%d.txt", is_real_time,
-        quircq_transport_mode_to_letter(transport_mode),
+        quicrq_transport_mode_to_letter(transport_mode),
         (unsigned long long)simulate_losses, congested_receiver);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),

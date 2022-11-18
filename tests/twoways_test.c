@@ -88,7 +88,7 @@ int quicrq_twoways_test_one(int is_real_time, quicrq_transport_mode_enum transpo
     }
     else {
         (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "twoways-%d-%c-%llx-%d", is_real_time, 
-            quircq_transport_mode_to_letter(transport_mode),
+            quicrq_transport_mode_to_letter(transport_mode),
             (unsigned long long)simulate_losses, test_mode);
         (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "%s_textlog.txt", test_id);
 

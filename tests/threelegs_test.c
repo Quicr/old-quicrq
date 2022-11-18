@@ -114,12 +114,12 @@ int quicrq_threelegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_
 
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "threelegs_textlog-%c-%llx.txt", 
-        quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
+        quicrq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
     for (int i = 0; i < 2; i++) {
         (void)picoquic_sprintf(result_file_name[i], sizeof(result_file_name_1), &nb_log_chars, "threelegs-video1-recv-%d-%c-%llx.bin",
-            i+1, quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
+            i+1, quicrq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
         (void)picoquic_sprintf(result_log_name[i], sizeof(result_log_name_1), &nb_log_chars, "threelegs-video1-log-%d-%c-%llx.csv",
-            i+1, quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
+            i+1, quicrq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
     }
 
     if (config == NULL) {

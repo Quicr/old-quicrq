@@ -85,7 +85,7 @@ int quicrq_pyramid_testone(int is_real_time, quicrq_transport_mode_enum transpor
     uint64_t is_publisher_started = 0;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "pyramid_textlog-%d-%c-%d-%llu-%llu-%llu.txt",
-        is_real_time, quircq_transport_mode_to_letter(transport_mode),
+        is_real_time, quicrq_transport_mode_to_letter(transport_mode),
         is_from_relay_client, (unsigned long long)simulate_losses,
         (unsigned long long)client_start_delay, (unsigned long long)publish_start_delay);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),

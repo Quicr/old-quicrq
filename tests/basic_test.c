@@ -512,7 +512,7 @@ int quicrq_basic_test_one(int is_real_time, quicrq_transport_mode_enum transport
     test_object_stream_ctx_t* object_stream_ctx = NULL;
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%c-%d-%" PRIx64 "-%d-%" PRIu64 "-%d.txt", is_real_time, 
-        quircq_transport_mode_to_letter(transport_mode), is_from_client,
+        quicrq_transport_mode_to_letter(transport_mode), is_from_client,
         simulate_losses, min_packet_size, extra_delay, unsubscribe);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         transport_mode, is_real_time, is_from_client,
