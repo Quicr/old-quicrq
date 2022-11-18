@@ -272,8 +272,6 @@ int quicrq_fourlegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_t
     int client_is_started[4] = { 0, 0, 0, 0 };
     quicrq_cnx_ctx_t* cnx_ctx[4] = { NULL, NULL, NULL, NULL };
     int partial_closure = 0;
-    /* temporary crutch */
-    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
     if (publish_last) {
         /* test what happens if local client subscribes before 
@@ -308,7 +306,7 @@ int quicrq_fourlegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_t
 
     if (ret == 0) {
         /* Enable origin on node 0 */
-        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        ret = quicrq_enable_origin(config->nodes[0], transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }
@@ -329,7 +327,7 @@ int quicrq_fourlegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_t
         /* Configure the relays: joint client-server as default source and default consumer */
         /* Configure the relays: set the server address */
         struct sockaddr* addr_to = quicrq_test_find_send_addr(config, i_relay, 0);
-        ret = quicrq_enable_relay(config->nodes[i_relay], NULL, addr_to, use_datagrams);
+        ret = quicrq_enable_relay(config->nodes[i_relay], NULL, addr_to, transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable relay %s, ret = %d", i_relay, ret);
         }

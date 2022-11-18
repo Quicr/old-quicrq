@@ -448,7 +448,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
     }
     /* Set up a default receiver on the server */
     if (ret == 0 && mode == quicrq_app_mode_server) {
-        quicrq_enable_origin(cb_ctx.qr_ctx, use_datagram);
+        quicrq_enable_origin(cb_ctx.qr_ctx, /* Crutch */ (use_datagram) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream);
     }
 
     /* If client or relay, resolve the address */

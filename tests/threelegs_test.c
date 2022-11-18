@@ -104,8 +104,6 @@ int quicrq_threelegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_
     char result_log_name_2[256];
     char* result_file_name[2] = { result_file_name_1, result_file_name_2 };
     char* result_log_name[2] = { result_log_name_1, result_log_name_2 };
-    /* temporary crutch */
-    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
     char text_log_name[512];
     size_t nb_log_chars = 0;
@@ -141,7 +139,7 @@ int quicrq_threelegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_
 
     if (ret == 0) {
         /* Enable origin on node 0 */
-        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        ret = quicrq_enable_origin(config->nodes[0], transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }
@@ -161,7 +159,7 @@ int quicrq_threelegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_
         /* Configure the relay: joint client-server as default source and default consumer */
         /* Configure the relay: set the server address */
         struct sockaddr* addr_to = quicrq_test_find_send_addr(config, 1, 0);
-        ret = quicrq_enable_relay(config->nodes[1], NULL, addr_to, use_datagrams);
+        ret = quicrq_enable_relay(config->nodes[1], NULL, addr_to, transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable relay, ret = %d", ret);
         }

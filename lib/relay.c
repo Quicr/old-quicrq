@@ -226,7 +226,7 @@ int quicrq_relay_default_source_fn(void* default_source_ctx, quicrq_ctx_t* qr_ct
 
                     /* Request a URL on a new stream on that connection */
                     ret = quicrq_cnx_subscribe_media(relay_ctx->cnx_ctx, url, url_length,
-                        relay_ctx->use_datagrams, quicrq_relay_consumer_cb, cons_ctx);
+                        relay_ctx->transport_mode, quicrq_relay_consumer_cb, cons_ctx);
                     if (ret == 0){
                         /* Document the stream ID for that cache */
                         char buffer[256];
@@ -315,8 +315,7 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
                 ret = -1;
             }
             else {
-                ret = quicrq_cnx_post_media(relay_ctx->cnx_ctx, url, url_length, 
-                    (relay_ctx->use_datagrams)? quicrq_transport_mode_datagram: quicrq_transport_mode_single_stream);
+                ret = quicrq_cnx_post_media(relay_ctx->cnx_ctx, url, url_length, relay_ctx->transport_mode);
                 if (ret != 0) {
                     /* TODO: unpublish the media context */
                     DBG_PRINTF("Should unpublish media context, ret = %d", ret);
@@ -448,7 +447,8 @@ void quicrq_relay_subscribe_pattern(quicrq_ctx_t* qr_ctx, quicrq_subscribe_actio
 /* The relay functionality has to be established to add the relay
  * function to a QUICRQ node.
  */
-int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sockaddr* addr, int use_datagrams)
+int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sockaddr* addr,
+    quicrq_transport_mode_enum transport_mode)
 {
     int ret = 0;
 
@@ -473,7 +473,7 @@ int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char* sni, const struct sock
             }
             v_sni[sni_len] = 0;
             relay_ctx->sni = (char const*)v_sni;
-            relay_ctx->use_datagrams = use_datagrams;
+            relay_ctx->transport_mode = transport_mode;
             /* set the relay as default provider */
             quicrq_set_default_source(qr_ctx, quicrq_relay_default_source_fn, relay_ctx);
             /* set a default post client on the relay */
@@ -612,7 +612,7 @@ int quicrq_origin_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const 
  * a client.
  */
 
-int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
+int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, quicrq_transport_mode_enum transport_mode)
 {
     int ret = 0;
     quicrq_relay_context_t* relay_ctx = (quicrq_relay_context_t*)malloc(
@@ -623,7 +623,7 @@ int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams)
     else {
         /* initialize the relay context. */
         memset(relay_ctx, 0, sizeof(quicrq_relay_context_t));
-        relay_ctx->use_datagrams = use_datagrams;
+        relay_ctx->transport_mode = transport_mode;
         relay_ctx->is_origin_only = 1;
         /* set the relay as default provider */
         quicrq_set_default_source(qr_ctx, quicrq_relay_default_source_fn, relay_ctx);

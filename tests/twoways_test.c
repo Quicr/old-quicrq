@@ -82,8 +82,6 @@ int quicrq_twoways_test_one(int is_real_time, quicrq_transport_mode_enum transpo
     quicrq_cnx_ctx_t* cnx_ctx[2] = { NULL, NULL };
     quicrq_test_config_target_t* target[2] = { NULL, NULL };
     uint64_t client_close_time = UINT64_MAX;
-    /* temporary crutch */
-    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
     if (config == NULL) {
         ret = -1;
@@ -118,7 +116,7 @@ int quicrq_twoways_test_one(int is_real_time, quicrq_transport_mode_enum transpo
 
     if (ret == 0) {
         /* Enable origin on node 0 */
-        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        ret = quicrq_enable_origin(config->nodes[0], transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }

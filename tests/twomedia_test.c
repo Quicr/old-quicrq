@@ -70,8 +70,6 @@ int quicrq_twomedia_test_one(int is_real_time, quicrq_transport_mode_enum transp
     char audio_log_name[512];
     char text_log_name[512];
     size_t nb_log_chars = 0;
-    /* temporary crutch */
-    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "twomedia_textlog-%d-%c-%d-%llx-%zx-%llu.txt", is_real_time, quircq_transport_mode_to_letter(transport_mode), is_from_client,
         (unsigned long long)simulate_losses, min_packet_size, (unsigned long long)extra_delay);

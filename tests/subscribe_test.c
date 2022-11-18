@@ -175,8 +175,6 @@ int quicrq_subscribe_test_one(int is_real_time, quicrq_transport_mode_enum trans
     int stream_ctx_subscriber_is_closed = 0;
     uint64_t subscriber_close_time = UINT64_MAX;
     quicrq_subscribe_test_result_t results = { 0 };
-    /* temporary crutch */
-    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "subscribe_textlog-%d-%c-%llx-%d-%d-%d.txt", is_real_time, 
         quircq_transport_mode_to_letter(transport_mode),
@@ -203,7 +201,7 @@ int quicrq_subscribe_test_one(int is_real_time, quicrq_transport_mode_enum trans
 
     if (ret == 0) {
         /* Enable origin on node 0 */
-        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        ret = quicrq_enable_origin(config->nodes[0], transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }
@@ -214,7 +212,7 @@ int quicrq_subscribe_test_one(int is_real_time, quicrq_transport_mode_enum trans
         /* Configure the relay: joint client-server as default source and default consumer */
         /* Configure the relay: set the server address */
         struct sockaddr* addr_to = quicrq_test_find_send_addr(config, 5, 0);
-        ret = quicrq_enable_relay(config->nodes[5], NULL, addr_to, use_datagrams);
+        ret = quicrq_enable_relay(config->nodes[5], NULL, addr_to, transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable relay, ret = %d", ret);
         }

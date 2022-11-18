@@ -87,8 +87,6 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
     int subscribed = 0;
     uint64_t start_group_intent = 0;
     uint64_t start_object_intent = 0;
-    /* temporary crutch */
-    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%c-%llx-%llu-%llu-%d-%d.txt", is_real_time, 
         quircq_transport_mode_to_letter(transport_mode),
@@ -115,7 +113,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
 
     if (ret == 0) {
         /* Enable origin on node 0 */
-        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        ret = quicrq_enable_origin(config->nodes[0], transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }
