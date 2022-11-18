@@ -102,7 +102,7 @@ quicrq_test_config_t* quicrq_test_congestion_config_create(uint64_t simulate_los
 }
 
 /* Basic relay test */
-int quicrq_congestion_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int congested_receiver, int max_drops, uint8_t min_loss_flag)
+int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int congested_receiver, int max_drops, uint8_t min_loss_flag)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -120,12 +120,15 @@ int quicrq_congestion_test_one(int is_real_time, int use_datagrams, uint64_t sim
     size_t nb_log_chars = 0;
     int partial_closure = 0;
     uint64_t client2_close_time = UINT64_MAX;
+    /* temporary crutch */
+    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%d-%llx-%d.txt", is_real_time, use_datagrams,
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%c-%llx-%d.txt", is_real_time,
+        quircq_transport_mode_to_letter(transport_mode),
         (unsigned long long)simulate_losses, congested_receiver);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        use_datagrams, is_real_time, 1,
+        transport_mode, is_real_time, 1,
         result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
@@ -305,49 +308,49 @@ int quicrq_congestion_test_one(int is_real_time, int use_datagrams, uint64_t sim
 
 int quicrq_congestion_basic_test()
 {
-    int ret = quicrq_congestion_test_one(1, 0, 0, 0, 85, 0x82);
+    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 85, 0x82);
 
     return ret;
 }
 
 int quicrq_congestion_basic_recv_test()
 {
-    int ret = quicrq_congestion_test_one(1, 0, 0, 1, 85, 0x82);
+    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, 0, 1, 85, 0x82);
 
     return ret;
 }
 
 int quicrq_congestion_basic_loss_test()
 {
-    int ret = quicrq_congestion_test_one(1, 0, 0x7080, 0, 180, 0x82);
+    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, 0x7080, 0, 180, 0x82);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0, 0, 82, 0x82);
+    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, 0, 0, 82, 0x82);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_loss_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 0, 115, 0x82);
+    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 115, 0x82);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_recv_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0, 1, 82, 0x82);
+    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, 0, 1, 82, 0x82);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_rloss_test()
 {
-    int ret = quicrq_congestion_test_one(1, 1, 0x7080, 1, 115, 0x82);
+    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, 0x7080, 1, 115, 0x82);
 
     return ret;
 }

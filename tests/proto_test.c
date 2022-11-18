@@ -647,7 +647,7 @@ int proto_msg_test()
         else if (result.url_length != 0 && memcmp(result.url, proto_cases[i].result->url, result.url_length) != 0) {
             ret = -1;
         }
-        else if (result.datagram_stream_id != proto_cases[i].result->datagram_stream_id) {
+        else if (result.media_id != proto_cases[i].result->media_id) {
             ret = -1;
         }
         else if (result.group_id != proto_cases[i].result->group_id) {

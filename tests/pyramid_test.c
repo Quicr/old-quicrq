@@ -59,7 +59,7 @@ quicrq_test_config_t* quicrq_test_pyramid_config_create(uint64_t simulate_loss)
 }
 
 /* Basic relay test */
-int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_relay_client, uint64_t client_start_delay, uint64_t publish_start_delay)
+int quicrq_pyramid_testone(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int is_from_relay_client, uint64_t client_start_delay, uint64_t publish_start_delay)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -83,12 +83,15 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
     uint64_t app_wake_time = (client_start_delay> publish_start_delay)? publish_start_delay: client_start_delay;
     uint64_t is_client_started = 0;
     uint64_t is_publisher_started = 0;
+    /* temporary crutch */
+    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "pyramid_textlog-%d-%d-%d-%llu-%llu-%llu.txt",
-        is_real_time, use_datagrams, is_from_relay_client, (unsigned long long)simulate_losses,
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "pyramid_textlog-%d-%c-%d-%llu-%llu-%llu.txt",
+        is_real_time, quircq_transport_mode_to_letter(transport_mode),
+        is_from_relay_client, (unsigned long long)simulate_losses,
         (unsigned long long)client_start_delay, (unsigned long long)publish_start_delay);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        use_datagrams, is_real_time, is_from_relay_client,
+        transport_mode, is_real_time, is_from_relay_client,
         result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
@@ -264,49 +267,49 @@ int quicrq_pyramid_testone(int is_real_time, int use_datagrams, uint64_t simulat
 
 int quicrq_pyramid_basic_test()
 {
-    int ret = quicrq_pyramid_testone(1, 0, 0, 0, 0, 0);
+    int ret = quicrq_pyramid_testone(1, quicrq_transport_mode_single_stream, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_datagram_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0, 0, 0, 0);
+    int ret = quicrq_pyramid_testone(1, quicrq_transport_mode_datagram, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_datagram_loss_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0x7080, 0, 0, 0);
+    int ret = quicrq_pyramid_testone(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_basic_client_test()
 {
-    int ret = quicrq_pyramid_testone(1, 0, 0, 1, 0, 0);
+    int ret = quicrq_pyramid_testone(1, quicrq_transport_mode_single_stream, 0, 1, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_datagram_client_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0, 1, 0, 0);
+    int ret = quicrq_pyramid_testone(1, quicrq_transport_mode_datagram, 0, 1, 0, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_datagram_delay_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0, 1, 2000000, 0);
+    int ret = quicrq_pyramid_testone(1, quicrq_transport_mode_datagram, 0, 1, 2000000, 0);
 
     return ret;
 }
 
 int quicrq_pyramid_publish_delay_test()
 {
-    int ret = quicrq_pyramid_testone(1, 1, 0, 1, 0, 2000000);
+    int ret = quicrq_pyramid_testone(1, quicrq_transport_mode_datagram, 0, 1, 0, 2000000);
 
     return ret;
 }

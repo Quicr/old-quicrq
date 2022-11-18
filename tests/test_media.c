@@ -657,7 +657,7 @@ typedef struct st_test_media_consumer_context_t {
 
 } test_media_consumer_context_t;
 
-int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_datagram, int is_real_time, int is_post,
+int test_media_derive_file_names(const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode, int is_real_time, int is_post,
     char * result_file_name, char * result_log_name, size_t result_name_size)
 {
     int ret = 0;
@@ -685,7 +685,7 @@ int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_d
         result_file_name[name_length + 2] = '_';
         result_file_name[name_length + 3] = (is_real_time) ? 'r' : 'n';
         result_file_name[name_length + 4] = '_';
-        result_file_name[name_length + 5] = (is_datagram) ? 'd' : 's';
+        result_file_name[name_length + 5] = quircq_transport_mode_to_letter(transport_mode);
         result_file_name[name_length + 6] = '.';
         result_file_name[name_length + 7] = 'b';
         result_file_name[name_length + 8] = 'i';
@@ -697,7 +697,7 @@ int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_d
         result_log_name[name_length + 2] = '_';
         result_log_name[name_length + 3] = (is_real_time) ? 'r' : 's';
         result_log_name[name_length + 4] = '_';
-        result_log_name[name_length + 5] = (is_datagram) ? 'd' : 's';
+        result_log_name[name_length + 5] = quircq_transport_mode_to_letter(transport_mode);
         result_log_name[name_length + 6] = '.';
         result_log_name[name_length + 7] = 'c';
         result_log_name[name_length + 8] = 's';
@@ -714,7 +714,9 @@ int test_media_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uin
     char result_file_name[512];
     char result_log_name[512];
 
-    ret = test_media_derive_file_names(url, url_length, stream_ctx->is_datagram, 1, 1, result_file_name, result_log_name, sizeof(result_file_name));
+    ret = test_media_derive_file_names(url, url_length, 
+        /* Crutch! */ (stream_ctx->is_datagram)? quicrq_transport_mode_datagram: quicrq_transport_mode_single_stream,
+        1, 1, result_file_name, result_log_name, sizeof(result_file_name));
 
     if (ret == 0) {
         /* Init the local media consumer */

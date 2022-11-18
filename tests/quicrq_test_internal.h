@@ -185,7 +185,7 @@ test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_
 test_media_object_source_context_t* test_media_object_source_publish_ex(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
     uint64_t start_time, quicrq_media_object_source_properties_t* properties);
-int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_datagram, int is_real_time, int is_post,
+int test_media_derive_file_names(const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode, int is_real_time, int is_post,
     char* result_file_name, char* result_log_name, size_t result_name_size);
 
 #ifdef __cplusplus

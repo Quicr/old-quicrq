@@ -52,7 +52,7 @@ quicrq_test_config_t* quicrq_test_relay_config_create(uint64_t simulate_loss)
 }
 
 /* Basic relay test */
-int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client)
+int quicrq_relay_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int is_from_client)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -67,10 +67,13 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     char result_log_name[512];
     char text_log_name[512];
     size_t nb_log_chars = 0;
+    /* temporary crutch */
+    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "relay_textlog-%d-%d-%d-%llx.txt", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "relay_textlog-%d-%c-%d-%llx.txt", is_real_time,
+        quircq_transport_mode_to_letter(transport_mode), is_from_client, (unsigned long long)simulate_losses);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        use_datagrams, is_real_time, is_from_client,
+        transport_mode, is_real_time, is_from_client,
         result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
@@ -201,35 +204,35 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 
 int quicrq_relay_basic_test()
 {
-    int ret = quicrq_relay_test_one(1, 0, 0, 0);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_single_stream, 0, 0);
 
     return ret;
 }
 
 int quicrq_relay_datagram_test()
 {
-    int ret = quicrq_relay_test_one(1, 1, 0, 0);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0, 0);
 
     return ret;
 }
 
 int quicrq_relay_datagram_loss_test()
 {
-    int ret = quicrq_relay_test_one(1, 1, 0x7080, 0);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0);
 
     return ret;
 }
 
 int quicrq_relay_basic_client_test()
 {
-    int ret = quicrq_relay_test_one(1, 0, 0, 1);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_single_stream, 0, 1);
 
     return ret;
 }
 
 int quicrq_relay_datagram_client_test()
 {
-    int ret = quicrq_relay_test_one(1, 1, 0, 1);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0, 1);
 
     return ret;
 }

@@ -155,7 +155,7 @@ int quicrq_subscribe_test_notify(void* notify_ctx, const uint8_t* url, size_t ur
 }
 
 /* Subscribe test */
-int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int subscriber, int publisher, int pattern_length)
+int quicrq_subscribe_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int subscriber, int publisher, int pattern_length)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -175,12 +175,15 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
     int stream_ctx_subscriber_is_closed = 0;
     uint64_t subscriber_close_time = UINT64_MAX;
     quicrq_subscribe_test_result_t results = { 0 };
+    /* temporary crutch */
+    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "subscribe_textlog-%d-%d-%llx-%d-%d-%d.txt", is_real_time, use_datagrams,
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "subscribe_textlog-%d-%c-%llx-%d-%d-%d.txt", is_real_time, 
+        quircq_transport_mode_to_letter(transport_mode),
         (unsigned long long)simulate_losses, subscriber, publisher, pattern_length);
 
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        use_datagrams, is_real_time, 0,
+        transport_mode, is_real_time, 0,
         result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
@@ -353,14 +356,14 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 int quicrq_subscribe_basic_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 0;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_single_stream;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
     int publisher = 0;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -369,14 +372,14 @@ int quicrq_subscribe_basic_test()
 int quicrq_subscribe_client_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
     int publisher = 2;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -385,14 +388,14 @@ int quicrq_subscribe_client_test()
 int quicrq_subscribe_datagram_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
     int publisher = 0;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE) - 5;
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -401,14 +404,14 @@ int quicrq_subscribe_datagram_test()
 int quicrq_subscribe_relay1_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
     int publisher = 3;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -417,14 +420,14 @@ int quicrq_subscribe_relay1_test()
 int quicrq_subscribe_relay2_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 3;
     int publisher = 2;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -433,14 +436,14 @@ int quicrq_subscribe_relay2_test()
 int quicrq_subscribe_relay3_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 3;
     int publisher = 4;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;

@@ -292,19 +292,19 @@ int quicrq_fragment_cache_publish_simulate(quicrq_fragment_publisher_context_t* 
                 }
                 if (ret == 0) {
                     /* decode the datagram header */
-                    uint64_t datagram_stream_id;
+                    uint64_t media_id;
                     uint64_t object_offset;
                     uint64_t queue_delay;
                     const uint8_t* datagram_max = bytes + datagram_length;
 
-                    bytes = quicrq_datagram_header_decode(bytes, datagram_max, &datagram_stream_id,
+                    bytes = quicrq_datagram_header_decode(bytes, datagram_max, &media_id,
                         &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
                     if (bytes == NULL) {
                         DBG_PRINTF("Cannot decode datagram header, length = %zu", datagram_length);
                         ret = -1;
                     }
-                    else if (datagram_stream_id != 0) {
-                        DBG_PRINTF("Unexpected datagram stream id: %" PRIu64, datagram_stream_id);
+                    else if (media_id != 0) {
+                        DBG_PRINTF("Unexpected datagram stream id: %" PRIu64, media_id);
                         ret = -1;
                     } else {
                         fragment = (uint8_t *)bytes;

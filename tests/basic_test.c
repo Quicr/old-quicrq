@@ -494,7 +494,7 @@ quicrq_cnx_ctx_t* quicrq_test_create_client_cnx(quicrq_test_config_t* config, in
 }
 
 /* Basic connection test */
-int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client, int min_packet_size, uint64_t extra_delay, int unsubscribe)
+int quicrq_basic_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int is_from_client, int min_packet_size, uint64_t extra_delay, int unsubscribe)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -510,11 +510,14 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     char text_log_name[512];
     size_t nb_log_chars = 0;
     test_object_stream_ctx_t* object_stream_ctx = NULL;
+    /* temporary crutch */
+    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%d-%d-%" PRIx64 "-%d-%" PRIu64 "-%d.txt", is_real_time, use_datagrams, is_from_client, 
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "basic_textlog-%d-%c-%d-%" PRIx64 "-%d-%" PRIu64 "-%d.txt", is_real_time, 
+        quircq_transport_mode_to_letter(transport_mode), is_from_client,
         simulate_losses, min_packet_size, extra_delay, unsubscribe);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        use_datagrams, is_real_time, is_from_client,
+        transport_mode, is_real_time, is_from_client,
         result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
@@ -642,55 +645,55 @@ int quicrq_basic_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 /* Basic connection test, using streams, not real time. */
 int quicrq_basic_test()
 {
-    return quicrq_basic_test_one(0, 0, 0, 0, 0, 0, 0);
+    return quicrq_basic_test_one(0, quicrq_transport_mode_single_stream, 0, 0, 0, 0, 0);
 }
 
 /* Basic connection test, using streams, real time. */
 int quicrq_basic_rt_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 0, 0, 0, 0);
+    return quicrq_basic_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 0, 0);
 }
 
 /* Basic datagram test. Same as the basic test, but using datagrams instead of streams. */
 int quicrq_datagram_basic_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0, 0, 0, 0);
+    return quicrq_basic_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 0, 0);
 }
 
 /* Datagram test, with forced packet losses. */
 int quicrq_datagram_loss_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 0, 0);
+    return quicrq_basic_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 0, 0);
 }
 
 /* Datagram test, with forced packet losses and extra repeat */
 int quicrq_datagram_extra_test()
 {
-    return quicrq_basic_test_one(1, 1, 0x7080, 0, 0, 10000, 0);
+    return quicrq_basic_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 10000, 0);
 }
 
 /* Publish from client, using streams */
 int quicrq_basic_client_test()
 {
-    return quicrq_basic_test_one(1, 0, 0, 1, 0, 0, 0);
+    return quicrq_basic_test_one(1, quicrq_transport_mode_single_stream, 0, 1, 0, 0, 0);
 }
 
 /* Publish from client, using datagrams */
 int quicrq_datagram_client_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 1, 0, 0, 0);
+    return quicrq_basic_test_one(1, quicrq_transport_mode_datagram, 0, 1, 0, 0, 0);
 }
 
 /* Datagram test, with datagram limit. */
 int quicrq_datagram_limit_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0, 1100, 0, 0);
+    return quicrq_basic_test_one(1, quicrq_transport_mode_datagram, 0, 0, 1100, 0, 0);
 }
 
 /* Unsubscribe test -- close the receiver mid way, check that nothing breaks */
 int quicrq_datagram_unsubscribe_test()
 {
-    return quicrq_basic_test_one(1, 1, 0, 0, 0, 0, 1);
+    return quicrq_basic_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 0, 1);
 }
 
 int quicrq_get_addr_test()
