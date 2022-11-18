@@ -331,7 +331,7 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
             else if (cb_ctx->mode == quicrq_app_mode_client) {
                 /* Post the media */
                 ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)url, url_length, 
-                    (use_datagrams)? quicrq_transport_mode_datagram: quicrq_transport_mode_single_stream);
+                    /* Crutch */ (use_datagrams) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream);
                 if (ret != 0) {
                     fprintf(stderr, "Cannot post url for scenario: %s\n", scenario);
                 }
@@ -346,7 +346,8 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
                 }
                 if (ret == 0) {
                     test_object_stream_ctx_t* object_stream_ctx = NULL;
-                    object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)url, url_length, use_datagrams, path, log_path);
+                    object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)url, url_length,
+                        /* Crutch */(use_datagrams) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream, path, log_path);
                     if (object_stream_ctx == NULL) {
                         ret = -1;
                     }

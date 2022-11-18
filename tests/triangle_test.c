@@ -178,7 +178,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
             /* Create a subscription to the test source on client # 2*/
             test_object_stream_ctx_t* object_stream_ctx = NULL;
             object_stream_ctx = test_object_stream_subscribe(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name, result_log_name);
             if (object_stream_ctx == NULL) {
                 ret = -1;
             }
@@ -219,7 +219,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
                 break;
             }
             object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, &intent, result_file_name, result_log_name);
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, &intent, result_file_name, result_log_name);
             if (object_stream_ctx == NULL) {
                 ret = -1;
                 break;

@@ -175,7 +175,7 @@ int quicrq_twoways_test_one(int is_real_time, quicrq_transport_mode_enum transpo
                             if (ret == 0) {
                                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (const uint8_t*)target[i]->url,
-                                    target[i]->url_length, use_datagrams, target[i]->target_bin, target[i]->target_csv);
+                                    target[i]->url_length, transport_mode, target[i]->target_bin, target[i]->target_csv);
                                 if (object_stream_ctx == NULL) {
                                     ret = -1;
                                 }
@@ -193,7 +193,7 @@ int quicrq_twoways_test_one(int is_real_time, quicrq_transport_mode_enum transpo
                                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                                 quicrq_subscribe_intent_t intent = { quicrq_subscribe_intent_current_group, 0, 0 };
                                 object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx[i], (const uint8_t*)target[source_id]->url,
-                                    target[source_id]->url_length, use_datagrams, &intent, target[source_id]->target_bin, target[source_id]->target_csv);
+                                    target[source_id]->url_length, transport_mode, &intent, target[source_id]->target_bin, target[source_id]->target_csv);
                                 if (object_stream_ctx == NULL) {
                                     ret = -1;
                                 }

@@ -199,7 +199,7 @@ int quicrq_threelegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_
                             if (ret == 0) {
                                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                                    strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name[i-1], result_log_name[i-1]);
+                                    strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name[i-1], result_log_name[i-1]);
                                 if (object_stream_ctx == NULL) {
                                     ret = -1;
                                 }

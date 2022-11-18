@@ -147,7 +147,7 @@ int quicrq_twomedia_test_one(int is_real_time, quicrq_transport_mode_enum transp
             if (ret == 0) {
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                    strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+                    strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name, result_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;
                 }
@@ -155,7 +155,7 @@ int quicrq_twomedia_test_one(int is_real_time, quicrq_transport_mode_enum transp
             if (ret == 0) {
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)QUICRQ_TEST_AUDIO_SOURCE,
-                    strlen(QUICRQ_TEST_AUDIO_SOURCE), use_datagrams, audio_file_name, audio_log_name);
+                    strlen(QUICRQ_TEST_AUDIO_SOURCE), transport_mode, audio_file_name, audio_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;
                 }

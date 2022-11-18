@@ -133,7 +133,7 @@ int quicrq_relay_test_one(int is_real_time, quicrq_transport_mode_enum transport
             if (ret == 0) {
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                    strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+                    strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name, result_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;
                 }

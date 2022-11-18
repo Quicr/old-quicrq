@@ -368,7 +368,7 @@ int quicrq_fourlegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_t
                                 test_object_stream_ctx_t* object_stream_ctx = NULL;
 
                                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                                    strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name[i], result_log_name[i]);
+                                    strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name[i], result_log_name[i]);
                                 if (object_stream_ctx == NULL) {
                                     ret = -1;
                                 }

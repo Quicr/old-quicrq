@@ -115,7 +115,7 @@ quicrq_test_config_t* quicrq_test_subscribe_config_create(uint64_t simulate_loss
 #define QUICRQ_SUBSCRIBE_TEST_RESULT_MAX 5
 typedef struct st_quicrq_subscribe_test_result_t {
     quicrq_cnx_ctx_t* cnx_ctx;
-    int use_datagrams;
+    quicrq_transport_mode_enum transport_mode;
     int nb_results;
     const char* result_file_name;
     const char* result_log_name;
@@ -143,7 +143,7 @@ int quicrq_subscribe_test_notify(void* notify_ctx, const uint8_t* url, size_t ur
             if (ret == 0 && results->cnx_ctx != NULL && results->nb_results == 1) {
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                 object_stream_ctx = test_object_stream_subscribe(results->cnx_ctx, url,
-                    url_length, results->use_datagrams, results->result_file_name, results->result_log_name);
+                    url_length, results->transport_mode, results->result_file_name, results->result_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;
                 }
@@ -260,7 +260,7 @@ int quicrq_subscribe_test_one(int is_real_time, quicrq_transport_mode_enum trans
         results.cnx_ctx = cnx_ctx_subscriber;
         results.result_file_name = result_file_name;
         results.result_log_name = result_log_name;
-        results.use_datagrams = use_datagrams;
+        results.transport_mode = transport_mode;
         stream_ctx_subscriber = quicrq_cnx_subscribe_pattern(cnx_ctx_subscriber, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
             pattern_length, quicrq_subscribe_test_notify, &results);
 
