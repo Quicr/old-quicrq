@@ -139,7 +139,6 @@ int quicrq_test_find_send_link(quicrq_test_config_t* config, int srce_node_id, c
 
 extern const generation_parameters_t video_1mps;
 
-int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log);
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file);
 int quicrq_compare_media_file_ex(char const* media_result_file, char const* media_reference_file,
     int* nb_losses, uint8_t* loss_flag, uint64_t start_group_id, uint64_t start_object_id);

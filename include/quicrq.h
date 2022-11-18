@@ -237,8 +237,8 @@ typedef struct st_quicrq_subscribe_intent_t {
 } quicrq_subscribe_intent_t;
 
 quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
-    const uint8_t* url, size_t url_length, int use_datagrams, int in_order_required,
-    quicrq_subscribe_intent_t * intent,
+    const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode,
+    int in_order_required, quicrq_subscribe_intent_t * intent,
     quicrq_object_stream_consumer_fn media_object_consumer_fn, void* media_object_ctx);
 
 void quicrq_unsubscribe_object_stream(quicrq_object_stream_consumer_ctx* subscribe_ctx);

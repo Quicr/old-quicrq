@@ -906,7 +906,7 @@ void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
  * Send a media request to the server.
  */
 int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, const quicrq_subscribe_intent_t * intent,
+    quicrq_transport_mode_enum transport_mode, const quicrq_subscribe_intent_t * intent,
     quicrq_media_consumer_fn media_consumer_fn, void* media_ctx, quicrq_stream_ctx_t** p_stream_ctx)
 {
     /* Create a stream for the media */
@@ -931,14 +931,16 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
             /* Format the media request */
             uint64_t media_id = stream_ctx->cnx_ctx->next_media_id;
             uint8_t* message_next = quicrq_rq_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
-                (use_datagrams)? QUICRQ_ACTION_REQUEST_DATAGRAM:QUICRQ_ACTION_REQUEST_STREAM, url_length, url,
+                /* Crutch */ (transport_mode == quicrq_transport_mode_datagram) ? QUICRQ_ACTION_REQUEST_DATAGRAM : QUICRQ_ACTION_REQUEST_STREAM,
+                url_length, url,
                 intent->intent_mode, intent->start_group_id, intent->start_object_id, media_id);
             if (message_next == NULL) {
                 ret = -1;
             } else {
                 char buffer[256];
                 /* Queue the media request message to that stream */
-                stream_ctx->is_datagram = (use_datagrams != 0);
+                stream_ctx->transport_mode = transport_mode;
+                stream_ctx->is_datagram = (transport_mode == quicrq_transport_mode_datagram);
                 stream_ctx->media_id = media_id;
                 message->message_size = message_next - message->buffer;
                 stream_ctx->consumer_fn = media_consumer_fn;
@@ -959,10 +961,10 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
 }
 
 int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx)
+    quicrq_transport_mode_enum transport_mode, quicrq_media_consumer_fn media_consumer_fn, void* media_ctx)
 {
     return quicrq_cnx_subscribe_media_ex(cnx_ctx, url, url_length,
-        use_datagrams, NULL, media_consumer_fn, media_ctx, NULL);
+        transport_mode, NULL, media_consumer_fn, media_ctx, NULL);
 }
 
 /* Process an incoming subscribe command */
@@ -1083,6 +1085,7 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
         else {
             /* Queue the accept message to that stream */
             char buffer[256];
+            /* Crutch */ stream_ctx->transport_mode = (use_datagrams) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream;
             stream_ctx->is_datagram = use_datagrams;
             message->message_size = message_next - message->buffer;
             stream_ctx->send_state = quicrq_sending_initial;
@@ -1126,6 +1129,7 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
     stream_ctx->receive_state = quicrq_receive_fragment;
     stream_ctx->is_sender = 1;
     if (use_datagrams) {
+        stream_ctx->transport_mode = quicrq_transport_mode_datagram;
         stream_ctx->is_datagram = 1;
         stream_ctx->media_id = media_id;
         stream_ctx->send_state = quicrq_sending_ready;
@@ -1139,6 +1143,7 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, more_to_send, stream_ctx);
     }
     else {
+        stream_ctx->transport_mode = quicrq_transport_mode_single_stream;
         stream_ctx->is_datagram = 0;
         stream_ctx->send_state = quicrq_sending_stream;
         stream_ctx->receive_state = quicrq_receive_done;

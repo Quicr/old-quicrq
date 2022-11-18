@@ -118,8 +118,8 @@ int quicrq_media_object_bridge_fn(
 
 /* Subscribe object stream. */
 quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
-    const uint8_t* url, size_t url_length, int use_datagrams, int in_order_required,
-    quicrq_subscribe_intent_t * intent,
+    const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode,
+    int in_order_required, quicrq_subscribe_intent_t * intent,
     quicrq_object_stream_consumer_fn object_stream_consumer_fn, void* object_stream_consumer_ctx)
 {
     quicrq_object_stream_consumer_ctx* bridge_ctx = (quicrq_object_stream_consumer_ctx*)malloc(sizeof(quicrq_object_stream_consumer_ctx));
@@ -133,7 +133,7 @@ quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx
         bridge_ctx->in_order_required = in_order_required;
         quicrq_reassembly_init(&bridge_ctx->reassembly_ctx);
         /* Create a media context for the stream */
-        ret = quicrq_cnx_subscribe_media_ex(cnx_ctx, url, url_length, use_datagrams, intent,
+        ret = quicrq_cnx_subscribe_media_ex(cnx_ctx, url, url_length, transport_mode, intent,
             quicrq_media_object_bridge_fn, bridge_ctx, &bridge_ctx->stream_ctx);
         if (ret != 0) {
             free(bridge_ctx);
