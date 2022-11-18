@@ -77,8 +77,7 @@ quicrq_request_message {
     transport_mode(i),
     intent_mode(i),
     [ start_group_id(i),
-      start_object_id(i),]
-    [datagram_stream_id(i)]
+      start_object_id(i)]
 }
 ```
 
@@ -88,7 +87,7 @@ transport mode can be set to one of four values:
 * Single Stream (1),
 * Warp (2) (not implemented yet)
 * Rush (3) (not implemented yet)
-* Datagram(4)_
+* Datagram(4)
 
 The intent mode indicates at which point in the media the receiver wants to start receiving data.
 It can be set to:
