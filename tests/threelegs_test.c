@@ -88,7 +88,7 @@ quicrq_test_config_t* quicrq_test_threelegs_config_create(uint64_t simulate_loss
 }
 
 /* Basic relay test */
-int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
+int quicrq_threelegs_test_one(quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -104,6 +104,8 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
     char result_log_name_2[256];
     char* result_file_name[2] = { result_file_name_1, result_file_name_2 };
     char* result_log_name[2] = { result_log_name_1, result_log_name_2 };
+    /* temporary crutch */
+    int use_datagrams = (transport_mode == quicrq_transport_mode_datagram);
 
     char text_log_name[512];
     size_t nb_log_chars = 0;
@@ -113,12 +115,13 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
     int partial_closure = 0;
 
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "threelegs_textlog-%d-%llx.txt", use_datagrams, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "threelegs_textlog-%c-%llx.txt", 
+        quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
     for (int i = 0; i < 2; i++) {
-        (void)picoquic_sprintf(result_file_name[i], sizeof(result_file_name_1), &nb_log_chars, "threelegs-video1-recv-%d-%d-%llx.bin",
-            i+1, use_datagrams, (unsigned long long)simulate_losses);
-        (void)picoquic_sprintf(result_log_name[i], sizeof(result_log_name_1), &nb_log_chars, "threelegs-video1-log-%d-%d-%llx.csv",
-            i+1, use_datagrams, (unsigned long long)simulate_losses);
+        (void)picoquic_sprintf(result_file_name[i], sizeof(result_file_name_1), &nb_log_chars, "threelegs-video1-recv-%d-%c-%llx.bin",
+            i+1, quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
+        (void)picoquic_sprintf(result_log_name[i], sizeof(result_log_name_1), &nb_log_chars, "threelegs-video1-log-%d-%c-%llx.csv",
+            i+1, quircq_transport_mode_to_letter(transport_mode), (unsigned long long)simulate_losses);
     }
 
     if (config == NULL) {
@@ -186,7 +189,7 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
                     if (ret == 0) {
                         if (i == 0) {
                             /* Start pushing from client 1 */
-                            ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
+                            ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode);
                             if (ret != 0) {
                                 DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
                             }
@@ -302,21 +305,21 @@ int quicrq_threelegs_test_one(int use_datagrams, uint64_t simulate_losses)
 
 int quicrq_threelegs_basic_test()
 {
-    int ret = quicrq_threelegs_test_one(0, 0);
+    int ret = quicrq_threelegs_test_one(quicrq_transport_mode_single_stream, 0);
 
     return ret;
 }
 
 int quicrq_threelegs_datagram_test()
 {
-    int ret = quicrq_threelegs_test_one(1, 0);
+    int ret = quicrq_threelegs_test_one(quicrq_transport_mode_datagram, 0);
 
     return ret;
 }
 
 int quicrq_threelegs_datagram_loss_test()
 {
-    int ret = quicrq_threelegs_test_one(1, 0x37880);
+    int ret = quicrq_threelegs_test_one(quicrq_transport_mode_datagram, 0x37880);
 
     return ret;
 }

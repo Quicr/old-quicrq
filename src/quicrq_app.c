@@ -330,7 +330,8 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
             }
             else if (cb_ctx->mode == quicrq_app_mode_client) {
                 /* Post the media */
-                ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)url, url_length, use_datagrams);
+                ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)url, url_length, 
+                    (use_datagrams)? quicrq_transport_mode_datagram: quicrq_transport_mode_single_stream);
                 if (ret != 0) {
                     fprintf(stderr, "Cannot post url for scenario: %s\n", scenario);
                 }

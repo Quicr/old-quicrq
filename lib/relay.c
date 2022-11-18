@@ -315,7 +315,8 @@ int quicrq_relay_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const u
                 ret = -1;
             }
             else {
-                ret = quicrq_cnx_post_media(relay_ctx->cnx_ctx, url, url_length, relay_ctx->use_datagrams);
+                ret = quicrq_cnx_post_media(relay_ctx->cnx_ctx, url, url_length, 
+                    (relay_ctx->use_datagrams)? quicrq_transport_mode_datagram: quicrq_transport_mode_single_stream);
                 if (ret != 0) {
                     /* TODO: unpublish the media context */
                     DBG_PRINTF("Should unpublish media context, ret = %d", ret);

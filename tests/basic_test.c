@@ -560,7 +560,7 @@ int quicrq_basic_test_one(int is_real_time, quicrq_transport_mode_enum transport
             /* Set up a default receiver on the server */
             quicrq_set_media_init_callback(config->nodes[0], test_media_consumer_init_callback);
             /* Start pushing from the client */
-            ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
+            ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode);
         }
         else {
             /* Create a subscription to the test source on client */

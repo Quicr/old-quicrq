@@ -184,7 +184,7 @@ int quicrq_pyramid_testone(int is_real_time, quicrq_transport_mode_enum transpor
         if ((ret == 0) && !is_publisher_started && (config->simulated_time >= publisher_start_time)) {
             /* Start pushing from the publisher client */
             quicrq_cnx_ctx_t* cnx_ctx_post = (is_from_relay_client) ? cnx_ctx_relay : cnx_ctx_server;
-            ret = quicrq_cnx_post_media(cnx_ctx_post, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
+            ret = quicrq_cnx_post_media(cnx_ctx_post, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode);
             if (ret != 0) {
                 DBG_PRINTF("Cannot subscribe to test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
             }
