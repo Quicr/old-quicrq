@@ -1541,8 +1541,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         ret = -1;
                     }
                     else switch (incoming.message_type) {
-                    case QUICRQ_ACTION_REQUEST_STREAM:
-                    case QUICRQ_ACTION_REQUEST_DATAGRAM:
+                    case QUICRQ_ACTION_REQUEST:
                         if (stream_ctx->receive_state != quicrq_receive_initial) {
                             quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", unexpected subscribe message is stream receive state %d",
                                 stream_ctx->stream_id, stream_ctx->receive_state);
@@ -1554,7 +1553,8 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             uint64_t intent_object = 0;
 
                             /* Process initial request */
-                            stream_ctx->transport_mode = (incoming.message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream;
+                            stream_ctx->media_id = incoming.media_id;
+                            stream_ctx->transport_mode = incoming.transport_mode;
                             /* Open the media -- TODO, variants with different actions. */
                             quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", received a subscribe request for url %s, mode = %s, id= %" PRIu64,
                                 stream_ctx->stream_id, quicrq_uint8_t_to_text(incoming.url, incoming.url_length, url_text, 256),
@@ -1592,7 +1592,6 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                     }
                                 }
                             }
-                            stream_ctx->media_id = incoming.media_id;
                             if (intent_group > 0 || intent_object > 0) {
                                 /* apply the intent, prepare a start point message */
                                 stream_ctx->start_group_id = intent_group;
@@ -1606,16 +1605,20 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
-                            else if (incoming.message_type == QUICRQ_ACTION_REQUEST_STREAM) {
+                            else if (incoming.transport_mode == quicrq_transport_mode_single_stream) {
                                 /* Start sending stream without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_stream;
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
-                            else {
+                            else if (incoming.transport_mode == quicrq_transport_mode_datagram) {
                                 /* Start sending datagrams without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
+                            }
+                            else {
+                                /* Not supported yet */
+                                ret = -1;
                             }
                         }
                         break;

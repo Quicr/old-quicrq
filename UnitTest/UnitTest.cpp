@@ -192,7 +192,6 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
-
 		TEST_METHOD(twomedia_tri_stream)
 		{
 			int ret = quicrq_twomedia_tri_stream_test();

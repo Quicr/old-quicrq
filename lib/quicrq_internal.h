@@ -56,15 +56,12 @@ void quicrq_msg_buffer_reset(quicrq_message_buffer_t* msg_buffer);
 void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 
 /* The protocol used for our tests defines a set of actions:
- * - Open Stream: request to open a stream, defined by URL of media fragment. Content will be sent as a stream of bytes.
- * - Open datagram: same as open stream, but specifying opening as a "datagram" stream and providing the ID of that stream.
- *   Content will be sent as a stream of datagrams, each specifying an offset and a set of bytes.
+ * - Request: request to open a media stream, defined by URL of media fragment. Content as per transport type.
  * - Fin Datagram: when the media fragment has been sent as a set of datagrams, provides the final offset.
  * - Request repair: when a stream is opened as datagram, some datagrams may be lost. The receiver may request data at offset and length.
  * - Repair: 1 byte code, followed by content of a datagram
  */
-#define QUICRQ_ACTION_REQUEST_STREAM 1
-#define QUICRQ_ACTION_REQUEST_DATAGRAM 2
+#define QUICRQ_ACTION_REQUEST 1
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
 #define QUICRQ_ACTION_FRAGMENT 5
@@ -122,9 +119,11 @@ uint8_t* quicrq_notify_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t m
 const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
 size_t quicrq_rq_msg_reserve(size_t url_length, quicrq_subscribe_intent_enum intent_mode);
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url,
-    quicrq_subscribe_intent_enum intent_mode, uint64_t start_group_id,  uint64_t start_object_id, uint64_t media_id);
+    uint64_t media_id, quicrq_transport_mode_enum transport_mode, quicrq_subscribe_intent_enum intent_mode,
+    uint64_t start_group_id, uint64_t start_object_id);
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url,
-    quicrq_subscribe_intent_enum * intent_mode, uint64_t * start_group_id,  uint64_t * start_object_id, uint64_t* media_id);
+    uint64_t* media_id, quicrq_transport_mode_enum* transport_mode, quicrq_subscribe_intent_enum* intent_mode,
+    uint64_t* start_group_id, uint64_t* start_object_id);
 size_t quicrq_post_msg_reserve(size_t url_length);
 uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, 
     const uint8_t* url, quicrq_transport_mode_enum transport_mode, uint8_t cache_policy,

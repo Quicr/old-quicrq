@@ -92,15 +92,22 @@ const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* byt
  * 
  * Datagram variant:
  * 
+ * }
+ * 
+ * Revised version: only on type, REQUEST
+ * media-ID always present, may be 0 if single stream mode
+ * transport mode is stated explicitly
+ * 
  * quicrq_request_message {
  *     message_type(i),
  *     url_length(i),
  *     url(...),
+ *     media_id(i),
+ *     transport_mode,
  *     intent_mode(i),
  *     [ start_group_id(i),
  *       start_object_id(i),]
- *     media_id(i)
- * }
+ * 
  * 
  * Same encoding and decoding code is used for both.
  * 
@@ -108,21 +115,21 @@ const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* byt
 size_t quicrq_rq_msg_reserve(size_t url_length, quicrq_subscribe_intent_enum intent_mode)
 {
     size_t intent_length = (intent_mode == quicrq_subscribe_intent_start_point) ? 17:1;
-    return 8 + 2 + url_length + intent_length;
+    return 8 + 2 + url_length + 8 + 1 + intent_length;
 }
 
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url,
-    quicrq_subscribe_intent_enum intent_mode, uint64_t start_group_id,  uint64_t start_object_id,  
-    uint64_t media_id)
+    uint64_t media_id, quicrq_transport_mode_enum transport_mode, quicrq_subscribe_intent_enum intent_mode,
+    uint64_t start_group_id,  uint64_t start_object_id)
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, media_id)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)transport_mode)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)intent_mode)) != NULL){
-        if (intent_mode != quicrq_subscribe_intent_start_point ||
-            ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_group_id)) != NULL &&
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_object_id)) != NULL)) {
-            if (message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
-                bytes = picoquic_frames_varint_encode(bytes, bytes_max, media_id);
+        if (intent_mode == quicrq_subscribe_intent_start_point){
+            if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_group_id)) != NULL) {
+                bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_object_id);
             }
         }
     }
@@ -130,12 +137,15 @@ uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t messa
 }
 
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * message_type, size_t * url_length, const uint8_t** url,
-    quicrq_subscribe_intent_enum * intent_mode, uint64_t * start_group_id,  uint64_t * start_object_id, uint64_t* media_id)
+    uint64_t *media_id, quicrq_transport_mode_enum* transport_mode, quicrq_subscribe_intent_enum* intent_mode,
+    uint64_t *start_group_id, uint64_t *start_object_id)
 {
     uint64_t intent_64 = 0;
+    uint64_t t_mode_64 = 0;
     *media_id = 0;
     *url = NULL;
     *url_length = 0;
+    *transport_mode = 0;
     *intent_mode = 0;
     *start_group_id = 0;
     *start_object_id = 0;
@@ -144,18 +154,21 @@ const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_m
         (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, url_length)) != NULL){
         *url = bytes;
         if ((bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *url_length)) != NULL &&
+            (bytes = picoquic_frames_varint_decode(bytes, bytes_max, media_id)) != NULL &&
+            (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &t_mode_64)) != NULL &&
             (bytes = picoquic_frames_varint_decode(bytes, bytes_max, &intent_64)) != NULL) {
-            if (intent_64 > quicrq_subscribe_intent_start_point) {
+            if (intent_64 > quicrq_subscribe_intent_start_point ||
+                t_mode_64 >= quicrq_transport_mode_max) {
                 bytes = NULL;
             }
             else {
+                *transport_mode = (quicrq_transport_mode_enum)t_mode_64;
                 *intent_mode = (quicrq_subscribe_intent_enum)intent_64;
 
-                if ((*intent_mode != quicrq_subscribe_intent_start_point ||
-                    ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_group_id)) != NULL &&
-                        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_object_id)) != NULL)) &&
-                    *message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
-                    bytes = picoquic_frames_varint_decode(bytes, bytes_max, media_id);
+                if (*intent_mode == quicrq_subscribe_intent_start_point) {
+                    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_group_id)) != NULL) {
+                        bytes = picoquic_frames_varint_decode(bytes, bytes_max, start_object_id);
+                    }
                 }
             }
         }
@@ -417,7 +430,7 @@ const uint8_t* quicrq_cache_policy_msg_decode(const uint8_t* bytes, const uint8_
  *     message_type(i),
  *     url_length(i),
  *     url(...)
- *     datagram_capable(i)
+ *     transport_mode(i)
  *     cache_policy(8)
  *     start_group_id(i)
  *     start_object_id(i)
@@ -475,7 +488,7 @@ const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes
 
  /* Media ACCEPT message.
   *     message_type(i),
-  *     use_datagram(i),
+  *     transport_mode(i),
   *     [media_id(i)]
   *     
   * This is the response to the POST message. The server tells the client whether it
@@ -536,10 +549,9 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
         /* TODO: do not decode the message type twice */
         bytes = bytes0;
         switch (msg->message_type) {
-        case QUICRQ_ACTION_REQUEST_STREAM:
-        case QUICRQ_ACTION_REQUEST_DATAGRAM:
+        case QUICRQ_ACTION_REQUEST:
             bytes = quicrq_rq_msg_decode(bytes, bytes_max, &msg->message_type, &msg->url_length, &msg->url,
-                &msg->subscribe_intent, &msg->group_id, &msg->object_id, &msg->media_id);
+                &msg->media_id, &msg->transport_mode, &msg->subscribe_intent, &msg->group_id, &msg->object_id);
             break;
         case QUICRQ_ACTION_FIN_DATAGRAM:
             bytes = quicrq_fin_msg_decode(bytes, bytes_max, &msg->message_type, &msg->group_id, &msg->object_id);
@@ -584,10 +596,9 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
 uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t* msg)
 {
     switch (msg->message_type) {
-    case QUICRQ_ACTION_REQUEST_STREAM:
-    case QUICRQ_ACTION_REQUEST_DATAGRAM:
+    case QUICRQ_ACTION_REQUEST:
         bytes = quicrq_rq_msg_encode(bytes, bytes_max, msg->message_type, msg->url_length, msg->url,
-            msg->subscribe_intent, msg->group_id, msg->object_id, msg->media_id);
+            msg->media_id, msg->transport_mode, msg->subscribe_intent, msg->group_id, msg->object_id);
         break;
     case QUICRQ_ACTION_FIN_DATAGRAM:
         bytes = quicrq_fin_msg_encode(bytes, bytes_max, msg->message_type, msg->group_id, msg->object_id);
@@ -932,9 +943,8 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
             /* Format the media request */
             uint64_t media_id = stream_ctx->cnx_ctx->next_media_id;
             uint8_t* message_next = quicrq_rq_msg_encode(message->buffer, message->buffer + message->buffer_alloc,
-                /* Crutch */ (transport_mode == quicrq_transport_mode_datagram) ? QUICRQ_ACTION_REQUEST_DATAGRAM : QUICRQ_ACTION_REQUEST_STREAM,
-                url_length, url,
-                intent->intent_mode, intent->start_group_id, intent->start_object_id, media_id);
+                QUICRQ_ACTION_REQUEST, url_length, url, media_id, transport_mode,
+                intent->intent_mode, intent->start_group_id, intent->start_object_id);
             if (message_next == NULL) {
                 ret = -1;
             } else {
