@@ -108,7 +108,7 @@ const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* byt
 size_t quicrq_rq_msg_reserve(size_t url_length, quicrq_subscribe_intent_enum intent_mode)
 {
     size_t intent_length = (intent_mode == quicrq_subscribe_intent_start_point) ? 17:1;
-    return 8 + 2 + url_length + intent_mode;
+    return 8 + 2 + url_length + intent_length;
 }
 
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url,
@@ -119,8 +119,8 @@ uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t messa
         (bytes = picoquic_frames_length_data_encode(bytes, bytes_max, url_length, url)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)intent_mode)) != NULL){
         if (intent_mode != quicrq_subscribe_intent_start_point ||
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_group_id)) != NULL &&
-            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_object_id)) != NULL) {
+            ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_group_id)) != NULL &&
+            (bytes = picoquic_frames_varint_encode(bytes, bytes_max, (uint64_t)start_object_id)) != NULL)) {
             if (message_type == QUICRQ_ACTION_REQUEST_DATAGRAM) {
                 bytes = picoquic_frames_varint_encode(bytes, bytes_max, media_id);
             }

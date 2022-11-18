@@ -2143,7 +2143,8 @@ void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx, quicrq_media_close_rea
     /* Delete the stream contexts */
     while (cnx_ctx->first_stream != NULL) {
         if (cnx_ctx->first_stream->close_reason == quicrq_media_close_reason_unknown) {
-            cnx_ctx->first_stream->close_reason = quicrq_media_close_delete_context;
+            cnx_ctx->first_stream->close_reason = close_reason;
+            cnx_ctx->first_stream->close_error_code = close_error_code;
         }
         quicrq_delete_stream_ctx(cnx_ctx, cnx_ctx->first_stream);
     }

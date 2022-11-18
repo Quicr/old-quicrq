@@ -295,7 +295,7 @@ typedef int (*quicrq_media_consumer_fn)(
     size_t data_length);
 
 int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx,
-    const uint8_t* url, size_t url_length, int use_datagrams,
+    const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode,
     quicrq_media_consumer_fn media_consumer_fn, void* media_ctx);
 
 int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
