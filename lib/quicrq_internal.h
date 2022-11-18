@@ -441,7 +441,6 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_peer_finished : 1;
     unsigned int is_local_finished : 1;
     unsigned int is_receive_complete: 1;
-    unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
     unsigned int is_start_object_id_sent : 1;
     unsigned int is_final_object_id_sent : 1;

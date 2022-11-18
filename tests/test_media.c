@@ -714,8 +714,7 @@ int test_media_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uin
     char result_file_name[512];
     char result_log_name[512];
 
-    ret = test_media_derive_file_names(url, url_length, 
-        /* Crutch! */ (stream_ctx->is_datagram)? quicrq_transport_mode_datagram: quicrq_transport_mode_single_stream,
+    ret = test_media_derive_file_names(url, url_length, stream_ctx->transport_mode,
         1, 1, result_file_name, result_log_name, sizeof(result_file_name));
 
     if (ret == 0) {

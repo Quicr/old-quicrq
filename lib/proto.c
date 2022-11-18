@@ -873,7 +873,7 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->cnx_ctx->cnx != NULL) {
-        if (stream_ctx->is_datagram) {
+        if (stream_ctx->transport_mode == quicrq_transport_mode_datagram) {
             stream_ctx->is_active_datagram = 1;
             picoquic_mark_datagram_ready(stream_ctx->cnx_ctx->cnx, 1);
             if (((stream_ctx->start_group_id != 0 || stream_ctx->start_object_id != 0) &&
@@ -940,7 +940,6 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
                 char buffer[256];
                 /* Queue the media request message to that stream */
                 stream_ctx->transport_mode = transport_mode;
-                stream_ctx->is_datagram = (transport_mode == quicrq_transport_mode_datagram);
                 stream_ctx->media_id = media_id;
                 message->message_size = message_next - message->buffer;
                 stream_ctx->consumer_fn = media_consumer_fn;
@@ -972,7 +971,7 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
 {
     int ret = 0;
     /* Process initial request */
-    stream_ctx->is_datagram = use_datagram;
+    stream_ctx->transport_mode = (use_datagram) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream;
     /* Open the media -- TODO, variants with different actions. */
     ret = quicrq_subscribe_local_media(stream_ctx, url, url_length);
     if (ret == 0) {
@@ -1038,7 +1037,7 @@ int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t 
                     stream_ctx->send_state = quicrq_sending_initial;
                     stream_ctx->receive_state = quicrq_receive_confirmation;
                     stream_ctx->media_id = UINT64_MAX;
-                    stream_ctx->is_datagram = (use_datagrams) ? 1 : 0;
+                    stream_ctx->transport_mode = (use_datagrams) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream;
                     stream_ctx->next_group_id = stream_ctx->start_group_id;
                     stream_ctx->next_object_id = stream_ctx->start_object_id;
                     picoquic_mark_active_stream(cnx_ctx->cnx, stream_id, 1, stream_ctx);
@@ -1086,7 +1085,6 @@ int quicrq_cnx_accept_media(quicrq_stream_ctx_t * stream_ctx, const uint8_t* url
             /* Queue the accept message to that stream */
             char buffer[256];
             /* Crutch */ stream_ctx->transport_mode = (use_datagrams) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream;
-            stream_ctx->is_datagram = use_datagrams;
             message->message_size = message_next - message->buffer;
             stream_ctx->send_state = quicrq_sending_initial;
             stream_ctx->receive_state = quicrq_receive_fragment;
@@ -1130,7 +1128,6 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
     stream_ctx->is_sender = 1;
     if (use_datagrams) {
         stream_ctx->transport_mode = quicrq_transport_mode_datagram;
-        stream_ctx->is_datagram = 1;
         stream_ctx->media_id = media_id;
         stream_ctx->send_state = quicrq_sending_ready;
         stream_ctx->receive_state = quicrq_receive_done;
@@ -1144,7 +1141,6 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_d
     }
     else {
         stream_ctx->transport_mode = quicrq_transport_mode_single_stream;
-        stream_ctx->is_datagram = 0;
         stream_ctx->send_state = quicrq_sending_stream;
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
@@ -1176,7 +1172,7 @@ void quicrq_cnx_abandon_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     stream_ctx->send_state = quicrq_sending_fin;
     (void)picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-    if (stream_ctx->is_datagram && !stream_ctx->is_sender) {
+    if (stream_ctx->transport_mode == quicrq_transport_mode_datagram && !stream_ctx->is_sender) {
         if (stream_ctx->cnx_ctx->next_abandon_datagram_id <= stream_ctx->media_id) {
             stream_ctx->cnx_ctx->next_abandon_datagram_id = stream_ctx->media_id + 1;
         }
