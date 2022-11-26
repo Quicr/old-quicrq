@@ -139,7 +139,6 @@ int quicrq_test_find_send_link(quicrq_test_config_t* config, int srce_node_id, c
 
 extern const generation_parameters_t video_1mps;
 
-int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log);
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file);
 int quicrq_compare_media_file_ex(char const* media_result_file, char const* media_reference_file,
     int* nb_losses, uint8_t* loss_flag, uint64_t start_group_id, uint64_t start_object_id);
@@ -173,9 +172,10 @@ void* test_media_publisher_init(char const* media_source_path, const generation_
 
 void* test_media_consumer_init(char const* media_result_file, char const* media_result_log);
 int test_media_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length);
-test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log);
-test_object_stream_ctx_t* test_object_stream_subscribe_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams,
-    quicrq_subscribe_intent_t* intent, char const* media_result_file, char const* media_result_log);
+test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, 
+    quicrq_transport_mode_enum transport_mode, char const* media_result_file, char const* media_result_log);
+test_object_stream_ctx_t* test_object_stream_subscribe_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
+    quicrq_transport_mode_enum transport_mode,  quicrq_subscribe_intent_t* intent, char const* media_result_file, char const* media_result_log);
 void test_object_stream_unsubscribe(test_object_stream_ctx_t* cons_ctx);
 int test_media_object_source_iterate(test_media_object_source_context_t* object_pub_ctx, uint64_t current_time, int * is_active);
 uint64_t test_media_object_source_next_time(test_media_object_source_context_t* object_pub_ctx, uint64_t current_time);
@@ -185,7 +185,7 @@ test_media_object_source_context_t* test_media_object_source_publish(quicrq_ctx_
 test_media_object_source_context_t* test_media_object_source_publish_ex(quicrq_ctx_t* qr_ctx, uint8_t* url, size_t url_length,
     char const* media_source_path, const generation_parameters_t* generation_model, int is_real_time,
     uint64_t start_time, quicrq_media_object_source_properties_t* properties);
-int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_datagram, int is_real_time, int is_post,
+int test_media_derive_file_names(const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode, int is_real_time, int is_post,
     char* result_file_name, char* result_log_name, size_t result_name_size);
 
 #ifdef __cplusplus

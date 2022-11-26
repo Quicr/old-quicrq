@@ -52,7 +52,7 @@ quicrq_test_config_t* quicrq_test_relay_config_create(uint64_t simulate_loss)
 }
 
 /* Basic relay test */
-int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int is_from_client)
+int quicrq_relay_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int is_from_client)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -68,9 +68,10 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
     char text_log_name[512];
     size_t nb_log_chars = 0;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "relay_textlog-%d-%d-%d-%llx.txt", is_real_time, use_datagrams, is_from_client, (unsigned long long)simulate_losses);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "relay_textlog-%d-%c-%d-%llx.txt", is_real_time,
+        quicrq_transport_mode_to_letter(transport_mode), is_from_client, (unsigned long long)simulate_losses);
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        use_datagrams, is_real_time, is_from_client,
+        transport_mode, is_real_time, is_from_client,
         result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
@@ -103,7 +104,7 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
         /* Configure the relay: joint client-server as default source and default consumer */
         /* Configure the relay: set the server address */
         struct sockaddr* addr_to = quicrq_test_find_send_addr(config, 1, 0);
-        ret = quicrq_enable_relay(config->nodes[1], NULL, addr_to, use_datagrams);
+        ret = quicrq_enable_relay(config->nodes[1], NULL, addr_to, transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable relay, ret = %d", ret);
         }
@@ -123,14 +124,14 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
             /* Set up a default receiver on the server */
             quicrq_set_media_init_callback(config->nodes[0], test_media_consumer_init_callback);
             /* Start pushing from the client */
-            ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
+            ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode);
         }
         else {
             /* Create a subscription to the test source on client */
             if (ret == 0) {
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                    strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+                    strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name, result_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;
                 }
@@ -201,35 +202,35 @@ int quicrq_relay_test_one(int is_real_time, int use_datagrams, uint64_t simulate
 
 int quicrq_relay_basic_test()
 {
-    int ret = quicrq_relay_test_one(1, 0, 0, 0);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_single_stream, 0, 0);
 
     return ret;
 }
 
 int quicrq_relay_datagram_test()
 {
-    int ret = quicrq_relay_test_one(1, 1, 0, 0);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0, 0);
 
     return ret;
 }
 
 int quicrq_relay_datagram_loss_test()
 {
-    int ret = quicrq_relay_test_one(1, 1, 0x7080, 0);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0);
 
     return ret;
 }
 
 int quicrq_relay_basic_client_test()
 {
-    int ret = quicrq_relay_test_one(1, 0, 0, 1);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_single_stream, 0, 1);
 
     return ret;
 }
 
 int quicrq_relay_datagram_client_test()
 {
-    int ret = quicrq_relay_test_one(1, 1, 0, 1);
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0, 1);
 
     return ret;
 }

@@ -65,7 +65,7 @@ quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss,
 }
 
 /* Basic relay test */
-int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, uint64_t extra_delay, uint64_t start_point,
+int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, uint64_t extra_delay, uint64_t start_point,
     int test_cache_clear, int test_intent)
 {
     int ret = 0;
@@ -88,11 +88,12 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
     uint64_t start_group_intent = 0;
     uint64_t start_object_intent = 0;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%d-%llx-%llu-%llu-%d-%d.txt", is_real_time, use_datagrams,
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%c-%llx-%llu-%llu-%d-%d.txt", is_real_time, 
+        quicrq_transport_mode_to_letter(transport_mode),
         (unsigned long long)simulate_losses, (unsigned long long) extra_delay, (unsigned long long) start_point, test_cache_clear, test_intent);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        use_datagrams, is_real_time, 1,
+        transport_mode, is_real_time, 1,
         result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
@@ -112,7 +113,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
 
     if (ret == 0) {
         /* Enable origin on node 0 */
-        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        ret = quicrq_enable_origin(config->nodes[0], transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }
@@ -162,7 +163,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
 
     if (ret == 0) {
         /* Start pushing from the client #1 */
-        ret = quicrq_cnx_post_media(cnx_ctx_1, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
+        ret = quicrq_cnx_post_media(cnx_ctx_1, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
@@ -175,7 +176,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
             /* Create a subscription to the test source on client # 2*/
             test_object_stream_ctx_t* object_stream_ctx = NULL;
             object_stream_ctx = test_object_stream_subscribe(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, result_file_name, result_log_name);
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name, result_log_name);
             if (object_stream_ctx == NULL) {
                 ret = -1;
             }
@@ -216,7 +217,7 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
                 break;
             }
             object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams, &intent, result_file_name, result_log_name);
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, &intent, result_file_name, result_log_name);
             if (object_stream_ctx == NULL) {
                 ret = -1;
                 break;
@@ -348,35 +349,35 @@ int quicrq_triangle_test_one(int is_real_time, int use_datagrams, uint64_t simul
 
 int quicrq_triangle_basic_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 0, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_basic_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0x7080, 0, 0, 0, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0x7080, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 0, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0, 0, 0, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_extra_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 0, 0, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 10000, 0, 0, 0);
 
     return ret;
 }
@@ -390,98 +391,98 @@ int quicrq_triangle_datagram_extra_test()
  */
 int quicrq_triangle_start_point_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 10000, 1, 0, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 10000, 1, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_start_point_s_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0x7080, 10000, 1, 0, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0x7080, 10000, 1, 0, 0);
 
     return ret;
 }
 
 int quicrq_triangle_cache_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 0);
 
     return ret;
 }
 
 int quicrq_triangle_cache_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0, 0, 1, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 1, 0);
 
     return ret;
 }
 
 int quicrq_triangle_cache_stream_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 0);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 0);
 
     return ret;
 }
 
 int quicrq_triangle_intent_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 1);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 1);
 
     return ret;
 }
 
 int quicrq_triangle_intent_nc_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 0, 1);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 0, 1);
 
     return ret;
 }
 
 int quicrq_triangle_intent_datagram_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1, 1);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 1);
 
     return ret;
 }
 
 int quicrq_triangle_intent_dg_nc_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 0, 1);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 0, 1);
 
     return ret;
 }
 
 int quicrq_triangle_intent_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0x7080, 0, 0, 1, 1);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 1, 1);
 
     return ret;
 }
 
 int quicrq_triangle_intent_next_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1, 2);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 2);
 
     return ret;
 }
 
 int quicrq_triangle_intent_next_s_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 2);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 2);
 
     return ret;
 }
 
 int quicrq_triangle_intent_that_test()
 {
-    int ret = quicrq_triangle_test_one(1, 1, 0, 0, 0, 1, 3);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 3);
 
     return ret;
 }
 
 int quicrq_triangle_intent_that_s_test()
 {
-    int ret = quicrq_triangle_test_one(1, 0, 0, 0, 0, 1, 3);
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 3);
 
     return ret;
 }

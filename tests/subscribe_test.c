@@ -115,7 +115,7 @@ quicrq_test_config_t* quicrq_test_subscribe_config_create(uint64_t simulate_loss
 #define QUICRQ_SUBSCRIBE_TEST_RESULT_MAX 5
 typedef struct st_quicrq_subscribe_test_result_t {
     quicrq_cnx_ctx_t* cnx_ctx;
-    int use_datagrams;
+    quicrq_transport_mode_enum transport_mode;
     int nb_results;
     const char* result_file_name;
     const char* result_log_name;
@@ -143,7 +143,7 @@ int quicrq_subscribe_test_notify(void* notify_ctx, const uint8_t* url, size_t ur
             if (ret == 0 && results->cnx_ctx != NULL && results->nb_results == 1) {
                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                 object_stream_ctx = test_object_stream_subscribe(results->cnx_ctx, url,
-                    url_length, results->use_datagrams, results->result_file_name, results->result_log_name);
+                    url_length, results->transport_mode, results->result_file_name, results->result_log_name);
                 if (object_stream_ctx == NULL) {
                     ret = -1;
                 }
@@ -155,7 +155,7 @@ int quicrq_subscribe_test_notify(void* notify_ctx, const uint8_t* url, size_t ur
 }
 
 /* Subscribe test */
-int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int subscriber, int publisher, int pattern_length)
+int quicrq_subscribe_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int subscriber, int publisher, int pattern_length)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -176,11 +176,12 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
     uint64_t subscriber_close_time = UINT64_MAX;
     quicrq_subscribe_test_result_t results = { 0 };
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "subscribe_textlog-%d-%d-%llx-%d-%d-%d.txt", is_real_time, use_datagrams,
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "subscribe_textlog-%d-%c-%llx-%d-%d-%d.txt", is_real_time, 
+        quicrq_transport_mode_to_letter(transport_mode),
         (unsigned long long)simulate_losses, subscriber, publisher, pattern_length);
 
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        use_datagrams, is_real_time, 0,
+        transport_mode, is_real_time, 0,
         result_file_name, result_log_name, sizeof(result_file_name));
 
     if (config == NULL) {
@@ -200,7 +201,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 
     if (ret == 0) {
         /* Enable origin on node 0 */
-        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        ret = quicrq_enable_origin(config->nodes[0], transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }
@@ -211,7 +212,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
         /* Configure the relay: joint client-server as default source and default consumer */
         /* Configure the relay: set the server address */
         struct sockaddr* addr_to = quicrq_test_find_send_addr(config, 5, 0);
-        ret = quicrq_enable_relay(config->nodes[5], NULL, addr_to, use_datagrams);
+        ret = quicrq_enable_relay(config->nodes[5], NULL, addr_to, transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable relay, ret = %d", ret);
         }
@@ -246,7 +247,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 
     if (ret == 0 && publisher != 0) {
         /* Start pushing from publisher */
-        ret = quicrq_cnx_post_media(cnx_ctx_2, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), use_datagrams);
+        ret = quicrq_cnx_post_media(cnx_ctx_2, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot publish test media %s, ret = %d", QUICRQ_TEST_BASIC_SOURCE, ret);
         }
@@ -257,7 +258,7 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
         results.cnx_ctx = cnx_ctx_subscriber;
         results.result_file_name = result_file_name;
         results.result_log_name = result_log_name;
-        results.use_datagrams = use_datagrams;
+        results.transport_mode = transport_mode;
         stream_ctx_subscriber = quicrq_cnx_subscribe_pattern(cnx_ctx_subscriber, (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
             pattern_length, quicrq_subscribe_test_notify, &results);
 
@@ -353,14 +354,14 @@ int quicrq_subscribe_test_one(int is_real_time, int use_datagrams, uint64_t simu
 int quicrq_subscribe_basic_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 0;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_single_stream;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
     int publisher = 0;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -369,14 +370,14 @@ int quicrq_subscribe_basic_test()
 int quicrq_subscribe_client_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
     int publisher = 2;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -385,14 +386,14 @@ int quicrq_subscribe_client_test()
 int quicrq_subscribe_datagram_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
     int publisher = 0;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE) - 5;
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -401,14 +402,14 @@ int quicrq_subscribe_datagram_test()
 int quicrq_subscribe_relay1_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 1;
     int publisher = 3;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -417,14 +418,14 @@ int quicrq_subscribe_relay1_test()
 int quicrq_subscribe_relay2_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 3;
     int publisher = 2;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;
@@ -433,14 +434,14 @@ int quicrq_subscribe_relay2_test()
 int quicrq_subscribe_relay3_test()
 {
     int is_real_time = 1;
-    int use_datagrams = 1;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_datagram;
     uint64_t simulate_losses = 0;
     int subscriber = 3;
     int publisher = 4;
     int pattern_length = (int)strlen(QUICRQ_TEST_BASIC_SOURCE);
 
     int ret = quicrq_subscribe_test_one(is_real_time,
-        use_datagrams, simulate_losses,
+        transport_mode, simulate_losses,
         subscriber, publisher, pattern_length);
 
     return ret;

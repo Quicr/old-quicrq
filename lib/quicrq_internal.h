@@ -56,15 +56,12 @@ void quicrq_msg_buffer_reset(quicrq_message_buffer_t* msg_buffer);
 void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 
 /* The protocol used for our tests defines a set of actions:
- * - Open Stream: request to open a stream, defined by URL of media fragment. Content will be sent as a stream of bytes.
- * - Open datagram: same as open stream, but specifying opening as a "datagram" stream and providing the ID of that stream.
- *   Content will be sent as a stream of datagrams, each specifying an offset and a set of bytes.
+ * - Request: request to open a media stream, defined by URL of media fragment. Content as per transport type.
  * - Fin Datagram: when the media fragment has been sent as a set of datagrams, provides the final offset.
  * - Request repair: when a stream is opened as datagram, some datagrams may be lost. The receiver may request data at offset and length.
  * - Repair: 1 byte code, followed by content of a datagram
  */
-#define QUICRQ_ACTION_REQUEST_STREAM 1
-#define QUICRQ_ACTION_REQUEST_DATAGRAM 2
+#define QUICRQ_ACTION_REQUEST 1
 #define QUICRQ_ACTION_FIN_DATAGRAM 3
 #define QUICRQ_ACTION_REQUEST_REPAIR 4
 #define QUICRQ_ACTION_FRAGMENT 5
@@ -82,7 +79,7 @@ typedef struct st_quicrq_message_t {
     uint64_t message_type;
     size_t url_length;
     const uint8_t* url;
-    uint64_t datagram_stream_id;
+    uint64_t media_id;
     uint64_t group_id;
     uint64_t object_id;
     uint64_t nb_objects_previous_group;
@@ -91,7 +88,7 @@ typedef struct st_quicrq_message_t {
     int is_last_fragment;
     size_t length;
     const uint8_t* data;
-    unsigned int use_datagram;
+    quicrq_transport_mode_enum transport_mode;
     uint8_t cache_policy;
     quicrq_subscribe_intent_enum subscribe_intent;
 } quicrq_message_t;
@@ -122,15 +119,17 @@ uint8_t* quicrq_notify_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t m
 const uint8_t* quicrq_notify_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url);
 size_t quicrq_rq_msg_reserve(size_t url_length, quicrq_subscribe_intent_enum intent_mode);
 uint8_t* quicrq_rq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, const uint8_t* url,
-    quicrq_subscribe_intent_enum intent_mode, uint64_t start_group_id,  uint64_t start_object_id, uint64_t datagram_stream_id);
+    uint64_t media_id, quicrq_transport_mode_enum transport_mode, quicrq_subscribe_intent_enum intent_mode,
+    uint64_t start_group_id, uint64_t start_object_id);
 const uint8_t* quicrq_rq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, size_t* url_length, const uint8_t** url,
-    quicrq_subscribe_intent_enum * intent_mode, uint64_t * start_group_id,  uint64_t * start_object_id, uint64_t* datagram_stream_id);
+    uint64_t* media_id, quicrq_transport_mode_enum* transport_mode, quicrq_subscribe_intent_enum* intent_mode,
+    uint64_t* start_group_id, uint64_t* start_object_id);
 size_t quicrq_post_msg_reserve(size_t url_length);
 uint8_t* quicrq_post_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, size_t url_length, 
-    const uint8_t* url, unsigned int datagram_capable, uint8_t cache_policy,
+    const uint8_t* url, quicrq_transport_mode_enum transport_mode, uint8_t cache_policy,
     uint64_t start_group_id, uint64_t start_object_id);
 const uint8_t* quicrq_post_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
-    size_t* url_length, const uint8_t** url, unsigned int* datagram_capable, uint8_t* cache_policy,
+    size_t* url_length, const uint8_t** url, quicrq_transport_mode_enum* transport_mode, uint8_t* cache_policy,
     uint64_t* start_group_id, uint64_t* start_object_id);
 size_t quicrq_fin_msg_reserve(uint64_t final_group_id, uint64_t final_object_id);
 uint8_t* quicrq_fin_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, 
@@ -160,9 +159,9 @@ const uint8_t* quicrq_cache_policy_msg_decode(const uint8_t* bytes, const uint8_
 
 /* Encode and decode the header of datagram packets. */
 #define QUICRQ_DATAGRAM_HEADER_MAX 16
-uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t datagram_stream_id, uint64_t group_id, 
+uint8_t* quicrq_datagram_header_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t media_id, uint64_t group_id, 
     uint64_t object_id, uint64_t object_offset, uint64_t queue_delay, uint8_t flags, uint64_t nb_objects_previous_group, int is_last_fragment);
-const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* datagram_stream_id, uint64_t* group_id,
+const uint8_t* quicrq_datagram_header_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* media_id, uint64_t* group_id,
     uint64_t* object_id, uint64_t* object_offset, uint64_t *queue_delay, uint8_t * flags, uint64_t *nb_objects_previous_group, int * is_last_fragment);
 /* Stream header is indentical to repair message */
 #define QUICRQ_STREAM_HEADER_MAX 2+1+8+4+2
@@ -295,11 +294,11 @@ typedef int (*quicrq_media_consumer_fn)(
     size_t data_length);
 
 int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx,
-    const uint8_t* url, size_t url_length, int use_datagrams,
+    const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode,
     quicrq_media_consumer_fn media_consumer_fn, void* media_ctx);
 
 int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, const quicrq_subscribe_intent_t * intent,
+    quicrq_transport_mode_enum transport_mode, const quicrq_subscribe_intent_t * intent,
     quicrq_media_consumer_fn media_consumer_fn, void* media_ctx, quicrq_stream_ctx_t** p_stream_ctx);
 
 
@@ -385,9 +384,9 @@ struct st_quicrq_stream_ctx_t {
     struct st_quicrq_datagram_ack_state_t* extra_last;
     /* stream_id: control stream identifier */
     uint64_t stream_id;
-    /* datagram_stream_id: local identifier of media stream.
+    /* media_id: local identifier of media stream.
      * TODO: rename to media_stream_id as part of RUSH/WARP development. */
-    uint64_t datagram_stream_id;
+    uint64_t media_id;
     /* Designation of next expected object, start object, final object */
     uint64_t next_group_id;
     uint64_t next_object_id;
@@ -415,6 +414,8 @@ struct st_quicrq_stream_ctx_t {
     quicrq_notify_url_t* first_notify_url;
     quicrq_media_notify_fn media_notify_fn;
     void* notify_ctx;
+    /* Transport mode: stream, datagram, etc. */
+    quicrq_transport_mode_enum transport_mode;
     /* Stream state */
     quicrq_stream_sending_state_enum send_state;
     quicrq_stream_receive_state_enum receive_state;
@@ -439,11 +440,6 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_peer_finished : 1;
     unsigned int is_local_finished : 1;
     unsigned int is_receive_complete: 1;
-    /* is_datagram:
-     * A single flag indicates whether the media is sent as as series of datagram
-     * or as a single stream.
-     * TODO: this will have to be updated as add support for RUSH and WARP. */
-    unsigned int is_datagram : 1;
     unsigned int is_active_datagram : 1;
     unsigned int is_start_object_id_sent : 1;
     unsigned int is_final_object_id_sent : 1;
@@ -480,7 +476,7 @@ struct st_quicrq_cnx_ctx_t {
     int is_client;
     quicrq_cnx_congestion_state_t congestion;
 
-    uint64_t next_datagram_stream_id; /* only used for receiving */
+    uint64_t next_media_id; /* only used for receiving */
     uint64_t next_abandon_datagram_id; /* used to test whether unexpected datagrams are OK */
     struct st_quicrq_stream_ctx_t* first_stream;
     struct st_quicrq_stream_ctx_t* last_stream;
@@ -563,10 +559,10 @@ uint8_t* quicr_encode_object_header(uint8_t* fh, const uint8_t* fh_max, const qu
 
 /* Process a receive POST command */
 int quicrq_cnx_accept_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams, uint8_t cache_policy, uint64_t start_group_id, uint64_t start_object_id);
+    quicrq_transport_mode_enum transport_mode, uint8_t cache_policy, uint64_t start_group_id, uint64_t start_object_id);
 
 /*  Process a received ACCEPT response */
-int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, unsigned int use_datagrams, uint64_t datagram_stream_id);
+int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, quicrq_transport_mode_enum transport_mode, uint64_t media_id);
 
 /* Handle closure of stream after receiving the last bit of data */
 int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int is_datagram, int ret);
@@ -592,6 +588,8 @@ int quicrq_media_object_bridge_fn(
 /* For logging.. */
 const char* quicrq_uint8_t_to_text(const uint8_t* u, size_t length, char* buffer, size_t buffer_length);
 void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...);
+char quicrq_transport_mode_to_letter(quicrq_transport_mode_enum transport_mode);
+const char* quicrq_transport_mode_to_string(quicrq_transport_mode_enum transport_mode);
 
 /* Evaluation of congestion state */
 int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, int has_backlog, uint64_t current_time);

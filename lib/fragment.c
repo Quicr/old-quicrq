@@ -894,7 +894,7 @@ int quicrq_fragment_datagram_publisher_object_update(
 int quicrq_fragment_datagram_publisher_send_fragment(
     quicrq_stream_ctx_t* stream_ctx,
     quicrq_fragment_publisher_context_t* media_ctx,
-    uint64_t datagram_stream_id,
+    uint64_t media_id,
     void* context,
     size_t space,
     int* media_was_sent,
@@ -908,7 +908,7 @@ int quicrq_fragment_datagram_publisher_send_fragment(
     int is_last_fragment = (should_skip) ? 1: media_ctx->current_fragment->is_last_fragment;
     size_t h_size = 0;
     uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-        datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
+        media_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
         media_ctx->current_fragment->queue_delay, flags, media_ctx->current_fragment->nb_objects_previous_group,
         is_last_fragment);
     if (h_byte == NULL) {
@@ -940,7 +940,7 @@ int quicrq_fragment_datagram_publisher_send_fragment(
                      */
                     is_last_fragment = 0;
                     h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-                        datagram_stream_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
+                        media_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
                         media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, media_ctx->current_fragment->nb_objects_previous_group,
                         0);
 
@@ -997,7 +997,7 @@ int quicrq_fragment_datagram_publisher_send_fragment(
 int quicrq_fragment_datagram_publisher_prepare(
     quicrq_stream_ctx_t* stream_ctx,
     quicrq_fragment_publisher_context_t* media_ctx,
-    uint64_t datagram_stream_id,
+    uint64_t media_id,
     void* context,
     size_t space,
     int* media_was_sent,
@@ -1020,7 +1020,7 @@ int quicrq_fragment_datagram_publisher_prepare(
     else  {
         /* Then send the object */
         if (ret == 0) {
-            ret = quicrq_fragment_datagram_publisher_send_fragment(stream_ctx, media_ctx, datagram_stream_id,
+            ret = quicrq_fragment_datagram_publisher_send_fragment(stream_ctx, media_ctx, media_id,
                 context, space, media_was_sent, at_least_one_active, should_skip);
         }
     }
@@ -1043,7 +1043,7 @@ int quicrq_fragment_datagram_publisher_fn(
      * which helps designing unit tests.
      */
     ret = quicrq_fragment_datagram_publisher_prepare(stream_ctx, media_ctx,
-        stream_ctx->datagram_stream_id, context, space, media_was_sent, at_least_one_active, &not_ready, current_time);
+        stream_ctx->media_id, context, space, media_was_sent, at_least_one_active, &not_ready, current_time);
 
     if (not_ready){
         /* Nothing to send at this point. If the media sending is finished, mark the stream accordingly.
@@ -1099,7 +1099,6 @@ int quicrq_publish_fragment_cached_media(quicrq_ctx_t* qr_ctx,
     quicrq_fragment_cache_t* cache_ctx, const uint8_t* url, const size_t url_length,
     int is_local_object_source, int is_cache_real_time)
 {
-    int ret = 0;
     /* if succeeded, publish the source */
     cache_ctx->srce_ctx = quicrq_publish_datagram_source(qr_ctx, url, url_length, cache_ctx, is_local_object_source, is_cache_real_time);
     return (cache_ctx->srce_ctx == NULL)?-1:0;

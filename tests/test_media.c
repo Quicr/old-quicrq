@@ -657,7 +657,7 @@ typedef struct st_test_media_consumer_context_t {
 
 } test_media_consumer_context_t;
 
-int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_datagram, int is_real_time, int is_post,
+int test_media_derive_file_names(const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode, int is_real_time, int is_post,
     char * result_file_name, char * result_log_name, size_t result_name_size)
 {
     int ret = 0;
@@ -685,7 +685,7 @@ int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_d
         result_file_name[name_length + 2] = '_';
         result_file_name[name_length + 3] = (is_real_time) ? 'r' : 'n';
         result_file_name[name_length + 4] = '_';
-        result_file_name[name_length + 5] = (is_datagram) ? 'd' : 's';
+        result_file_name[name_length + 5] = quicrq_transport_mode_to_letter(transport_mode);
         result_file_name[name_length + 6] = '.';
         result_file_name[name_length + 7] = 'b';
         result_file_name[name_length + 8] = 'i';
@@ -697,7 +697,7 @@ int test_media_derive_file_names(const uint8_t* url, size_t url_length, int is_d
         result_log_name[name_length + 2] = '_';
         result_log_name[name_length + 3] = (is_real_time) ? 'r' : 's';
         result_log_name[name_length + 4] = '_';
-        result_log_name[name_length + 5] = (is_datagram) ? 'd' : 's';
+        result_log_name[name_length + 5] = quicrq_transport_mode_to_letter(transport_mode);
         result_log_name[name_length + 6] = '.';
         result_log_name[name_length + 7] = 'c';
         result_log_name[name_length + 8] = 's';
@@ -714,7 +714,8 @@ int test_media_consumer_init_callback(quicrq_stream_ctx_t* stream_ctx, const uin
     char result_file_name[512];
     char result_log_name[512];
 
-    ret = test_media_derive_file_names(url, url_length, stream_ctx->is_datagram, 1, 1, result_file_name, result_log_name, sizeof(result_file_name));
+    ret = test_media_derive_file_names(url, url_length, stream_ctx->transport_mode,
+        1, 1, result_file_name, result_log_name, sizeof(result_file_name));
 
     if (ret == 0) {
         /* Init the local media consumer */
@@ -876,21 +877,6 @@ int test_media_object_consumer_cb(
     return ret;
 }
 
-int test_media_subscribe(quicrq_cnx_ctx_t* cnx_ctx, uint8_t* url, size_t url_length, int use_datagrams, char const* media_result_file, char const* media_result_log)
-{
-    int ret = 0;
-    void* media_ctx = test_media_consumer_init(media_result_file, media_result_log);
-
-    if (media_ctx == NULL) {
-        ret = -1;
-    }
-    else {
-        ret = quicrq_cnx_subscribe_media(cnx_ctx, url, url_length, use_datagrams, test_media_object_consumer_cb, media_ctx);
-    }
-
-    return ret;
-}
-
 /* Object stream consumer
  */
 
@@ -1001,12 +987,13 @@ int test_object_stream_consumer_cb(
     return ret;
 }
 
-test_object_stream_ctx_t* test_object_stream_subscribe_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams,
-    quicrq_subscribe_intent_t * intent, char const* media_result_file, char const* media_result_log)
+test_object_stream_ctx_t* test_object_stream_subscribe_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
+    quicrq_transport_mode_enum transport_mode, quicrq_subscribe_intent_t * intent, char const* media_result_file, char const* media_result_log)
 {
     int ret = 0;
     /* Open and initialize result file and log file */
     test_object_stream_ctx_t* cons_ctx = (test_object_stream_ctx_t*)malloc(sizeof(test_object_stream_ctx_t));
+
     if (cons_ctx != NULL) {
         int last_err;
         memset(cons_ctx, 0, sizeof(test_object_stream_ctx_t));
@@ -1021,7 +1008,7 @@ test_object_stream_ctx_t* test_object_stream_subscribe_ex(quicrq_cnx_ctx_t* cnx_
             ret = -1;
         }
         else {
-            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, use_datagrams, 1, intent, test_object_stream_consumer_cb, cons_ctx);
+            cons_ctx->media_ctx = quicrq_subscribe_object_stream(cnx_ctx, url, url_length, transport_mode, 1, intent, test_object_stream_consumer_cb, cons_ctx);
             if (cons_ctx->media_ctx == NULL) {
                 ret = -1;
             }
@@ -1035,10 +1022,10 @@ test_object_stream_ctx_t* test_object_stream_subscribe_ex(quicrq_cnx_ctx_t* cnx_
     return cons_ctx;
 }
 
-test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length, int use_datagrams,
-    char const* media_result_file, char const* media_result_log)
+test_object_stream_ctx_t* test_object_stream_subscribe(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
+    quicrq_transport_mode_enum transport_mode, char const* media_result_file, char const* media_result_log)
 {
-    return test_object_stream_subscribe_ex(cnx_ctx, url, url_length, use_datagrams,
+    return test_object_stream_subscribe_ex(cnx_ctx, url, url_length, transport_mode,
         NULL, media_result_file, media_result_log);
 }
 

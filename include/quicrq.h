@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.25c"
+#define QUICRQ_VERSION "0.26"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
@@ -22,7 +22,7 @@ extern "C" {
  * different protocol versions will not be compatible, and connections attempts
  * between such binaries will fail, forcing deployments of compatible versions.
  */
-#define QUICRQ_ALPN "quicr-h25"
+#define QUICRQ_ALPN "quicr-h26"
 #define QUICRQ_PORT 853
 
 /* QUICR error codes */
@@ -41,6 +41,16 @@ typedef enum {
     quicrq_media_close_remote_application,
     quicrq_media_close_quic_connection
 } quicrq_media_close_reason_enum;
+
+/* Transport modes */
+typedef enum {
+    quicrq_transport_mode_unspecified = 0,
+    quicrq_transport_mode_single_stream = 1,
+    quicrq_transport_mode_warp = 2, /* One stream per GOP */
+    quicrq_transport_mode_rush = 3, /* One stream per object */
+    quicrq_transport_mode_datagram = 4,
+    quicrq_transport_mode_max
+} quicrq_transport_mode_enum;
 
 /* Connection context management functions.
  * The type quicrq_ctx_t is treated here as an opaque pointer, to
@@ -228,14 +238,14 @@ typedef struct st_quicrq_subscribe_intent_t {
 } quicrq_subscribe_intent_t;
 
 quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
-    const uint8_t* url, size_t url_length, int use_datagrams, int in_order_required,
-    quicrq_subscribe_intent_t * intent,
+    const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode,
+    int in_order_required, quicrq_subscribe_intent_t * intent,
     quicrq_object_stream_consumer_fn media_object_consumer_fn, void* media_object_ctx);
 
 void quicrq_unsubscribe_object_stream(quicrq_object_stream_consumer_ctx* subscribe_ctx);
 
 int quicrq_cnx_post_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, size_t url_length,
-    int use_datagrams);
+    quicrq_transport_mode_enum transport_mode);
 
 typedef int (*quicrq_media_consumer_init_fn)(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, size_t url_length);
 int quicrq_set_media_init_callback(quicrq_ctx_t* ctx, quicrq_media_consumer_init_fn media_init_fn);

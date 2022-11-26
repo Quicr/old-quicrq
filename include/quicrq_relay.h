@@ -10,10 +10,10 @@ extern "C" {
 
 
     /* Enable the relay */
-    int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char * sni, const struct sockaddr * addr, int use_datagrams);
+    int quicrq_enable_relay(quicrq_ctx_t* qr_ctx, const char * sni, const struct sockaddr * addr, quicrq_transport_mode_enum transport_mode);
 
     /* Enable origin */
-    int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, int use_datagrams);
+    int quicrq_enable_origin(quicrq_ctx_t* qr_ctx, quicrq_transport_mode_enum transport_mode);
 
     /* Disable the relay */
     void quicrq_disable_relay(quicrq_ctx_t* qr_ctx);

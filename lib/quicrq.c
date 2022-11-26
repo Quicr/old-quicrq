@@ -456,14 +456,14 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
 }
 
 /* Find the stream context associated with a datagram */
-quicrq_stream_ctx_t* quicrq_find_stream_ctx_for_datagram(quicrq_cnx_ctx_t* cnx_ctx, uint64_t datagram_stream_id, int is_sender)
+quicrq_stream_ctx_t* quicrq_find_stream_ctx_for_datagram(quicrq_cnx_ctx_t* cnx_ctx, uint64_t media_id, int is_sender)
 {
     quicrq_stream_ctx_t* stream_ctx = NULL;
 
     /* Find the stream context by datagram ID */
     stream_ctx = cnx_ctx->first_stream;
     while (stream_ctx != NULL) {
-        if ((stream_ctx->is_sender == is_sender) && stream_ctx->is_datagram && stream_ctx->datagram_stream_id == datagram_stream_id) {
+        if ((stream_ctx->is_sender == is_sender) && stream_ctx->transport_mode == quicrq_transport_mode_datagram && stream_ctx->media_id == media_id) {
             break;
         }
         stream_ctx = stream_ctx->next_stream;
@@ -479,7 +479,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
 
     /* Parse the datagram header */
     const uint8_t* bytes_max = bytes + length;
-    uint64_t datagram_stream_id;
+    uint64_t media_id;
     uint64_t group_id;
     uint64_t object_id;
     uint64_t object_offset;
@@ -489,7 +489,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     int is_last_fragment;
     const uint8_t* next_bytes;
 
-    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
+    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &media_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
 
     if (next_bytes == NULL) {
         DBG_PRINTF("%s", "Error decoding datagram header");
@@ -497,16 +497,16 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     }
     else {
         /* Find the stream context by datagram ID */
-        stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 0);
+        stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, media_id, 0);
         if (stream_ctx == NULL) {
             DBG_PRINTF("Unexpected datagram on stream %" PRIu64 ", object id %" PRIu64 "/%" PRIu64 ", max: % " PRIu64, 
-                datagram_stream_id, group_id, object_id, cnx_ctx->next_datagram_stream_id);
+                media_id, group_id, object_id, cnx_ctx->next_media_id);
             picoquic_log_app_message(cnx_ctx->cnx, "Unexpected datagram on stream %" PRIu64 ", object id %" PRIu64 "/%" PRIu64 ", max: % " PRIu64,
-                datagram_stream_id, group_id, object_id, cnx_ctx->next_datagram_stream_id);
-            if (datagram_stream_id >= cnx_ctx->next_datagram_stream_id) {
+                media_id, group_id, object_id, cnx_ctx->next_media_id);
+            if (media_id >= cnx_ctx->next_media_id) {
                 ret = -1;
                 picoquic_log_app_message(cnx_ctx->cnx, "Error, unexpected datagram stream %" PRIu64,
-                    datagram_stream_id);
+                    media_id);
             }
         }
         else {
@@ -518,7 +518,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             /* Pass data to the media context. */
             if (is_last_fragment) {
                 picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 "/%" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
-                    group_id, object_id, datagram_stream_id, stream_ctx->stream_id);
+                    group_id, object_id, media_id, stream_ctx->stream_id);
             }
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, group_id, object_id, object_offset, 
                 queue_delay, flags, nb_objects_previous_group, is_last_fragment, bytes_max - next_bytes);
@@ -526,7 +526,7 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
                 ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
             }
             if (ret != 0) {
-                DBG_PRINTF("Error found on dg stream id %" PRIu64 ", object id %" PRIu64 "/%", datagram_stream_id, group_id, object_id);
+                DBG_PRINTF("Error found on dg stream id %" PRIu64 ", object id %" PRIu64 "/%", media_id, group_id, object_id);
             }
         }
     }
@@ -919,7 +919,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
             }
             /* Encode the header */
             found->last_sent_time = current_time;
-            bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->datagram_stream_id,
+            bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->media_id,
                 found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, found->nb_objects_previous_group, found->is_last_fragment);
             /* Check how much data should be send in this fragment */
             header_length = bytes - datagram;
@@ -927,7 +927,7 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
             if (datagram_length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
                 if (found->is_last_fragment) {
                     /* Erase the last segment mark in datagram header */
-                    bytes = quicrq_datagram_header_encode(datagram, bytes_max, stream_ctx->datagram_stream_id,
+                    bytes = quicrq_datagram_header_encode(datagram, bytes_max, stream_ctx->media_id,
                         found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, found->nb_objects_previous_group, 0);
                     header_length = bytes - datagram;
                 }
@@ -1013,7 +1013,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     int ret = 0;
     /* Obtain the datagram ID */
     const uint8_t* bytes_max = bytes + length;
-    uint64_t datagram_stream_id;
+    uint64_t media_id;
     uint64_t group_id;
     uint64_t object_id;
     uint64_t object_offset;
@@ -1027,7 +1027,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
         ret = -1;
     }
     else {
-        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &datagram_stream_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
+        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &media_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
         
         /* Retrieve the stream context for the datagram */
         if (next_bytes == NULL) {
@@ -1037,7 +1037,7 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
             /* Find the stream context by datagram ID.
              * the stream may already be closed, so not finding it is not an error.
              */
-            quicrq_stream_ctx_t* stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, datagram_stream_id, 1);
+            quicrq_stream_ctx_t* stream_ctx = quicrq_find_stream_ctx_for_datagram(cnx_ctx, media_id, 1);
             if (stream_ctx != NULL) {
                 size_t data_length = (size_t)(bytes_max - next_bytes);
                 switch (picoquic_event) {
@@ -1140,7 +1140,7 @@ int quicrq_prepare_to_send_datagram(quicrq_cnx_ctx_t* cnx_ctx, void* context, si
      */
 
     while (stream_ctx != NULL) {
-        if (stream_ctx->is_datagram && stream_ctx->is_sender && stream_ctx->is_active_datagram && stream_ctx->datagram_stream_id < UINT64_MAX) {
+        if (stream_ctx->transport_mode == quicrq_transport_mode_datagram && stream_ctx->is_sender && stream_ctx->is_active_datagram && stream_ctx->media_id < UINT64_MAX) {
             int media_was_sent = 0;
             ret = quicrq_fragment_datagram_publisher_fn(stream_ctx, context, space, &media_was_sent, &at_least_one_active, current_time);
             if (media_was_sent || ret != 0) {
@@ -1270,7 +1270,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-            else if (!stream_ctx->is_datagram && quicrq_fragment_is_ready_to_send(stream_ctx->media_ctx, space, current_time)) {
+            else if (stream_ctx->transport_mode == quicrq_transport_mode_single_stream && quicrq_fragment_is_ready_to_send(stream_ctx->media_ctx, space, current_time)) {
                 stream_ctx->send_state = quicrq_sending_stream;
             }
             else {
@@ -1541,8 +1541,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         ret = -1;
                     }
                     else switch (incoming.message_type) {
-                    case QUICRQ_ACTION_REQUEST_STREAM:
-                    case QUICRQ_ACTION_REQUEST_DATAGRAM:
+                    case QUICRQ_ACTION_REQUEST:
                         if (stream_ctx->receive_state != quicrq_receive_initial) {
                             quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", unexpected subscribe message is stream receive state %d",
                                 stream_ctx->stream_id, stream_ctx->receive_state);
@@ -1554,11 +1553,12 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             uint64_t intent_object = 0;
 
                             /* Process initial request */
-                            stream_ctx->is_datagram = (incoming.message_type == QUICRQ_ACTION_REQUEST_DATAGRAM);
+                            stream_ctx->media_id = incoming.media_id;
+                            stream_ctx->transport_mode = incoming.transport_mode;
                             /* Open the media -- TODO, variants with different actions. */
                             quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", received a subscribe request for url %s, mode = %s, id= %" PRIu64,
                                 stream_ctx->stream_id, quicrq_uint8_t_to_text(incoming.url, incoming.url_length, url_text, 256),
-                                (stream_ctx->is_datagram) ? "datagram" : "stream", incoming.datagram_stream_id);
+                                quicrq_transport_mode_to_string(stream_ctx->transport_mode), incoming.media_id);
                             ret = quicrq_subscribe_local_media(stream_ctx, incoming.url, incoming.url_length);
                             if (ret == 0) {
                                 quicrq_wakeup_media_stream(stream_ctx);
@@ -1592,7 +1592,6 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                     }
                                 }
                             }
-                            stream_ctx->datagram_stream_id = incoming.datagram_stream_id;
                             if (intent_group > 0 || intent_object > 0) {
                                 /* apply the intent, prepare a start point message */
                                 stream_ctx->start_group_id = intent_group;
@@ -1606,16 +1605,20 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
-                            else if (incoming.message_type == QUICRQ_ACTION_REQUEST_STREAM) {
+                            else if (incoming.transport_mode == quicrq_transport_mode_single_stream) {
                                 /* Start sending stream without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_stream;
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
-                            else {
+                            else if (incoming.transport_mode == quicrq_transport_mode_datagram) {
                                 /* Start sending datagrams without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
+                            }
+                            else {
+                                /* Not supported yet */
+                                ret = -1;
                             }
                         }
                         break;
@@ -1632,10 +1635,10 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             char url_text[256];
                             quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", received a publish request for url %s, mode = %s",
                                 stream_ctx->stream_id, quicrq_uint8_t_to_text(incoming.url, incoming.url_length, url_text, 256),
-                                (incoming.use_datagram) ? "datagram" : "stream");
+                                quicrq_transport_mode_to_string(incoming.transport_mode));
                             /* Decide whether to receive the data as stream or as datagrams */
                             /* Prepare a consumer for the data. */
-                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.use_datagram,
+                            ret = quicrq_cnx_accept_media(stream_ctx, incoming.url, incoming.url_length, incoming.transport_mode,
                                 incoming.cache_policy, incoming.group_id, incoming.object_id);
                         }
                         break;
@@ -1644,8 +1647,8 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                         /* Open the media provider */
                         /* Depending on mode, set media ready or datagram ready */
                         quicrq_log_message(stream_ctx->cnx_ctx, "Stream %" PRIu64 ", publish request accepted, mode = %s",
-                            stream_ctx->stream_id, (incoming.use_datagram) ? "datagram" : "stream");
-                        ret = quicrq_cnx_post_accepted(stream_ctx, incoming.use_datagram, incoming.datagram_stream_id);
+                            stream_ctx->stream_id, quicrq_transport_mode_to_string(incoming.transport_mode));
+                        ret = quicrq_cnx_post_accepted(stream_ctx, incoming.transport_mode, incoming.media_id);
                         break;
                     case QUICRQ_ACTION_START_POINT:
                         if (stream_ctx->receive_state != quicrq_receive_fragment || stream_ctx->start_group_id != 0 || stream_ctx->start_object_id != 0) {
@@ -2143,7 +2146,8 @@ void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx, quicrq_media_close_rea
     /* Delete the stream contexts */
     while (cnx_ctx->first_stream != NULL) {
         if (cnx_ctx->first_stream->close_reason == quicrq_media_close_reason_unknown) {
-            cnx_ctx->first_stream->close_reason = quicrq_media_close_delete_context;
+            cnx_ctx->first_stream->close_reason = close_reason;
+            cnx_ctx->first_stream->close_error_code = close_error_code;
         }
         quicrq_delete_stream_ctx(cnx_ctx, cnx_ctx->first_stream);
     }
@@ -2447,4 +2451,51 @@ void quicrq_log_message(quicrq_cnx_ctx_t* cnx_ctx, const char* fmt, ...)
         picoquic_log_app_message_v(cnx_ctx->cnx, fmt, args);
         va_end(args);
     }
+}
+
+/* Utility function to get names or letters for transport mode */
+char quicrq_transport_mode_to_letter(quicrq_transport_mode_enum transport_mode)
+{
+    char ret = 'u';
+
+    switch (transport_mode) {
+    case quicrq_transport_mode_single_stream:
+        ret = 's';
+        break;
+    case quicrq_transport_mode_warp:
+        ret = 'w'; /* w for warp */
+        break;
+    case quicrq_transport_mode_rush:
+        ret = 'r'; /* r for rush */
+        break;
+    case quicrq_transport_mode_datagram:
+        ret = 'd';
+        break;
+    default:
+        break;
+    }
+    return ret;
+}
+
+const char * quicrq_transport_mode_to_string(quicrq_transport_mode_enum transport_mode)
+{
+    const char * ret = "undefined";
+
+    switch (transport_mode) {
+    case quicrq_transport_mode_single_stream:
+        ret = "stream";
+        break;
+    case quicrq_transport_mode_warp:
+        ret = "warp";
+        break;
+    case quicrq_transport_mode_rush:
+        ret = "rush";
+        break;
+    case quicrq_transport_mode_datagram:
+        ret = "datagram";
+        break;
+    default:
+        break;
+    }
+    return ret;
 }

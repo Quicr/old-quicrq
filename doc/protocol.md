@@ -51,8 +51,7 @@ quicrq_message {
 The length is encoded as a 16 bit number in big endian network order.
 The prototype uses the following control messages:
 
-* REQUEST_STREAM: subscribe to a media, request data in stream mode
-* REQUEST_DATAGRAM: subscribe to a media, request data as datagrams
+* REQUEST: subscribe to a media, 
 * FIN_DATAGRAM: indicates group_id and object_id of last object sent as datagram
 * FRAGMENT: carry a media fragment
 * POST: publish a media stream towards the origin
@@ -74,16 +73,21 @@ quicrq_request_message {
     message_type(i),
     url_length(i),
     url(...),
+    media_id(i),
+    transport_mode(i),
     intent_mode(i),
     [ start_group_id(i),
-      start_object_id(i),]
-    [datagram_stream_id(i)]
+      start_object_id(i)]
 }
 ```
 
-The message type will be set to REQUEST_STREAM (1) if the client wants to receive the media in
-stream mode, or REQUEST_DATAGRAM (2) if receiving in datagram mode. If in datagram mode,
-the client must select a datagram stream id that is not yet used for any other media stream.
+The message type will be set to REQUEST (1). The media_id is chosen by the receiver. The
+transport mode can be set to one of four values:
+
+* Single Stream (1),
+* Warp (2) (not implemented yet)
+* Rush (3) (not implemented yet)
+* Datagram(4)
 
 The intent mode indicates at which point in the media the receiver wants to start receiving data.
 It can be set to:
@@ -104,7 +108,7 @@ quicrq_post_message {
     message_type(i),
     url_length(i),
     url(...),
-    datagram_capable(i),
+    transport_mode(i),
     cache_policy(8),
     start_group_id(i),
     start_object_id(i)
@@ -112,8 +116,7 @@ quicrq_post_message {
 ```
 
 The message type will be set to POST (6).
-The `datagram_capable` flag is set to 0 if the client can only post data in stream
-mode, to 1 if the client is also capable of posting media fragments as datagrams.
+The `transport_mode` is set to the transport mode preferred by the sender.
 
 The `cache_policy` value is set to either `real_time (1)`
 or `not real time (0)`. If the cache policy is set to real time,
@@ -133,15 +136,14 @@ the QUIC control stream.
 ```
 quicrq_accept_message { 
      message_type(i),
-     use_datagram(i),
-     [datagram_stream_id(i)]
+     transport_mode(i),
+     [media_id(i)]
 }
 ```
 
-The message id is set to ACCEPT (7). The `use_datagram` flag is set to 0 if the
-server wants to receive data in stream mode, and to 1 if the server selects to
-receive data fragments as datagrams. In that case, the server must select a
-datagram stream id that is not yet used to receive any other media stream.
+The message id is set to ACCEPT (7). The `transport_mode` flag indicates the transport mode
+preferred by the server. In the current build, the `media_id` is only documented if the
+transport mode is set to `datagram`._
 
 ### Cache Policy Message
  

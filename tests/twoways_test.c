@@ -62,7 +62,7 @@ quicrq_test_config_t* quicrq_test_twoways_config_create(uint64_t simulate_loss)
  * 1) Two sources on one node, the other gets the data.
  * 2) Same as 1, but the subscriber starts before the publisher.
  */
-int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simulate_losses, int test_mode)
+int quicrq_twoways_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int test_mode)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -87,7 +87,8 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
         ret = -1;
     }
     else {
-        (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "twoways-%d-%d-%llx-%d", is_real_time, use_datagrams,
+        (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "twoways-%d-%c-%llx-%d", is_real_time, 
+            quicrq_transport_mode_to_letter(transport_mode),
             (unsigned long long)simulate_losses, test_mode);
         (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "%s_textlog.txt", test_id);
 
@@ -115,7 +116,7 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
 
     if (ret == 0) {
         /* Enable origin on node 0 */
-        ret = quicrq_enable_origin(config->nodes[0], use_datagrams);
+        ret = quicrq_enable_origin(config->nodes[0], transport_mode);
         if (ret != 0) {
             DBG_PRINTF("Cannot enable origin, ret = %d", ret);
         }
@@ -161,7 +162,7 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
                     if (test_mode == 0) {
                         if (ret == 0) {
                             /* Start pushing from the client */
-                            ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)url[i], strlen(url[i]), use_datagrams);
+                            ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)url[i], strlen(url[i]), transport_mode);
                             if (ret != 0) {
                                 DBG_PRINTF("Cannot publish test media %s, ret = %d", url[i], ret);
                             }
@@ -172,7 +173,7 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
                             if (ret == 0) {
                                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                                 object_stream_ctx = test_object_stream_subscribe(cnx_ctx[i], (const uint8_t*)target[i]->url,
-                                    target[i]->url_length, use_datagrams, target[i]->target_bin, target[i]->target_csv);
+                                    target[i]->url_length, transport_mode, target[i]->target_bin, target[i]->target_csv);
                                 if (object_stream_ctx == NULL) {
                                     ret = -1;
                                 }
@@ -190,7 +191,7 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
                                 test_object_stream_ctx_t* object_stream_ctx = NULL;
                                 quicrq_subscribe_intent_t intent = { quicrq_subscribe_intent_current_group, 0, 0 };
                                 object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx[i], (const uint8_t*)target[source_id]->url,
-                                    target[source_id]->url_length, use_datagrams, &intent, target[source_id]->target_bin, target[source_id]->target_csv);
+                                    target[source_id]->url_length, transport_mode, &intent, target[source_id]->target_bin, target[source_id]->target_csv);
                                 if (object_stream_ctx == NULL) {
                                     ret = -1;
                                 }
@@ -210,7 +211,7 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
                                 }
                                 else {
                                     /* Start pushing from the client */
-                                    ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)url[source_id], strlen(url[source_id]), use_datagrams);
+                                    ret = quicrq_cnx_post_media(cnx_ctx[i], (uint8_t*)url[source_id], strlen(url[source_id]), transport_mode);
                                     if (ret != 0) {
                                         DBG_PRINTF("Cannot publish test media %s, ret = %d", url[source_id], ret);
                                     }
@@ -315,42 +316,42 @@ int quicrq_twoways_test_one(int is_real_time, int use_datagrams, uint64_t simula
 
 int quicrq_twoways_basic_test()
 {
-    int ret = quicrq_twoways_test_one(1, 0, 0, 0);
+    int ret = quicrq_twoways_test_one(1, quicrq_transport_mode_single_stream, 0, 0);
 
     return ret;
 }
 
 int quicrq_twoways_datagram_test()
 {
-    int ret = quicrq_twoways_test_one(1, 1, 0, 0);
+    int ret = quicrq_twoways_test_one(1, quicrq_transport_mode_datagram, 0, 0);
 
     return ret;
 }
 
 int quicrq_twoways_datagram_loss_test()
 {
-    int ret = quicrq_twoways_test_one(1, 1, 0x7080, 0);
+    int ret = quicrq_twoways_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0);
 
     return ret;
 }
 
 int quicrq_twomedia_tri_stream_test()
 {
-    int ret = quicrq_twoways_test_one(1, 0, 0, 1);
+    int ret = quicrq_twoways_test_one(1, quicrq_transport_mode_single_stream, 0, 1);
 
     return ret;
 }
 
 int quicrq_twomedia_tri_datagram_test()
 {
-    int ret = quicrq_twoways_test_one(1, 1, 0, 1);
+    int ret = quicrq_twoways_test_one(1, quicrq_transport_mode_datagram, 0, 1);
 
     return ret;
 }
 
 int quicrq_twomedia_tri_later_test()
 {
-    int ret = quicrq_twoways_test_one(1, 1, 0, 2);
+    int ret = quicrq_twoways_test_one(1, quicrq_transport_mode_datagram, 0, 2);
 
     return ret;
 }
