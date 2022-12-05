@@ -539,6 +539,40 @@ const uint8_t* quicrq_accept_msg_decode(const uint8_t* bytes, const uint8_t* byt
     return bytes;
 }
 
+/* Encoding or decoding the warp_header message
+ *
+ * quicrq_warp_header_message {
+ *     message_type(i),
+ *     media_id(i),
+ *     group_id(i)
+ * }
+ */
+
+size_t quicrq_warp_header_msg_reserve(uint64_t media_id, uint64_t group_id)
+{
+    size_t len = 1 +
+                 picoquic_frames_varint_encode_length(media_id) +
+                 picoquic_frames_varint_encode_length(group_id);
+    return len;
+}
+
+uint8_t* quicrq_warp_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t media_id, uint64_t group_id)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, media_id)) != NULL) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, group_id);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* media_id, uint64_t* group_id)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, media_id)) != NULL){
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, group_id);
+    }
+    return bytes;
+}
 
 /* Generic decoding of QUICRQ control message */
 const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t* msg)
@@ -583,6 +617,8 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
         case QUICRQ_ACTION_CACHE_POLICY:
             bytes = quicrq_cache_policy_msg_decode(bytes, bytes_max, &msg->message_type, &msg->cache_policy);
             break;
+        case QUICRQ_ACTION_WARP_HEADER:
+            bytes = quicrq_warp_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->media_id, &msg->group_id);
         default:
             /* Unexpected message type */
             bytes = NULL;
@@ -630,6 +666,8 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
     case QUICRQ_ACTION_CACHE_POLICY:
         bytes = quicrq_cache_policy_msg_encode(bytes, bytes_max, msg->message_type, msg->cache_policy);
         break;
+    case QUICRQ_ACTION_WARP_HEADER:
+        bytes = quicrq_warp_header_msg_encode(bytes, bytes_max, msg->message_type, msg->media_id, msg->group_id);
     default:
         /* Unexpected message type */
         bytes = NULL;
@@ -725,6 +763,8 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
             srce_ctx->cache_ctx = cache_ctx;
             srce_ctx->is_local_object_source = is_local_object_source;
 
+            // Called in the case there exists streams on the cnx
+            // For publish object source, it is a no-op
             if (quicrq_notify_url_to_all(qr_ctx, url, url_length) < 0) {
                 DBG_PRINTF("%s", "Fail to notify new source");
                 quicrq_delete_source(srce_ctx, qr_ctx);
@@ -882,6 +922,7 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
     }
 }
 
+/// stream_ctx - this is for control channel
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->cnx_ctx->cnx != NULL) {
@@ -893,7 +934,12 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                 (stream_ctx->is_cache_real_time && !stream_ctx->is_cache_policy_sent)) {
                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
             }
-        }
+        } /*else if {
+            // if in the same group-id , picoquic_mark_active_stream(for the stream_id mapping to the group-id)
+            // else new - group,
+            // mark old stream as finished
+            // create a new stream-ctx and with picoquic-api, mark active (calls the callback eventually)
+        }*/
         else if (stream_ctx->cnx_ctx->cnx != NULL) {
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
         }

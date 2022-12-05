@@ -71,6 +71,8 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_SUBSCRIBE 9
 #define QUICRQ_ACTION_NOTIFY 10
 #define QUICRQ_ACTION_CACHE_POLICY 11
+#define QUICRQ_ACTION_WARP_HEADER 12
+#define QUICRQ_ACTION_RUSH_HEADER 13
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -156,6 +158,9 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
 size_t quicrq_cache_policy_msg_reserve();
 uint8_t* quicrq_cache_policy_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint8_t cache_policy);
 const uint8_t* quicrq_cache_policy_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * message_type, uint8_t * cache_policy);
+size_t quicrq_warp_header_msg_reserve(uint64_t media_id, uint64_t group_id);
+uint8_t* quicrq_warp_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t media_id, uint64_t group_id);
+const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* media_id, uint64_t* group_id);
 
 /* Encode and decode the header of datagram packets. */
 #define QUICRQ_DATAGRAM_HEADER_MAX 16
@@ -371,6 +376,72 @@ typedef struct st_quicrq_notify_url_t {
     uint8_t* url;
 } quicrq_notify_url_t;
 
+/* Context representing unidirectional streams*/
+struct st_quicrq_uni_stream_ctx_t {
+    struct st_quicrq_uni_stream_ctx_t* next_stream;
+    struct st_quicrq_uni_stream_ctx_t* previous_stream;
+    struct st_quicrq_cnx_ctx_t* cnx_ctx;
+    /* Source from which data is read and sent on the stream. */
+    quicrq_media_source_ctx_t* media_source;
+    struct st_quicrq_uni_stream_ctx_t* next_stream_for_source;
+    struct st_quicrq_uni_stream_ctx_t* previous_stream_for_source;
+
+    /* Control stream context */
+    struct st_quicrq_stream_ctx_t* control_stream;
+
+    uint64_t stream_id;
+    /* media_id: local identifier of media stream.*/
+    uint64_t media_id;
+    uint64_t next_group_id;
+    uint64_t next_object_id;
+    uint64_t next_object_offset;
+    uint64_t current_group_id;
+    uint64_t start_object_id;
+
+    /* Stream state */
+    quicrq_stream_sending_state_enum send_state;
+    quicrq_stream_receive_state_enum receive_state;
+    /* Close reason and diagnostic code */
+    quicrq_media_close_reason_enum close_reason;
+    uint64_t close_error_code;
+    /* Control flags */
+    unsigned int is_sender : 1;
+    /* is_cache_real_time:
+     * Indicates whether local cache management follows the "real time" logic,
+     * in which only recent objects are kept. By default, cache management
+     * follows the "streaming" logic, in which everything is kept -- or nothing.
+     */
+    unsigned int is_cache_real_time : 1;
+    /* is_peer_finished, is_local_finished, is_receive_complete:
+     * For the sender, receiver finished happens if the client closes the control stream.
+     * In that case, the server should close the stream and mark itself finished.
+     * For the receiver, the transfer finishes if everything was received. In that
+     * case, the receiver shall close the control stream. If the sender closes the
+     * control stream before that, we have an abnormal close.
+     */
+    unsigned int is_peer_finished : 1;
+    unsigned int is_local_finished : 1;
+    unsigned int is_receive_complete: 1;
+    unsigned int is_active_datagram : 1;
+    unsigned int is_start_object_id_sent : 1;
+    unsigned int is_final_object_id_sent : 1;
+    unsigned int is_cache_policy_sent : 1;
+
+    quicrq_message_buffer_t message_sent;
+    quicrq_message_buffer_t message_receive;
+
+    quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
+};
+
+
+/* list of uni-directional stream */
+struct st_quicrq_uni_stream {
+    struct st_quicrq_uni_streams_t* next_stream;
+    struct st_quicrq_uni_streams_t* previous_stream;
+    uint64_t stream_id;
+    struct st_quicrq_uni_stream_ctx_t* stream_ctx;
+};
+
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
@@ -450,7 +521,9 @@ struct st_quicrq_stream_ctx_t {
 
     quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
     struct st_quicrq_fragment_publisher_context_t* media_ctx; /* Callback argument for receiving or sending data */
+    struct st_quicrq_uni_stream* first_uni_stream;
 };
+
 
 int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_consumer_fn media_fn, void* media_ctx);
 
@@ -480,6 +553,12 @@ struct st_quicrq_cnx_ctx_t {
     uint64_t next_abandon_datagram_id; /* used to test whether unexpected datagrams are OK */
     struct st_quicrq_stream_ctx_t* first_stream;
     struct st_quicrq_stream_ctx_t* last_stream;
+    /* reference to the unidrectional streams */
+    struct st_quicrq_uni_stream_ctx_t* first_uni_stream;
+    struct st_quicrq_uni_stream_ctx_t* last_uni_stream;
+
+    /* reference to the control stream */
+    struct st_quicrq_stream_ctx_t* control_stream;
 };
 
 /* Prototype function for managing the cache of relays.
@@ -548,8 +627,14 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
     uint64_t stream_id,
     quicrq_cnx_ctx_t* cnx_ctx,
     int should_create);
-
 quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id);
+
+quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
+        uint64_t stream_id,
+        quicrq_cnx_ctx_t* cnx_ctx,
+        int should_create);
+
+quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id);
 
 void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx);
 

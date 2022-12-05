@@ -60,6 +60,7 @@ typedef enum {
 typedef struct st_quicrq_ctx_t quicrq_ctx_t;
 typedef struct st_quicrq_cnx_ctx_t quicrq_cnx_ctx_t;
 typedef struct st_quicrq_stream_ctx_t quicrq_stream_ctx_t;
+typedef struct st_quicrq_uni_stream_ctx_t quicrq_uni_stream_ctx_t;
 
 quicrq_ctx_t* quicrq_create_empty();
 void quicrq_set_quic(quicrq_ctx_t* qr_ctx, picoquic_quic_t* quic);
