@@ -1181,29 +1181,30 @@ int quicrq_compare_log_file(char const* media_result_log, char const* media_refe
     FILE* G = picoquic_file_open_ex(media_reference_log, "r", &last_err2);
 
     if (F == NULL || G == NULL) {
-        ret = -1;
+ret = -1;
     }
     else {
-        char result_line[512];
-        char ref_line[512];
-        while (ret == 0) {
-            char* result_read = fgets(result_line, sizeof(result_line), F);
-            char* ref_read = fgets(ref_line, sizeof(ref_line), G);
-            if (result_read == NULL) {
-                if (ref_read != NULL) {
-                    ret = -1;
-                }
-                break;
-            } else if (ref_read == NULL) {
-                if (result_read != NULL) {
-                    ret = -1;
-                }
-                break;
-            }
-            else if (strcmp(ref_read, result_read) != 0) {
+    char result_line[512];
+    char ref_line[512];
+    while (ret == 0) {
+        char* result_read = fgets(result_line, sizeof(result_line), F);
+        char* ref_read = fgets(ref_line, sizeof(ref_line), G);
+        if (result_read == NULL) {
+            if (ref_read != NULL) {
                 ret = -1;
             }
+            break;
         }
+        else if (ref_read == NULL) {
+            if (result_read != NULL) {
+                ret = -1;
+            }
+            break;
+        }
+        else if (strcmp(ref_read, result_read) != 0) {
+            ret = -1;
+        }
+    }
     }
     if (F != NULL) {
         picoquic_file_close(F);
@@ -1211,6 +1212,113 @@ int quicrq_compare_log_file(char const* media_result_log, char const* media_refe
     if (G != NULL) {
         picoquic_file_close(G);
     }
+    return ret;
+}
+
+/* Compare log file to reference log file
+ */
+const char* quicrq_get_log_number(const char* s, const char* s_max, int* v)
+{
+    *v = 0;
+
+    while (s != NULL && s < s_max) {
+        char c = *s;
+        s++;
+        if (c == ' ') {
+            continue;
+        }
+        if (c == ',') {
+            break;
+        }
+        if (c >= '0' && c <= '9') {
+            *v *= 10;
+            *v += (c - '0');
+        }
+        else {
+            s = NULL;
+        }
+    }
+    return s;
+}
+
+int quicrq_log_file_statistics(char const* media_result_log, int* nb_frames, int* nb_losses,
+    uint64_t* delay_average, uint64_t* delay_min, uint64_t* delay_max)
+{
+    int ret = 0;
+    int last_err1 = 0;
+    int last_err2 = 0;
+    *nb_frames = 0;
+    *nb_losses = 0;
+    *delay_average = 0;
+    *delay_min = 0;
+    *delay_max = 0;
+
+
+    FILE* F = picoquic_file_open_ex(media_result_log, "r", &last_err1);
+
+    if (F == NULL) {
+        ret = -1;
+    }
+    else {
+        char result_line[512];
+        uint64_t d_sum = 0;
+        uint64_t d_min = UINT64_MAX;
+        uint64_t d_max = 0;
+        while (ret == 0) {
+            char* result_read = fgets(result_line, sizeof(result_line), F);
+            if (result_read == NULL) {
+                break;
+            }
+            else {
+                int g_id = 0;
+                int o_id = 0;
+                int a_time = 0;
+                int o_time = 0;
+                int f_num = 0;
+                int len = 0;
+                const char* s = result_line;
+                const char* s_max = result_line + strlen(result_line);
+
+                /* Parse the log line */
+                if (NULL != (s = quicrq_get_log_number(s, s_max, &g_id)) &&
+                    NULL != (s = quicrq_get_log_number(s, s_max, &o_id)) &&
+                    NULL != (s = quicrq_get_log_number(s, s_max, &a_time)) &&
+                    NULL != (s = quicrq_get_log_number(s, s_max, &o_time)) &&
+                    NULL != (s = quicrq_get_log_number(s, s_max, &f_num))) {
+                    s = quicrq_get_log_number(s, s_max, &len);
+                }
+                if (s == NULL) {
+                    ret = -1;
+                    break;
+                }
+                else {
+                    *nb_frames += 1;
+                    if (len <= 0) {
+                        *nb_losses += 1;
+                    }
+                    else {
+                        uint64_t delay = (a_time > o_time) ? a_time - o_time : 0;
+                        d_sum += delay;
+                        if (d_min > delay) {
+                            d_min = delay;
+                        }
+                        if (d_max < delay) {
+                            d_max = delay;
+                        }
+                    }
+                }
+            }
+        }
+        if (ret == 0 && *nb_frames > 0) {
+            *delay_average = d_sum / *nb_frames;
+            *delay_min = d_min;
+            *delay_max = d_max;
+        }
+    }
+    if (F != NULL) {
+        picoquic_file_close(F);
+    }
+
     return ret;
 }
 

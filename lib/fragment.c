@@ -553,6 +553,27 @@ int quicrq_fragment_is_ready_to_send(void* v_media_ctx, size_t data_max_size, ui
     return is_ready;
 }
 
+int quicrq_fragment_evaluate_backlog(quicrq_fragment_publisher_context_t* media_ctx)
+{
+    int has_backlog = 0;
+    const uint64_t backlog_threshold = 5;
+
+    if (media_ctx->current_offset > 0 || media_ctx->length_sent > 0) {
+        has_backlog = media_ctx->has_backlog;
+    }
+    else if (media_ctx->current_group_id < media_ctx->cache_ctx->next_group_id ||
+        (media_ctx->current_group_id == media_ctx->cache_ctx->next_group_id &&
+            media_ctx->current_object_id + backlog_threshold < media_ctx->cache_ctx->next_object_id)) {
+        has_backlog = 1;
+        media_ctx->has_backlog = 1;
+    }
+    else {
+        has_backlog = 0;
+        media_ctx->has_backlog = 0;
+    }
+    return has_backlog;
+}
+
 int quicrq_fragment_publisher_fn(
     quicrq_media_source_action_enum action,
     void* v_media_ctx,
@@ -665,18 +686,8 @@ int quicrq_fragment_publisher_fn(
                 }
                 *data_length = copied;
                 *is_still_active = 1;
-                if (media_ctx->current_offset > 0) {
-                    *has_backlog = media_ctx->has_backlog;
-                } else if (media_ctx->current_group_id < media_ctx->cache_ctx->next_group_id ||
-                    (media_ctx->current_group_id == media_ctx->cache_ctx->next_group_id &&
-                        media_ctx->current_object_id + 1 < media_ctx->cache_ctx->next_object_id)) {
-                    *has_backlog = 1;
-                    media_ctx->has_backlog = 1;
-                }
-                else {
-                    *has_backlog = 0;
-                    media_ctx->has_backlog = 0;
-                }
+                *has_backlog = quicrq_fragment_evaluate_backlog(media_ctx);
+
                 if (data != NULL) {
                     /* If data is set to NULL, return the available size but do not copy anything */
                     memcpy(data, media_ctx->current_fragment->data + media_ctx->length_sent, copied);
@@ -717,6 +728,7 @@ int quicrq_fragment_datagram_publisher_object_eval(
     quicrq_fragment_publisher_context_t* media_ctx, int* should_skip, uint64_t current_time)
 {
     int ret = 0;
+    const int64_t delta_t_max = 5 * 33333;
 
     *should_skip = 0;
     if (media_ctx->current_fragment->object_id != 0 &&
@@ -724,7 +736,7 @@ int quicrq_fragment_datagram_publisher_object_eval(
         if (stream_ctx->cnx_ctx->qr_ctx->quic != NULL &&
             media_ctx->current_fragment != NULL) {
             int64_t delta_t = current_time - media_ctx->current_fragment->cache_time;
-            int has_backlog = delta_t > 33333;
+            int has_backlog = delta_t > delta_t_max;
 
             *should_skip = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx,
                 media_ctx->current_fragment->flags, has_backlog, current_time);
