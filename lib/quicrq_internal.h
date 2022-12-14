@@ -434,14 +434,6 @@ struct st_quicrq_uni_stream_ctx_t {
 };
 
 
-/* list of uni-directional stream */
-struct st_quicrq_uni_stream {
-    struct st_quicrq_uni_streams_t* next_stream;
-    struct st_quicrq_uni_streams_t* previous_stream;
-    uint64_t stream_id;
-    struct st_quicrq_uni_stream_ctx_t* stream_ctx;
-};
-
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
@@ -521,7 +513,7 @@ struct st_quicrq_stream_ctx_t {
 
     quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
     struct st_quicrq_fragment_publisher_context_t* media_ctx; /* Callback argument for receiving or sending data */
-    struct st_quicrq_uni_stream* first_uni_stream;
+    struct st_quicrq_uni_stream_ctx_t* first_uni_stream;
 };
 
 
@@ -634,9 +626,13 @@ quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
         quicrq_cnx_ctx_t* cnx_ctx,
         int should_create);
 
-quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id);
+quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
+        quicrq_stream_ctx_t* control_stream_ctx,
+        uint64_t group_id);
+
 
 void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx);
+void quicrq_delete_uni_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_ctx_t* stream_ctx);
 
 /* Encode and decode the object header */
 const uint8_t* quicr_decode_object_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_object_header_t* hdr);

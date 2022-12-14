@@ -2521,6 +2521,26 @@ quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
     return stream_ctx;
 }
 
+
+
+quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
+        quicrq_stream_ctx_t* control_stream,
+        uint64_t group_id)
+{
+    quicrq_uni_stream_ctx_t* stream_ctx = control_stream->first_uni_stream;
+
+    while (stream_ctx != NULL) {
+        if (stream_ctx->current_group_id == group_id) {
+            return  stream_ctx;
+        }
+        stream_ctx = stream_ctx->next_stream;
+    }
+
+
+    return NULL;
+}
+
+
 int quicrq_cnx_has_stream(quicrq_cnx_ctx_t* cnx_ctx)
 {
     return (cnx_ctx->first_stream != NULL);

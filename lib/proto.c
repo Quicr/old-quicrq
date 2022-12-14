@@ -934,12 +934,21 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                 (stream_ctx->is_cache_real_time && !stream_ctx->is_cache_policy_sent)) {
                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
             }
-        } /*else if {
+        } else if (stream_ctx->transport_mode == quicrq_transport_mode_warp) {
+            quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_uni_stream_for_group(stream_ctx, stream_ctx->media_ctx->current_group_id);
+            if (uni_stream_ctx == NULL && stream_ctx->media_ctx->current_group_id == stream_ctx->start_group_id) {
+                /* first ever warp stream */
+                uint64_t stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx, 1);
+                quicrq_find_or_create_uni_stream(stream_ctx->cnx_ctx, stream_id, 1);
+
+            } else {
+
+            }
             // if in the same group-id , picoquic_mark_active_stream(for the stream_id mapping to the group-id)
             // else new - group,
             // mark old stream as finished
             // create a new stream-ctx and with picoquic-api, mark active (calls the callback eventually)
-        }*/
+        }
         else if (stream_ctx->cnx_ctx->cnx != NULL) {
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
         }
