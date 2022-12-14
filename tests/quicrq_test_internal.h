@@ -93,6 +93,7 @@ typedef struct st_quicrq_test_config_t {
     int nb_nodes;
     quicrq_ctx_t** nodes;
     int nb_links;
+    int congested_link_id;
     picoquictest_sim_link_t** links;
     int* return_links;
     int nb_attachments;
