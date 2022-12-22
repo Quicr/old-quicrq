@@ -17,10 +17,14 @@ extern "C" {
     int quicrq_congestion_basic_test();
     int quicrq_congestion_basic_recv_test();
     int quicrq_congestion_basic_loss_test();
+    int quicrq_congestion_basic_zero_test();
+    int quicrq_congestion_basic_half_test();
     int quicrq_congestion_datagram_test();
     int quicrq_congestion_datagram_loss_test();
     int quicrq_congestion_datagram_recv_test();
     int quicrq_congestion_datagram_rloss_test();
+    int quicrq_congestion_datagram_zero_test();
+    int quicrq_congestion_datagram_half_test();
     int quicrq_datagram_basic_test();
     int quicrq_datagram_loss_test();
     int quicrq_datagram_extra_test();
