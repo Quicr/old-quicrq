@@ -99,12 +99,20 @@ void quicrq_fragment_cache_media_init(quicrq_fragment_cache_t* cached_media)
 
 /* Fragment cache progress.
  * Manage the "next_group" and "next_object" items.
+ * Also manage "highest group" and "highest object"
  */
 void quicrq_fragment_cache_progress(quicrq_fragment_cache_t* cache_ctx,
     quicrq_cached_fragment_t* fragment)
 {
     /* Check whether the next object is present */
     picosplay_node_t* next_fragment_node = &fragment->fragment_node;
+
+    if (fragment->group_id > cache_ctx->highest_group_id ||
+        (fragment->group_id == cache_ctx->highest_group_id &&
+            fragment->object_id > cache_ctx->highest_object_id)) {
+        cache_ctx->highest_group_id = fragment->group_id;
+        cache_ctx->highest_object_id = fragment->object_id;
+    }
 
     do {
         int is_expected = 0;

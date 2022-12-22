@@ -43,6 +43,8 @@ typedef struct st_quicrq_fragment_cache_t {
     uint64_t next_group_id; /* Updated as objects are added sequentially to cache */
     uint64_t next_object_id; /* Updated as objects are added sequentially to cache */
     uint64_t next_offset; /* Updated as objects are added sequentially to cache */
+    uint64_t highest_group_id; /* Highest group id received, whether in order or not. */
+    uint64_t highest_object_id; /* Highest object id received within the highest group id. */
     quicrq_cached_fragment_t* first_fragment; /* Fragments in order of arrival */
     quicrq_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree; /* Splay ordered by group_id/object_id/offset */
