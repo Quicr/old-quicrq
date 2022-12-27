@@ -574,6 +574,60 @@ const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t
     return bytes;
 }
 
+
+/* Encoding or decoding the object_header message
+ *
+ * quicrq_object_header_message {
+ *     message_type(i),
+ *     object_id(i),
+ *     length(i),
+ *     data(...)
+ * }
+ */
+
+size_t quicrq_object_header_msg_reserve(uint64_t object_id, size_t data_length)
+{
+    size_t len = 1 +
+                 picoquic_frames_varint_encode_length(object_id);
+
+    len += picoquic_frames_varint_encode_length(data_length);
+    return len;
+}
+
+uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t object_id,
+                                         size_t length, const uint8_t *data)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id);
+        if (bytes != NULL) {
+            if (data != NULL) {
+                bytes = picoquic_frames_length_data_encode(bytes, bytes_max, length, data);
+            } else {
+                bytes = picoquic_frames_varint_encode(bytes, bytes_max, length);
+            }
+        }
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_object_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+                                               uint64_t* object_id, size_t *length, const uint8_t **data)
+{
+    object_id = 0;
+    *length = 0;
+    *data = NULL;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL){
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, object_id);
+        if (bytes != NULL &&
+            (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, length)) != NULL) {
+            *data = bytes;
+            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *length);
+        }
+    }
+    return bytes;
+}
+
+
 /* Generic decoding of QUICRQ control message */
 const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t* msg)
 {
@@ -619,6 +673,10 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
             break;
         case QUICRQ_ACTION_WARP_HEADER:
             bytes = quicrq_warp_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->media_id, &msg->group_id);
+            break;
+        case QUICRQ_ACTION_OBJECT_HEADER:
+            bytes = quicrq_object_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->object_id, &msg->length, &msg->data);
+            break;
         default:
             /* Unexpected message type */
             bytes = NULL;
@@ -668,6 +726,10 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         break;
     case QUICRQ_ACTION_WARP_HEADER:
         bytes = quicrq_warp_header_msg_encode(bytes, bytes_max, msg->message_type, msg->media_id, msg->group_id);
+        break;
+    case QUICRQ_ACTION_OBJECT_HEADER:
+        bytes = quicrq_object_header_msg_encode(bytes, bytes_max, msg->message_type, msg->object_id, msg->length, msg->data);
+        break;
     default:
         /* Unexpected message type */
         bytes = NULL;
@@ -923,7 +985,7 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
 }
 
 /// stream_ctx - this is for control channel
-void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
+void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx, uint64_t highest_group_id, uint64_t highest_object_id)
 {
     if (stream_ctx->cnx_ctx->cnx != NULL) {
         if (stream_ctx->transport_mode == quicrq_transport_mode_datagram) {
@@ -935,19 +997,30 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
             }
         } else if (stream_ctx->transport_mode == quicrq_transport_mode_warp) {
-            quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_uni_stream_for_group(stream_ctx, stream_ctx->media_ctx->current_group_id);
-            if (uni_stream_ctx == NULL && stream_ctx->media_ctx->current_group_id == stream_ctx->start_group_id) {
-                /* first ever warp stream */
-                uint64_t stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx, 1);
-                quicrq_find_or_create_uni_stream(stream_ctx->cnx_ctx, stream_id, 1);
+            /*
+             * Scenarios
+             *  TODO: Can it support out of order sending of groups
+             *  TODO: mix of transport types (datagram & stream) along the path and its implications
+             *        on the cache organization
+             */
 
-            } else {
-
+            quicrq_uni_stream_ctx_t * uni_stream_ctx = stream_ctx->first_uni_stream;
+            uint64_t max_group_id = uni_stream_ctx->current_group_id;
+            /* loop through all the unistreams, since more than one can be active */
+            while(uni_stream_ctx != NULL) {
+                if (uni_stream_ctx->current_group_id > max_group_id) {
+                    max_group_id = uni_stream_ctx->current_group_id;
+                }
+                picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
             }
-            // if in the same group-id , picoquic_mark_active_stream(for the stream_id mapping to the group-id)
-            // else new - group,
-            // mark old stream as finished
-            // create a new stream-ctx and with picoquic-api, mark active (calls the callback eventually)
+            /* create uni_streams for unseen group_id from the cache */
+            for(uint64_t i = max_group_id; i < highest_group_id; i++) {
+                uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx, 1);
+                quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_ctx->cnx_ctx, uni_stream_id, 1);
+                picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+            }
+
+            /* TODO: how to reset/mark a uni_stream as finished .should it be done in here or somewhere else*/
         }
         else if (stream_ctx->cnx_ctx->cnx != NULL) {
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
@@ -960,11 +1033,11 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
  * and possibly stream.
  * TODO: for datagram, we may want to manage a queue of media for which data is ready.
  */
-void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
+void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx, uint64_t highest_group_id, uint64_t highest_object_id)
 {
     quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
     while (stream_ctx != NULL) {
-        quicrq_wakeup_media_stream(stream_ctx);
+        quicrq_wakeup_media_stream(stream_ctx, highest_group_id, highest_object_id);
         stream_ctx = stream_ctx->next_stream_for_source;
     }
 }
@@ -1207,8 +1280,9 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, quicrq_transport_m
         stream_ctx->send_state = quicrq_sending_stream;
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-    }
-    else {
+    } else if (transport_mode == quicrq_transport_mode_warp) {
+
+    } else {
         /* TODO: WARP, RUSH */
         ret = -1;
     }
