@@ -269,7 +269,7 @@ int quicrq_fragment_propose_to_cache(quicrq_fragment_cache_t* cache_ctx,
 
     if (ret == 0 && data_was_added) {
         /* Wake up the consumers of this source */
-        quicrq_source_wakeup(cache_ctx->srce_ctx, cache_ctx->highest_group_id, cache_ctx->highest_object_id);
+        quicrq_source_wakeup(cache_ctx->srce_ctx);
         /* Check whether this object is now complete */
         last_fragment_node = picosplay_find_previous(&cache_ctx->fragment_tree, &key);
         first_fragment_state = (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(last_fragment_node);

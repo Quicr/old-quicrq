@@ -320,7 +320,7 @@ int quicrq_congestion_basic_recv_test()
 
 int quicrq_congestion_basic_loss_test()
 {
-    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, 0x7080, 0, 180, 0x82);
+    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, 0x7080, 0, 182, 0x82);
 
     return ret;
 }

@@ -985,7 +985,7 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
 }
 
 /// stream_ctx - this is for control channel
-void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx, uint64_t highest_group_id, uint64_t highest_object_id)
+void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->cnx_ctx->cnx != NULL) {
         if (stream_ctx->transport_mode == quicrq_transport_mode_datagram) {
@@ -1003,21 +1003,22 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx, uint64_t highes
              *  TODO: mix of transport types (datagram & stream) along the path and its implications
              *        on the cache organization
              */
-
             quicrq_uni_stream_ctx_t * uni_stream_ctx = stream_ctx->first_uni_stream;
             uint64_t max_group_id = uni_stream_ctx->current_group_id;
+            uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
+
             /* loop through all the unistreams, since more than one can be active */
             while(uni_stream_ctx != NULL) {
                 if (uni_stream_ctx->current_group_id > max_group_id) {
                     max_group_id = uni_stream_ctx->current_group_id;
                 }
-                picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+                picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
             }
             /* create uni_streams for unseen group_id from the cache */
             for(uint64_t i = max_group_id; i < highest_group_id; i++) {
-                uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx, 1);
+                uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
                 quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_ctx->cnx_ctx, uni_stream_id, 1);
-                picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+                picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
             }
 
             /* TODO: how to reset/mark a uni_stream as finished .should it be done in here or somewhere else*/
@@ -1033,11 +1034,11 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx, uint64_t highes
  * and possibly stream.
  * TODO: for datagram, we may want to manage a queue of media for which data is ready.
  */
-void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx, uint64_t highest_group_id, uint64_t highest_object_id)
+void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx)
 {
     quicrq_stream_ctx_t* stream_ctx = srce_ctx->first_stream;
     while (stream_ctx != NULL) {
-        quicrq_wakeup_media_stream(stream_ctx, highest_group_id, highest_object_id);
+        quicrq_wakeup_media_stream(stream_ctx);
         stream_ctx = stream_ctx->next_stream_for_source;
     }
 }

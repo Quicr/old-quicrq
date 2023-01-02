@@ -1829,7 +1829,7 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                 if (is_finished) {
                     /* Decode the incoming message */
                     quicrq_message_t incoming = { 0 };
-                    const uint8_t* r_bytes = quicrq_msg_decode(uni_stream_ctx->message_buffer.buffer, uni_stream_ctx->message_buffer.buffer + stream_ctx->message_receive.message_size, &incoming);
+                    const uint8_t* r_bytes = quicrq_msg_decode(uni_stream_ctx->message_buffer.buffer, uni_stream_ctx->message_buffer.buffer + uni_stream_ctx->message_buffer.message_size, &incoming);
 
                     if (r_bytes == NULL) {
                         /* Message was incorrect */
@@ -1931,30 +1931,32 @@ int quicrq_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
-            if ((stream_id & 2) == 0 && stream_ctx == NULL) {
-                /* Retrieve, or create and initialize stream context for control channel */
-                stream_ctx = quicrq_find_or_create_stream(stream_id, cnx_ctx, 1);
+
+            if ((stream_id & 2) == 0) {
                 if (stream_ctx == NULL) {
-                    /* Internal error */
-                    (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
-                    return(-1);
+                    /* Retrieve, or create and initialize stream context for control channel */
+                    stream_ctx = quicrq_find_or_create_stream(stream_id, cnx_ctx, 1);
+                    if (stream_ctx == NULL) {
+                        /* Internal error */
+                        (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
+                        return(-1);
+                    }
                 }
 
                 /* we consider unidir streams as warp/rush streams. may be we need something more explicit */
-                ret = quicrq_receive_stream_data(stream_ctx, bytes, length,(fin_or_event == picoquic_callback_stream_fin));
-
-            } else {
-
+                ret = quicrq_receive_stream_data(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
+            }
+            else {
                 uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_id, cnx_ctx, 1);
                 if (uni_stream_ctx == NULL) {
                     /* Internal error */
-                    (void) picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
+                    (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
                     return (-1);
                 }
 
                 /* we consider unidirectional streams as warp/rush streams. maybe we need something more explicit */
                 ret = quicrq_receive_warp_or_rush_stream_data(cnx_ctx, uni_stream_ctx, bytes, length,
-                                                              (fin_or_event == picoquic_callback_stream_fin));
+                    (fin_or_event == picoquic_callback_stream_fin));
             }
 
             break;

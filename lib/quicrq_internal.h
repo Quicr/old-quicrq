@@ -234,7 +234,7 @@ typedef enum {
 typedef struct st_quicrq_media_source_ctx_t quicrq_media_source_ctx_t;
 
 void quicrq_delete_source(quicrq_media_source_ctx_t* srce_ctx, quicrq_ctx_t* qr_ctx);
-void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx, uint64_t highest_group_id, uint64_t highest_object_id);
+void quicrq_source_wakeup(quicrq_media_source_ctx_t* srce_ctx);
 
 quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, size_t url_length,
     void* cache_ctx, int is_local_object_source, int is_cache_real_time);
@@ -272,7 +272,7 @@ struct st_quicrq_media_source_ctx_t {
 quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, const uint8_t* url, const size_t url_length);
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx);
-void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx, uint64_t highest_group_id, uint64_t highest_object_id);
+void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
 
 /* Quic media consumer. Old definition, moved to internal only.
  * 
