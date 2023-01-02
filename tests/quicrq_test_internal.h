@@ -93,6 +93,7 @@ typedef struct st_quicrq_test_config_t {
     int nb_nodes;
     quicrq_ctx_t** nodes;
     int nb_links;
+    int congested_link_id;
     picoquictest_sim_link_t** links;
     int* return_links;
     int nb_attachments;
@@ -142,6 +143,8 @@ extern const generation_parameters_t video_1mps;
 int quicrq_compare_media_file(char const* media_result_file, char const* media_reference_file);
 int quicrq_compare_media_file_ex(char const* media_result_file, char const* media_reference_file,
     int* nb_losses, uint8_t* loss_flag, uint64_t start_group_id, uint64_t start_object_id);
+int quicrq_log_file_statistics(char const* media_result_log, int* nb_frames, int* nb_losses,
+    uint64_t* delay_average, uint64_t* delay_min, uint64_t* delay_max);
 int test_media_is_audio(const uint8_t* url, size_t url_length);
 
 typedef struct st_test_object_stream_ctx_t {

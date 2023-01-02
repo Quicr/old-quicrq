@@ -300,7 +300,7 @@ void quicrq_app_free_sources(quicrq_app_loop_cb_t* cb_ctx)
 }
 
 char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char const* scenario,
-    uint64_t current_time, int use_datagrams, quicrq_cnx_ctx_t * cnx_ctx)
+    uint64_t current_time, quicrq_transport_mode_enum transport_mode, quicrq_cnx_ctx_t * cnx_ctx)
 {
     /* parse the current scenario until end of line or semicolon */
     char const* next_char = scenario;
@@ -330,8 +330,7 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
             }
             else if (cb_ctx->mode == quicrq_app_mode_client) {
                 /* Post the media */
-                ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)url, url_length, 
-                    /* Crutch */ (use_datagrams) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream);
+                ret = quicrq_cnx_post_media(cnx_ctx, (uint8_t*)url, url_length, transport_mode);
                 if (ret != 0) {
                     fprintf(stderr, "Cannot post url for scenario: %s\n", scenario);
                 }
@@ -347,7 +346,7 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
                 if (ret == 0) {
                     test_object_stream_ctx_t* object_stream_ctx = NULL;
                     object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)url, url_length,
-                        /* Crutch */(use_datagrams) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream, path, log_path);
+                        transport_mode, path, log_path);
                     if (object_stream_ctx == NULL) {
                         ret = -1;
                     }
@@ -375,13 +374,13 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
 }
 
 int quic_app_scenario_parse(quicrq_app_loop_cb_t* cb_ctx, char const* scenario,
-    uint64_t current_time, int use_datagrams, quicrq_cnx_ctx_t* cnx_ctx)
+    uint64_t current_time, quicrq_transport_mode_enum transport_mode, quicrq_cnx_ctx_t* cnx_ctx)
 {
     char const* next_char = scenario;
 
     while (next_char != NULL && *next_char != 0) {
         next_char = quic_app_scenario_parse_line(cb_ctx, next_char, current_time,
-            use_datagrams, cnx_ctx);
+            transport_mode, cnx_ctx);
     }
 
     return (next_char == NULL) ? -1 : 0;
@@ -390,7 +389,8 @@ int quic_app_scenario_parse(quicrq_app_loop_cb_t* cb_ctx, char const* scenario,
 int quic_app_loop(picoquic_quic_config_t* config,
     int mode,
     const char* server_name,
-    int use_datagram,
+    quicrq_transport_mode_enum transport_mode,
+    int congestion_mode,
     int server_port,
     char const* scenario)
 {
@@ -426,8 +426,8 @@ int quic_app_loop(picoquic_quic_config_t* config,
             ret = -1;
         }
         else {
-            /* Enable congestion control by default */
-            quicrq_enable_congestion_control(cb_ctx.qr_ctx, 1);
+            /* Enable congestion control or not, based on CLI choice */
+            quicrq_enable_congestion_control(cb_ctx.qr_ctx, congestion_mode);
 
             /* Setting logs, etc. */
             quicrq_set_quic(cb_ctx.qr_ctx, quic);
@@ -448,7 +448,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
     }
     /* Set up a default receiver on the server */
     if (ret == 0 && mode == quicrq_app_mode_server) {
-        quicrq_enable_origin(cb_ctx.qr_ctx, /* Crutch */ (use_datagram) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream);
+        quicrq_enable_origin(cb_ctx.qr_ctx, transport_mode);
     }
 
     /* If client or relay, resolve the address */
@@ -463,7 +463,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
     }
     /* If relay, enable relaying */
     if (ret == 0 && mode == quicrq_app_mode_relay) {
-        ret = quicrq_enable_relay(cb_ctx.qr_ctx, sni, (struct sockaddr*)&addr, use_datagram);
+        ret = quicrq_enable_relay(cb_ctx.qr_ctx, sni, (struct sockaddr*)&addr, transport_mode);
         if (ret != 0) {
             fprintf(stderr, "Cannot initialize relay to %s\n", server_name);
         }
@@ -490,7 +490,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
         }
         else {
             ret = quic_app_scenario_parse(&cb_ctx, scenario, current_time,
-                use_datagram, cnx_ctx);
+                transport_mode, cnx_ctx);
         }
     }
 
@@ -527,6 +527,10 @@ void usage()
     fprintf(stderr, "  and either 'd' or 's' for datagram or stream mode.\n");
     fprintf(stderr, "  For the server and relay mode, use -p to specify the port,\n");
     fprintf(stderr, "  and also -c and -k for certificate and matching private key.\n");
+    fprintf(stderr, "\nOptions include generic picoquic options and QUICRQ option:\n");
+    fprintf(stderr, "  -f congestion_mode    Specify whether to drop frames during congestion:\n");
+    fprintf(stderr, "                        -f 1  drop low priority frames,\n");
+    fprintf(stderr, "                        -f 0  do not drop any frame (default).\n");
     picoquic_config_usage();
     fprintf(stderr, "\nOn the client, the scenario argument specifies the media files\n");
     fprintf(stderr, "that should be retrieved (get) or published (post):\n");
@@ -546,8 +550,9 @@ int main(int argc, char** argv)
     int ret = 0;
     quicrq_app_mode_enum mode = 0;
     const char* server_name = NULL;
-    int use_datagram = 0;
+    quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_single_stream;
     int server_port = -1;
+    int congestion_mode = 0;
     char const* scenario = NULL;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
@@ -556,12 +561,23 @@ int main(int argc, char** argv)
     fprintf(stdout, "QUICRQ Version %s, Picoquic Version %s\n", QUICRQ_VERSION, PICOQUIC_VERSION);
 
     picoquic_config_init(&config);
-    ret = picoquic_config_option_letters(option_string, sizeof(option_string), NULL);
+    memcpy(option_string, "f:", 7);
+    ret = picoquic_config_option_letters(option_string + 2, sizeof(option_string) - 2, NULL);
 
     if (ret == 0) {
         /* Get the parameters */
         while ((opt = getopt(argc, argv, option_string)) != -1) {
             switch (opt) {
+            case 'f':
+                congestion_mode = atoi(optarg);
+                if (congestion_mode <= 0 || congestion_mode > 1) {
+                    fprintf(stderr, "Invalid congestion mode: %s\n", optarg);
+                    usage();
+                }
+                break;
+            case 'h':
+                usage();
+                break;
             default:
                 if (picoquic_config_command_line(opt, &optind, argc, (char const**)argv, optarg, &config) != 0) {
                     usage();
@@ -601,10 +617,16 @@ int main(int argc, char** argv)
                 server_port = atoi(argv[optind++]);
 
                 if (strcmp(a_d_s, "d") == 0) {
-                    use_datagram = 1;
+                    transport_mode = quicrq_transport_mode_datagram;
+                }
+                else if (strcmp(a_d_s, "r") == 0) {
+                    transport_mode = quicrq_transport_mode_rush;
+                }
+                else if (strcmp(a_d_s, "w") == 0) {
+                    transport_mode = quicrq_transport_mode_warp;
                 }
                 else if (strcmp(a_d_s, "s") == 0) {
-                    use_datagram = 0;
+                    transport_mode = quicrq_transport_mode_single_stream;
                 }
                 else {
                     usage();
@@ -637,7 +659,7 @@ int main(int argc, char** argv)
     }
 
     /* Run */
-    ret = quic_app_loop(&config, mode, server_name, use_datagram, server_port, scenario);
+    ret = quic_app_loop(&config, mode, server_name, transport_mode, congestion_mode, server_port, scenario);
     /* Clean up */
     picoquic_config_clear(&config);
     /* Exit */

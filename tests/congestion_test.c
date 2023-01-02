@@ -12,8 +12,26 @@
  * Client #2 gets the media fragment.
  */
 
+typedef enum {
+    congestion_mode_full = 0,
+    congestion_mode_zero,
+    congestion_mode_half
+} congestion_mode_enum;
+
+
+typedef struct st_quicrq_congestion_test_t {
+    uint64_t simulate_losses;
+    int congested_receiver;
+    int max_drops;
+    congestion_mode_enum congestion_mode;
+    uint8_t min_loss_flag;
+    uint64_t average_delay_target;
+    uint64_t max_delay_target;
+
+} quicrq_congestion_test_t;
+
 /* Create a test network */
-quicrq_test_config_t* quicrq_test_congestion_config_create(uint64_t simulate_loss, int congested_receiver)
+quicrq_test_config_t* quicrq_test_congestion_config_create(quicrq_congestion_test_t * spec)
 {
     int ret = 0;
     /* Create a configuration with three nodes, four links, one source and 8 attachment points.*/
@@ -35,9 +53,12 @@ quicrq_test_config_t* quicrq_test_congestion_config_create(uint64_t simulate_los
             NULL, NULL, config->test_server_cert_store_file, NULL, NULL,
             NULL, 0, &config->simulated_time);
 
-        congested_link = picoquictest_sim_link_create(0.001, 10000, NULL, 0, config->simulated_time);
+        if (spec->congestion_mode != congestion_mode_zero) {
+            congested_link = picoquictest_sim_link_create(0.001, 10000, NULL, 0, config->simulated_time);
+        }
 
-        if (config->nodes[0] == NULL || config->nodes[1] == NULL || config->nodes[2] == NULL || congested_link == NULL) {
+        if (config->nodes[0] == NULL || config->nodes[1] == NULL || config->nodes[2] == NULL || 
+            (spec->congestion_mode != congestion_mode_zero && congested_link == NULL)) {
             ret = -1;
         }
 
@@ -66,9 +87,9 @@ quicrq_test_config_t* quicrq_test_congestion_config_create(uint64_t simulate_los
         config->attachments[3].link_id = 3;
         config->attachments[3].node_id = 2;
         /* Set the desired loss pattern */
-        config->simulate_loss = simulate_loss;
+        config->simulate_loss = spec->simulate_losses;
         /* Replace the selected link by the congested link */
-        if (congested_receiver) {
+        if (spec->congested_receiver) {
             srce_node_id = 0;
             dest_node_id = 2;
         }
@@ -82,9 +103,10 @@ quicrq_test_config_t* quicrq_test_congestion_config_create(uint64_t simulate_los
             /* Bug! */
             ret = -1;
         }
-        else {
+        else if (spec->congestion_mode != congestion_mode_zero){
             picoquictest_sim_link_delete(config->links[replaced_link_id]);
             config->links[replaced_link_id] = congested_link;
+            config->congested_link_id = replaced_link_id;
         }
     }
 
@@ -102,7 +124,7 @@ quicrq_test_config_t* quicrq_test_congestion_config_create(uint64_t simulate_los
 }
 
 /* Basic relay test */
-int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, int congested_receiver, int max_drops, uint8_t min_loss_flag)
+int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, quicrq_congestion_test_t * spec)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -110,7 +132,7 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
     int is_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
-    quicrq_test_config_t* config = quicrq_test_congestion_config_create(simulate_losses, congested_receiver);
+    quicrq_test_config_t* config = quicrq_test_congestion_config_create(spec);
     quicrq_cnx_ctx_t* cnx_ctx_1 = NULL;
     quicrq_cnx_ctx_t* cnx_ctx_2 = NULL;
     char media_source_path[512];
@@ -119,11 +141,12 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
     char text_log_name[512];
     size_t nb_log_chars = 0;
     int partial_closure = 0;
+    int half_congestion = spec->congestion_mode == congestion_mode_half;
     uint64_t client2_close_time = UINT64_MAX;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%c-%llx-%d.txt", is_real_time,
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%c-%llx-%d-%d.txt", is_real_time,
         quicrq_transport_mode_to_letter(transport_mode),
-        (unsigned long long)simulate_losses, congested_receiver);
+        (unsigned long long)spec->simulate_losses, spec->congested_receiver, (int)spec->congestion_mode);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
         transport_mode, is_real_time, 1,
@@ -208,6 +231,15 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
         /* Run the simulation. Monitor the connection. Monitor the media. */
         int is_active = 0;
 
+        if (config->simulated_time > 5000000 && half_congestion) {
+            /* Reset bandwidth of congested link to normal value, to simulate
+             * transient congestion affecting only half of the connection */
+            double pico_d = 8000.0 / 0.01 /* data_rate_in_gps */;
+            pico_d *= (1.024 * 1.024); /* account for binary units */
+            config->links[config->congested_link_id]->picosec_per_byte = (uint64_t)pico_d;
+            half_congestion = 0;
+        }
+
         ret = quicrq_test_loop_step(config, &is_active, UINT64_MAX);
         if (ret != 0) {
             DBG_PRINTF("Fail on loop step %d, %d, active: ret=%d", nb_steps, is_active, ret);
@@ -280,16 +312,44 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
             ret = quicrq_compare_media_file_ex(result_file_name, media_source_path, &observed_drops, &observed_min_loss, 0, 0);
 
             if (ret == 0) {
-                if (observed_drops > max_drops) {
-                    DBG_PRINTF("Got %d drops, larger than %d\n", observed_drops, max_drops);
+                if (observed_drops > spec->max_drops) {
+                    DBG_PRINTF("Got %d drops, larger than %d\n", observed_drops, spec->max_drops);
                     ret = -1;
                 }
-                else if (observed_min_loss < min_loss_flag) {
-                    DBG_PRINTF("Drop level 0x%x, expected 0x%x\n", observed_min_loss, min_loss_flag);
+                else if (observed_min_loss < spec->min_loss_flag) {
+                    DBG_PRINTF("Drop level 0x%x, expected 0x%x\n", observed_min_loss, spec->min_loss_flag);
                     ret = -1;
                 }
                 else {
                     /* To do: parse the log file to get the max delay. */
+                    int nb_frames;
+                    int nb_losses;
+                    uint64_t delay_average;
+                    uint64_t delay_min;
+                    uint64_t delay_max;
+
+                    ret = quicrq_log_file_statistics(result_log_name, &nb_frames, &nb_losses,
+                        &delay_average, &delay_min, &delay_max);
+
+                    if (ret == 0){
+                        if (nb_losses != observed_drops) {
+                            DBG_PRINTF("Inconsistent loss counts, %d vs %d", nb_losses, observed_drops);
+                            ret = -1;
+                        }
+                        else if (spec->average_delay_target > 0 &&
+                            delay_average > spec->average_delay_target) {
+                            DBG_PRINTF("Average delay %" PRIu64 ", exceeds %" PRIu64,
+                                delay_average, spec->average_delay_target);
+                            ret = -1;
+                        }
+                        else if (spec->max_delay_target > 0 &&
+                            delay_max > spec->max_delay_target) {
+                            DBG_PRINTF("Average delay %" PRIu64 ", exceeds %" PRIu64,
+                                delay_max, spec->max_delay_target);
+                            ret = -1;
+                        }
+                    }
+
                 }
             }
         }
@@ -306,49 +366,191 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
 
 int quicrq_congestion_basic_test()
 {
-    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 85, 0x82);
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 85;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 250000;
+    spec.max_delay_target = 700000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
-int quicrq_congestion_basic_recv_test()
+int quicrq_congestion_basic_half_test()
 {
-    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, 0, 1, 85, 0x82);
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 38;
+    spec.min_loss_flag = 0x82;
+    spec.congestion_mode = congestion_mode_half;
+    spec.average_delay_target = 110000;
+    spec.max_delay_target = 500000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_congestion_basic_loss_test()
 {
-    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, 0x7080, 0, 182, 0x82);
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0x7080;
+    spec.congested_receiver = 0;
+    spec.max_drops = 97;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 190000;
+    spec.max_delay_target = 700000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_basic_recv_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 1;
+    spec.max_drops = 74;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 215000;
+    spec.max_delay_target = 580000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_basic_zero_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 0;
+    spec.min_loss_flag = 0x82;
+    spec.congestion_mode = congestion_mode_zero;
+    spec.average_delay_target = 26000;
+    spec.max_delay_target = 110000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_test()
 {
-    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, 0, 0, 82, 0x82);
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 73;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 210000;
+    spec.max_delay_target = 700000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_datagram_half_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 37;
+    spec.min_loss_flag = 0x82;
+    spec.congestion_mode = congestion_mode_half;
+    spec.average_delay_target = 125000;
+    spec.max_delay_target = 610000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_loss_test()
 {
-    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 115, 0x82);
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0x7080;
+    spec.congested_receiver = 0;
+    spec.max_drops = 98;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 230000;
+    spec.max_delay_target = 820000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_recv_test()
 {
-    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, 0, 1, 82, 0x82);
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 1;
+    spec.max_drops = 74;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 220000;
+    spec.max_delay_target = 760000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_congestion_datagram_rloss_test()
 {
-    int ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, 0x7080, 1, 115, 0x82);
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0x7080;
+    spec.congested_receiver = 1;
+    spec.max_drops = 101;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 220000;
+    spec.max_delay_target = 800000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_datagram_zero_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 0;
+    spec.min_loss_flag = 0x82;
+    spec.congestion_mode = congestion_mode_zero;
+    spec.average_delay_target = 26000;
+    spec.max_delay_target = 115000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
