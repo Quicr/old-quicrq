@@ -92,6 +92,7 @@ extern "C" {
     int quicrq_fourlegs_datagram_loss_test();
     int quicrq_fragment_cache_fill_test();
     int quicrq_get_addr_test();
+    int quicrq_warp_basic_test();
 
 #ifdef __cplusplus
 }

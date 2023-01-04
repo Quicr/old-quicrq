@@ -1033,8 +1033,8 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
              *        on the cache organization
              */
             quicrq_uni_stream_ctx_t * uni_stream_ctx = stream_ctx->first_uni_stream;
-            uint64_t max_group_id = uni_stream_ctx->current_group_id;
             uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
+            uint64_t max_group_id = 0; /* TODO: check that! */
 
             /* loop through all the unistreams, since more than one can be active */
             while(uni_stream_ctx != NULL) {
