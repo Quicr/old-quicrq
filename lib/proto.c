@@ -580,30 +580,45 @@ const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t
  * quicrq_object_header_message {
  *     message_type(i),
  *     object_id(i),
+ *     [nb_objects_previous_group(i),]
+ *     flags[8],
  *     length(i),
  *     data(...)
  * }
+ * 
+ * The nb_objects_previous_group is only set if the object_id is zero.
  */
 
-size_t quicrq_object_header_msg_reserve(uint64_t object_id, size_t data_length)
+size_t quicrq_object_header_msg_reserve(uint64_t object_id, uint64_t nb_objects_previous_group, size_t data_length)
 {
-    size_t len = 1 +
-                 picoquic_frames_varint_encode_length(object_id);
-
+    size_t len = 1 + picoquic_frames_varint_encode_length(object_id) +
+        ((object_id == 0) ? picoquic_frames_varint_encode_length(nb_objects_previous_group) : 0)
+        + 1;
     len += picoquic_frames_varint_encode_length(data_length);
+    len += data_length;
     return len;
 }
 
 uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t object_id,
-                                         size_t length, const uint8_t *data)
+    uint64_t nb_objects_previous_group, uint8_t flags, size_t length, const uint8_t *data)
 {
-    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL) {
-        bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id);
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id)) != NULL) {
+        if (object_id == 0) {
+            bytes = picoquic_frames_varint_encode(bytes, bytes_max, nb_objects_previous_group);
+        }
         if (bytes != NULL) {
-            if (data != NULL) {
-                bytes = picoquic_frames_length_data_encode(bytes, bytes_max, length, data);
-            } else {
-                bytes = picoquic_frames_varint_encode(bytes, bytes_max, length);
+            if (bytes < bytes_max) {
+                *bytes++ = flags;
+                if (data != NULL) {
+                    bytes = picoquic_frames_length_data_encode(bytes, bytes_max, length, data);
+                }
+                else {
+                    bytes = picoquic_frames_varint_encode(bytes, bytes_max, length);
+                }
+            }
+            else {
+                bytes = NULL;
             }
         }
     }
@@ -611,17 +626,29 @@ uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uin
 }
 
 const uint8_t* quicrq_object_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
-                                               uint64_t* object_id, size_t *length, const uint8_t **data)
+    uint64_t *object_id, uint64_t *nb_objects_previous_group, uint8_t* flags, size_t *length, const uint8_t **data)
 {
-    object_id = 0;
+    *object_id = 0;
+    *nb_objects_previous_group = 0;
+    *flags = 0;
     *length = 0;
     *data = NULL;
-    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL){
-        bytes = picoquic_frames_varint_decode(bytes, bytes_max, object_id);
-        if (bytes != NULL &&
-            (bytes = picoquic_frames_varlen_decode(bytes, bytes_max, length)) != NULL) {
-            *data = bytes;
-            bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *length);
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, object_id)) != NULL){
+        if (*object_id == 0) {
+            bytes = picoquic_frames_varint_decode(bytes, bytes_max, nb_objects_previous_group);
+        }
+        if (bytes != NULL) {
+            if (bytes < bytes_max) {
+                *flags = *bytes++;
+                if ((bytes = picoquic_frames_varlen_decode(bytes, bytes_max, length)) != NULL) {
+                    *data = bytes;
+                    bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *length);
+                }
+            }
+            else {
+                bytes = NULL;
+            }
         }
     }
     return bytes;
@@ -675,7 +702,8 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
             bytes = quicrq_warp_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->media_id, &msg->group_id);
             break;
         case QUICRQ_ACTION_OBJECT_HEADER:
-            bytes = quicrq_object_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->object_id, &msg->length, &msg->data);
+            bytes = quicrq_object_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->object_id,
+                &msg->nb_objects_previous_group, &msg->flags, &msg->length, &msg->data);
             break;
         default:
             /* Unexpected message type */
@@ -728,7 +756,8 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         bytes = quicrq_warp_header_msg_encode(bytes, bytes_max, msg->message_type, msg->media_id, msg->group_id);
         break;
     case QUICRQ_ACTION_OBJECT_HEADER:
-        bytes = quicrq_object_header_msg_encode(bytes, bytes_max, msg->message_type, msg->object_id, msg->length, msg->data);
+        bytes = quicrq_object_header_msg_encode(bytes, bytes_max, msg->message_type, msg->object_id,
+            msg->nb_objects_previous_group, msg->flags, msg->length, msg->data);
         break;
     default:
         /* Unexpected message type */
@@ -1017,7 +1046,7 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
             /* create uni_streams for unseen group_id from the cache */
             for(uint64_t i = max_group_id; i < highest_group_id; i++) {
                 uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
-                quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_ctx->cnx_ctx, uni_stream_id, 1);
+                quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_or_create_uni_stream(uni_stream_id, stream_ctx->cnx_ctx, 1);
                 picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
             }
 
