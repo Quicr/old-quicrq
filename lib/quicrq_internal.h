@@ -350,9 +350,9 @@ typedef enum {
  */
 typedef enum {
     quicrq_sending_open = 0,
-    quicrq_sending_header,
+    quicrq_sending_warp_header_sent,
+    quicrq_sending_object_header_ready, /* this is where the header is sent */
     quicrq_sending_object_header,
-    quicrq_sending_object_data,
 } quicrq_uni_stream_sending_state_enum;
 
 typedef enum {
@@ -403,6 +403,7 @@ struct st_quicrq_uni_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* control_stream_ctx;
     uint64_t stream_id;
     uint64_t current_group_id;
+    uint16_t final_object_id; /* == 0, new group */
 
     /* UniStream state */
     quicrq_uni_stream_sending_state_enum send_state;
