@@ -1526,8 +1526,10 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             }
             else {
                 /* Check whether the next fragment is available */
-                uint8_t flags;
-                size_t next_object_size = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id, & flags, NULL);
+                uint8_t flags = 0;
+                uint64_t nb_objects_previous_group = 0;
+                size_t next_object_size = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id,
+                    &nb_objects_previous_group, &flags, NULL);
 
                 if (next_object_size > 0) {
                     quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
@@ -1538,12 +1540,12 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
                     else {
                         uint8_t* message_next = quicrq_object_header_msg_encode(message->buffer,
                             message->buffer + message->buffer_alloc,
-                            QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id, 0, flags, next_object_size, NULL);
+                            QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id, nb_objects_previous_group, flags, next_object_size, NULL);
                         if (message_next == NULL) {
                             ret = -1;
                         }
                         else {
-                            size_t copied = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id, &flags, message_next);
+                            size_t copied = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id, &nb_objects_previous_group, &flags, message_next);
                             if (copied != next_object_size) {
                                 ret = -1;
                             }
