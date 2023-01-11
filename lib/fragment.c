@@ -1088,6 +1088,17 @@ int quicrq_fragment_datagram_publisher_fn(
     return ret;
 }
 
+/* Copy a full object from the cache.
+ * - return the size of the object if it is completely received
+ * - returns 0 if the object is not yet received
+ * - copy the bytes into buffer if "buffer" is not NULL.
+ */
+size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint8_t * flags, uint8_t* buffer)
+{
+    /* TODO: read fragments in sequence until the next fragment */
+    return 0;
+}
+
 void* quicrq_fragment_publisher_subscribe(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t * stream_ctx)
 {
     quicrq_fragment_publisher_context_t* media_ctx = (quicrq_fragment_publisher_context_t*)

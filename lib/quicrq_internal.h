@@ -162,6 +162,11 @@ const uint8_t* quicrq_cache_policy_msg_decode(const uint8_t* bytes, const uint8_
 size_t quicrq_warp_header_msg_reserve(uint64_t media_id, uint64_t group_id);
 uint8_t* quicrq_warp_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t media_id, uint64_t group_id);
 const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* media_id, uint64_t* group_id);
+size_t quicrq_object_header_msg_reserve(uint64_t object_id, uint64_t nb_objects_previous_group, size_t data_length);
+uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t object_id,
+    uint64_t nb_objects_previous_group, uint8_t flags, size_t length, const uint8_t* data);
+const uint8_t* quicrq_object_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+    uint64_t* object_id, uint64_t* nb_objects_previous_group, uint8_t* flags, size_t* length, const uint8_t** data);
 
 /* Encode and decode the header of datagram packets. */
 #define QUICRQ_DATAGRAM_HEADER_MAX 16
@@ -351,8 +356,9 @@ typedef enum {
 typedef enum {
     quicrq_sending_open = 0,
     quicrq_sending_warp_header_sent,
-    quicrq_sending_object_header_ready, /* this is where the header is sent */
     quicrq_sending_object_header,
+    quicrq_sending_warp_all_sent,
+    quicrq_sending_warp_should_close
 } quicrq_uni_stream_sending_state_enum;
 
 typedef enum {
@@ -403,6 +409,7 @@ struct st_quicrq_uni_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* control_stream_ctx;
     uint64_t stream_id;
     uint64_t current_group_id;
+    uint64_t current_object_id;
     uint16_t final_object_id; /* == 0, new group */
 
     /* UniStream state */
