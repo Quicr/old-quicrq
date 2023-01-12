@@ -276,7 +276,7 @@ int quicrq_fragment_datagram_publisher_fn(
     int* at_least_one_active,
     uint64_t current_time);
 
-size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint8_t* flags, uint8_t* buffer);
+size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint64_t* nb_objects_previous_group, uint8_t* flags, uint8_t* buffer);
 
 void* quicrq_fragment_publisher_subscribe(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t* stream_ctx);
 

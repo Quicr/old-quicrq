@@ -1092,8 +1092,9 @@ int quicrq_fragment_datagram_publisher_fn(
  * - return the size of the object if it is completely received
  * - returns 0 if the object is not yet received
  * - copy the bytes into buffer if "buffer" is not NULL.
+ * - the nb_objects_previous_group and flags will be set to the value documented in the first fragment
  */
-size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint8_t * flags, uint8_t* buffer)
+size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint64_t* nb_objects_previous_group, uint8_t * flags, uint8_t* buffer)
 {
     /* TODO: read fragments in sequence until the next fragment */
     /* Find all cache fragments that might be before the start point,
