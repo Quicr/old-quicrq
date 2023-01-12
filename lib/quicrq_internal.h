@@ -616,7 +616,7 @@ quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uin
 
 quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
         uint64_t stream_id,
-        quicrq_cnx_ctx_t* cnx_ctx,
+        quicrq_stream_ctx_t* stream_ctx,
         int should_create);
 
 quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(

@@ -1096,6 +1096,36 @@ int quicrq_fragment_datagram_publisher_fn(
 size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint8_t * flags, uint8_t* buffer)
 {
     /* TODO: read fragments in sequence until the next fragment */
+    /* Find all cache fragments that might be before the start point,
+   * and delete them */
+    size_t object_size = 0;
+    uint64_t current_offset = 0;
+    picosplay_node_t* fragment_node = NULL;
+
+    /* find the fragment tree for the group/object */
+    quicrq_cached_fragment_t key = { 0 };
+    key.group_id = group_id;
+    key.object_id = object_id;
+    key.offset = 0;
+    fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
+
+    while ((fragment_node = picosplay_first(&cache_ctx->fragment_tree)) != NULL) {
+        quicrq_cached_fragment_t* fragment_state =
+                (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+        /* compute the object size and fill the passed in buffer, if non-null*/
+        object_size += fragment_state->data_length;
+        if (buffer != NULL) {
+            memcpy(buffer, fragment_state->data + current_offset, fragment_state->data_length);
+            current_offset += fragment_state->data_length;
+        }
+
+        if (fragment_state->is_last_fragment) {
+            /* we found all the fragments, return total length */
+            *flags = fragment_state->flags;
+            return object_size;
+        }
+    }
+
     return 0;
 }
 

@@ -1042,13 +1042,24 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                     max_group_id = uni_stream_ctx->current_group_id;
                 }
                 picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+                uni_stream_ctx = uni_stream_ctx->next_uni_stream;
             }
-            /* create uni_streams for unseen group_id from the cache */
-            for(uint64_t i = max_group_id; i < highest_group_id; i++) {
-                uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
-                quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_or_create_uni_stream(uni_stream_id, stream_ctx->cnx_ctx, 1);
-                picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+
+            if ( max_group_id == 0) {
+                /* first ever unistream */
+                //uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
+                //uni_stream_ctx = quicrq_find_or_create_uni_stream(uni_stream_id, stream_ctx, 1);
+                //picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+            } else {
+                /* create uni_streams for unseen group_id from the cache */
+                for(uint64_t i = max_group_id; i < highest_group_id; i++) {
+                    uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
+                    quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_or_create_uni_stream(uni_stream_id, stream_ctx->cnx_ctx, 1);
+                    picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+                }
             }
+
+
 
             /* TODO: how to reset/mark a uni_stream as finished .should it be done in here or somewhere else*/
         }

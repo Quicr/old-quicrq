@@ -1492,9 +1492,10 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
      *
      *
      */
+    /* prepare the message that needs to be sent */
     if (uni_stream_ctx->message_buffer.message_size == 0) {
         if (uni_stream_ctx->send_state == quicrq_sending_open) {
-            /* prepare warp_header */
+            /* prepare warp_header, since its the first time we are dealing with this stream */
             quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
             if (quicrq_msg_buffer_alloc(message, quicrq_warp_header_msg_reserve(uni_stream_ctx->control_stream_ctx->media_id, uni_stream_ctx->current_group_id), 0) != 0) {
                 ret = -1;
@@ -1511,13 +1512,6 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
                 uni_stream_ctx->send_state = quicrq_sending_warp_header_sent;
             }
         } else if(uni_stream_ctx->send_state == quicrq_sending_warp_header_sent) {
-            /* prepare object header, we need to handle these conditions
-             * 1. how to know there is next object and that it is ready
-             * 2. how to know if we need to go to the next group
-             * 3. how to handle that group might not come in the order
-             * 4. how to know where is the data bytes for the object payload
-             *
-             * */
             quicrq_fragment_publisher_context_t* media_ctx = uni_stream_ctx->control_stream_ctx->media_ctx;
             quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
             /* Check whether the fin object for the group is known */
@@ -1531,14 +1525,14 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
 
                 if (next_object_size > 0) {
                     quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
-
                     if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, 0, next_object_size), 0) != 0) {
                         ret = -1;
                     }
                     else {
                         uint8_t* message_next = quicrq_object_header_msg_encode(message->buffer,
                             message->buffer + message->buffer_alloc,
-                            QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id, 0, flags, next_object_size, NULL);
+                            QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
+                            0, flags, next_object_size, NULL);
                         if (message_next == NULL) {
                             ret = -1;
                         }
@@ -1554,7 +1548,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
                             }
                         }
                     }
-                }
+                } // next_object_size > 0
             }
 
         } else {
@@ -1777,7 +1771,8 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
-                            else if (incoming.transport_mode == quicrq_transport_mode_single_stream) {
+                            else if (incoming.transport_mode == quicrq_transport_mode_single_stream
+                                        || incoming.transport_mode == quicrq_transport_mode_warp) {
                                 /* Start sending stream without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_stream;
                                 stream_ctx->receive_state = quicrq_receive_done;
@@ -2653,24 +2648,35 @@ quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uin
     return stream_ctx;
 }
 
-quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id)
+quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(quicrq_stream_ctx_t * stream_ctx, uint64_t stream_id)
 {
-    quicrq_uni_stream_ctx_t* stream_ctx = (quicrq_uni_stream_ctx_t*)malloc(sizeof(quicrq_uni_stream_ctx_t));
-    if (stream_ctx != NULL) {
-        memset(stream_ctx, 0, sizeof(quicrq_uni_stream_ctx_t));
-        stream_ctx->stream_id = stream_id;
-        if (cnx_ctx->last_uni_stream == NULL) {
-            cnx_ctx->first_uni_stream = stream_ctx;
+    quicrq_uni_stream_ctx_t* uni_stream_ctx = (quicrq_uni_stream_ctx_t*)malloc(sizeof(quicrq_uni_stream_ctx_t));
+    if (uni_stream_ctx != NULL) {
+        memset(uni_stream_ctx, 0, sizeof(quicrq_uni_stream_ctx_t));
+        uni_stream_ctx->stream_id = stream_id;
+        if (stream_ctx->cnx_ctx->last_uni_stream == NULL) {
+            stream_ctx->cnx_ctx->first_uni_stream = uni_stream_ctx;
         }
         else {
-            cnx_ctx->last_uni_stream->next_uni_stream = stream_ctx;
+            stream_ctx->cnx_ctx->last_uni_stream->next_uni_stream = uni_stream_ctx;
         }
-        stream_ctx->previous_uni_stream = cnx_ctx->last_uni_stream;
-        cnx_ctx->last_uni_stream = stream_ctx;
-        quicrq_datagram_ack_ctx_init(cnx_ctx->control_stream);
+        uni_stream_ctx->previous_uni_stream = stream_ctx->cnx_ctx->last_uni_stream;
+        stream_ctx->cnx_ctx->last_uni_stream = uni_stream_ctx;
+        //quicrq_datagram_ack_ctx_init(stream_ctx->cnx_ctx->control_stream);
     }
 
-    return stream_ctx;
+    uni_stream_ctx->control_stream_ctx = stream_ctx;
+    if (stream_ctx->first_uni_stream == NULL) {
+        stream_ctx->first_uni_stream = uni_stream_ctx;
+        stream_ctx->last_uni_stream = NULL;
+    } else {
+        stream_ctx->first_uni_stream->next_uni_stream = uni_stream_ctx;
+        stream_ctx->last_uni_stream = uni_stream_ctx;
+    }
+
+
+
+    return uni_stream_ctx;
 }
 
 quicrq_stream_ctx_t* quicrq_find_or_create_stream(
@@ -2696,24 +2702,24 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
 
 quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
         uint64_t stream_id,
-        quicrq_cnx_ctx_t* cnx_ctx,
+        quicrq_stream_ctx_t *stream_ctx,
         int should_create)
 {
-    quicrq_uni_stream_ctx_t* stream_ctx = cnx_ctx->first_uni_stream;
+    quicrq_uni_stream_ctx_t* uni_stream_ctx = stream_ctx->cnx_ctx->first_uni_stream;
 
-    while (stream_ctx != NULL) {
-        if (stream_ctx->stream_id == stream_id) {
+    while (uni_stream_ctx != NULL) {
+        if (uni_stream_ctx->stream_id == stream_id) {
             break;
         }
-        stream_ctx = stream_ctx->next_uni_stream;
+        stream_ctx = uni_stream_ctx->next_uni_stream;
     }
 
-    if (stream_ctx == NULL && should_create) {
-        stream_ctx = quicrq_create_uni_stream_context(cnx_ctx, stream_id);
+    if (uni_stream_ctx == NULL && should_create) {
+        uni_stream_ctx = quicrq_create_uni_stream_context(stream_ctx, stream_id);
     }
 
 
-    return stream_ctx;
+    return uni_stream_ctx;
 }
 
 
