@@ -203,7 +203,6 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer)
  */
 int quicrq_msg_buffer_prepare_to_send_message(quicrq_message_buffer_t* msg_buffer, void* context, size_t space, int more_to_send)
 {
-    /* TODO: Refactor to work with uni_stream_ctx */
     int ret = 0;
     size_t total_size = msg_buffer->message_size;
     size_t total_to_send = 2 + total_size;
@@ -1517,6 +1516,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             /* Check whether the fin object for the group is known */
             if (uni_stream_ctx->final_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->final_object_id) {
                 uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
+                uni_stream_ctx->is_final_object_id_sent = 1;
             }
             else {
                 /* Check whether the next fragment is available */
@@ -1570,7 +1570,9 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
         }
     }
     else {
-        int more_to_send = 1;
+        int more_to_send = !uni_stream_ctx->is_final_object_id_sent;
+        quicrq_log_message(uni_stream_ctx->control_stream_ctx->cnx_ctx, "Send:UniStream %" PRIu64 ",  message buffer size = %" PRIu8,
+                           uni_stream_ctx->stream_id, uni_stream_ctx->message_buffer.message_size);
         ret = quicrq_msg_buffer_prepare_to_send_message(&uni_stream_ctx->message_buffer, context, space, more_to_send);
     }
 
@@ -2004,6 +2006,9 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                         /* Message was incorrect */
                         ret = -1;
                     } else {
+                        quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received message type=%" PRIu8,
+                                           uni_stream_ctx->stream_id, incoming.message_type);
+
                         switch (incoming.message_type) {
                             case QUICRQ_ACTION_WARP_HEADER:
                                 uni_stream_ctx->current_group_id = incoming.group_id;

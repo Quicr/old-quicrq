@@ -418,6 +418,7 @@ struct st_quicrq_uni_stream_ctx_t {
 
     /* Control flags */
     unsigned int is_sender : 1;
+    unsigned int is_final_object_id_sent: 1;
 
     quicrq_message_buffer_t message_buffer;
     /* TODO: Add priority */
@@ -497,6 +498,7 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_start_object_id_sent : 1;
     unsigned int is_final_object_id_sent : 1;
     unsigned int is_cache_policy_sent : 1;
+    unsigned int is_warp_mode_started: 1;
 
     quicrq_message_buffer_t message_sent;
     quicrq_message_buffer_t message_receive;
