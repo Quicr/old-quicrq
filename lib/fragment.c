@@ -1088,6 +1088,26 @@ int quicrq_fragment_datagram_publisher_fn(
     return ret;
 }
 
+/* Check whether the number of objects in the next group is known */
+uint64_t quicrq_fragment_get_object_count(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id)
+{
+    /* Find whether the next object is in cache */
+    quicrq_cached_fragment_t key = { 0 };
+    picosplay_node_t* fragment_node;
+    uint64_t nb_objects = 0;
+    key.group_id = group_id + 1;
+    key.object_id = 0;
+    key.offset = 0;
+    fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
+
+    if (fragment_node != NULL) {
+        quicrq_cached_fragment_t* fragment_state =
+            (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+        nb_objects = fragment_state->nb_objects_previous_group;
+    }
+    return nb_objects;
+}
+
 /* Copy a full object from the cache.
  * - return the size of the object if it is completely received
  * - returns 0 if the object is not yet received
@@ -1110,9 +1130,13 @@ size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t 
     key.offset = 0;
     fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
 
-    while ((fragment_node = picosplay_first(&cache_ctx->fragment_tree)) != NULL) {
+    while (fragment_node != NULL) {
         quicrq_cached_fragment_t* fragment_state =
                 (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+        if (fragment_state->group_id != group_id || fragment_state->object_id != group_id || fragment_state->offset != current_offset) {
+            /* Next fragment in order is not what we expect, so give up */
+            break;
+        }
         /* compute the object size and fill the passed in buffer, if non-null*/
         object_size += fragment_state->data_length;
         if (buffer != NULL) {

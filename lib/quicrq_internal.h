@@ -410,20 +410,17 @@ struct st_quicrq_uni_stream_ctx_t {
     uint64_t stream_id;
     uint64_t current_group_id;
     uint64_t current_object_id;
-    uint16_t final_object_id; /* == 0, new group */
-
+    uint64_t last_object_id; 
     /* UniStream state */
     quicrq_uni_stream_sending_state_enum send_state;
     quicrq_uni_stream_receive_state_enum receive_state;
 
     /* Control flags */
     unsigned int is_sender : 1;
-    unsigned int is_final_object_id_sent: 1;
 
     quicrq_message_buffer_t message_buffer;
     /* TODO: Add priority */
 };
-
 
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;

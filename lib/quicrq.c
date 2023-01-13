@@ -1514,9 +1514,16 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             quicrq_fragment_publisher_context_t* media_ctx = uni_stream_ctx->control_stream_ctx->media_ctx;
             quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
             /* Check whether the fin object for the group is known */
-            if (uni_stream_ctx->final_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->final_object_id) {
+            if (uni_stream_ctx->last_object_id == 0) {
+                if (uni_stream_ctx->control_stream_ctx->final_group_id == uni_stream_ctx->current_group_id) {
+                    uni_stream_ctx->last_object_id = uni_stream_ctx->control_stream_ctx->final_object_id;
+                }
+                else {
+                    uni_stream_ctx->last_object_id = quicrq_fragment_get_object_count(cache_ctx, uni_stream_ctx->current_group_id);
+                }
+            }
+            if (uni_stream_ctx->last_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->last_object_id) {
                 uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
-                uni_stream_ctx->is_final_object_id_sent = 1;
             }
             else {
                 /* Check whether the next fragment is available */
@@ -1562,7 +1569,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
         if (uni_stream_ctx->send_state == quicrq_sending_warp_all_sent) {
             /* TODO; send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
             (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
-            uni_stream_ctx->send_state == quicrq_sending_warp_should_close;
+            uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
         }
         else {
             /* Nothing to send */
@@ -1570,7 +1577,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
         }
     }
     else {
-        int more_to_send = !uni_stream_ctx->is_final_object_id_sent;
+        int more_to_send = uni_stream_ctx->send_state != quicrq_sending_warp_should_close;
         quicrq_log_message(uni_stream_ctx->control_stream_ctx->cnx_ctx, "Send:UniStream %" PRIu64 ",  message buffer size = %" PRIu8,
                            uni_stream_ctx->stream_id, uni_stream_ctx->message_buffer.message_size);
         ret = quicrq_msg_buffer_prepare_to_send_message(&uni_stream_ctx->message_buffer, context, space, more_to_send);
