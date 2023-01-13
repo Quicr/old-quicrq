@@ -1050,15 +1050,14 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                     if ( max_group_id == 0 && uni_stream_ctx == NULL) {
                         /* first ever unistream */
                         uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
-                        uni_stream_ctx = quicrq_find_or_create_uni_stream(uni_stream_id, stream_ctx, 1);
+                        uni_stream_ctx = quicrq_find_or_create_uni_stream(uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
                         picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
                     } else {
                         /* create uni_streams for unseen group_id from the cache */
                         for(uint64_t i = max_group_id; i < highest_group_id; i++) {
                             uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
-                            quicrq_uni_stream_ctx_t *uni_stream_ctx = quicrq_find_or_create_uni_stream(uni_stream_id,
-                                                                                                       stream_ctx->cnx_ctx,
-                                                                                                       1);
+                            quicrq_uni_stream_ctx_t *uni_stream_ctx = quicrq_find_or_create_uni_stream(
+                                uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
                             picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx,
                                                         uni_stream_ctx->stream_id, 1, uni_stream_ctx);
                         }
@@ -1155,24 +1154,23 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
 {
     int ret = 0;
     /* Process initial request */
-    stream_ctx->transport_mode = (use_datagram) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream;
     /* Open the media -- TODO, variants with different actions. */
     ret = quicrq_subscribe_local_media(stream_ctx, url, url_length);
     if (ret == 0) {
         quicrq_wakeup_media_stream(stream_ctx);
     }
     stream_ctx->is_sender = 1;
-    if (use_datagram) {
-        /* There is no data to send or receive on the control stream at this point.
-         * The sender might send repair messages and will send a final object eventually.
-         * The receiver will close the stream when not needed anymore. */
-        stream_ctx->send_state = quicrq_sending_ready;
-        stream_ctx->receive_state = quicrq_receive_done;
-    }
-    else {
+    if (stream_ctx->transport_mode == quicrq_transport_mode_single_stream) {
         stream_ctx->send_state = quicrq_sending_stream;
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+    }
+    else {
+        /* There is no data to send or receive on the control stream at this point.
+         * The sender will send a final object eventually.
+         * The receiver will close the stream when not needed anymore. */
+        stream_ctx->send_state = quicrq_sending_ready;
+        stream_ctx->receive_state = quicrq_receive_done;
     }
 
     return ret;

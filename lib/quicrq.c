@@ -1775,19 +1775,18 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
-                            else if (incoming.transport_mode == quicrq_transport_mode_single_stream
-                                        || incoming.transport_mode == quicrq_transport_mode_warp) {
+                            else if (incoming.transport_mode == quicrq_transport_mode_single_stream) {
                                 /* Start sending stream without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_stream;
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
-                            else if (incoming.transport_mode == quicrq_transport_mode_datagram) {
+                            else if (incoming.transport_mode == quicrq_transport_mode_datagram
+                                || incoming.transport_mode == quicrq_transport_mode_warp) {
                                 /* Start sending datagrams without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
                             }
-                            /* TODO: add case for WARP */
                             else {
                                 /* Not supported yet */
                                 ret = -1;
@@ -2014,13 +2013,21 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                 uni_stream_ctx->current_group_id = incoming.group_id;
                                 uni_stream_ctx->receive_state = quicrq_receive_warp_header;
                                 quicrq_stream_ctx_t* ctrl_stream_ctx = quicrq_get_control_stream_for_media_id(cnx_ctx, incoming.media_id);
-                                uni_stream_ctx->receive_state = quicrq_receive_warp_header;
-                                uni_stream_ctx->control_stream_ctx = ctrl_stream_ctx;
-                                /* todo: add check for null control stream */
-                                quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received warp header message uni_id= %" PRIu64,
-                                                   ", ControlStream id= %" PRIu64 " media id=%" PRIu64,
-                                                   uni_stream_ctx->stream_id, uni_stream_ctx->control_stream_ctx->stream_id, incoming.media_id);
-
+                                if (ctrl_stream_ctx == NULL) {
+                                    /* Protocol error: unknown media ID. */
+                                    quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", unknown media id=%" PRIu64,
+                                        uni_stream_ctx->stream_id,incoming.media_id);
+                                    ret = -1;
+                                }
+                                else {
+                                    uni_stream_ctx->receive_state = quicrq_receive_warp_header;
+                                    if (uni_stream_ctx->control_stream_ctx == NULL) {
+                                        quicrq_chain_uni_stream_to_control_stream(uni_stream_ctx, ctrl_stream_ctx);
+                                    }
+                                    quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received warp header message uni_id= %" PRIu64,
+                                        ", ControlStream id= %" PRIu64 " media id=%" PRIu64,
+                                        uni_stream_ctx->stream_id, uni_stream_ctx->control_stream_ctx->stream_id, incoming.media_id);
+                                }
                                 break;
                             case QUICRQ_ACTION_OBJECT_HEADER:
                                 if (uni_stream_ctx->receive_state != quicrq_receive_warp_header) {
@@ -2121,7 +2128,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
                 ret = quicrq_receive_stream_data(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
             }
             else {
-                uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_id, cnx_ctx, 1);
+                uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_id, cnx_ctx, NULL, 1);
                 if (uni_stream_ctx == NULL) {
                     /* Internal error */
                     (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
@@ -2655,34 +2662,38 @@ quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uin
     return stream_ctx;
 }
 
-quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(quicrq_stream_ctx_t * stream_ctx, uint64_t stream_id)
+void quicrq_chain_uni_stream_to_control_stream(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_stream_ctx_t* stream_ctx)
+{
+    uni_stream_ctx->control_stream_ctx = stream_ctx;
+    if (stream_ctx->first_uni_stream == NULL) {
+        stream_ctx->first_uni_stream = uni_stream_ctx;
+    }
+    else {
+        stream_ctx->first_uni_stream->next_uni_stream = uni_stream_ctx;
+    }
+    stream_ctx->last_uni_stream = uni_stream_ctx;
+}
+
+quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(
+    quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t * stream_ctx, uint64_t stream_id)
 {
     quicrq_uni_stream_ctx_t* uni_stream_ctx = (quicrq_uni_stream_ctx_t*)malloc(sizeof(quicrq_uni_stream_ctx_t));
     if (uni_stream_ctx != NULL) {
         memset(uni_stream_ctx, 0, sizeof(quicrq_uni_stream_ctx_t));
         uni_stream_ctx->stream_id = stream_id;
-        if (stream_ctx->cnx_ctx->last_uni_stream == NULL) {
-            stream_ctx->cnx_ctx->first_uni_stream = uni_stream_ctx;
+        if (cnx_ctx->last_uni_stream == NULL) {
+            cnx_ctx->first_uni_stream = uni_stream_ctx;
         }
         else {
-            stream_ctx->cnx_ctx->last_uni_stream->next_uni_stream = uni_stream_ctx;
+            cnx_ctx->last_uni_stream->next_uni_stream = uni_stream_ctx;
         }
-        uni_stream_ctx->previous_uni_stream = stream_ctx->cnx_ctx->last_uni_stream;
-        stream_ctx->cnx_ctx->last_uni_stream = uni_stream_ctx;
+        uni_stream_ctx->previous_uni_stream = cnx_ctx->last_uni_stream;
+        cnx_ctx->last_uni_stream = uni_stream_ctx;
         //quicrq_datagram_ack_ctx_init(stream_ctx->cnx_ctx->control_stream);
+        if (stream_ctx != NULL) {
+            quicrq_chain_uni_stream_to_control_stream(uni_stream_ctx, stream_ctx);
+        }
     }
-
-    uni_stream_ctx->control_stream_ctx = stream_ctx;
-    if (stream_ctx->first_uni_stream == NULL) {
-        stream_ctx->first_uni_stream = uni_stream_ctx;
-        stream_ctx->last_uni_stream = NULL;
-    } else {
-        stream_ctx->first_uni_stream->next_uni_stream = uni_stream_ctx;
-        stream_ctx->last_uni_stream = uni_stream_ctx;
-    }
-
-
-
     return uni_stream_ctx;
 }
 
@@ -2703,28 +2714,27 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
         stream_ctx = quicrq_create_stream_context(cnx_ctx, stream_id);
     }
 
-
     return stream_ctx;
 }
 
 quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
         uint64_t stream_id,
+        quicrq_cnx_ctx_t *cnx_ctx,
         quicrq_stream_ctx_t *stream_ctx,
         int should_create)
 {
-    quicrq_uni_stream_ctx_t* uni_stream_ctx = stream_ctx->cnx_ctx->first_uni_stream;
+    quicrq_uni_stream_ctx_t* uni_stream_ctx = cnx_ctx->first_uni_stream;
 
     while (uni_stream_ctx != NULL) {
         if (uni_stream_ctx->stream_id == stream_id) {
             break;
         }
-        stream_ctx = uni_stream_ctx->next_uni_stream;
+        uni_stream_ctx = uni_stream_ctx->next_uni_stream;
     }
 
     if (uni_stream_ctx == NULL && should_create) {
-        uni_stream_ctx = quicrq_create_uni_stream_context(stream_ctx, stream_id);
+        uni_stream_ctx = quicrq_create_uni_stream_context(cnx_ctx, stream_ctx, stream_id);
     }
-
 
     return uni_stream_ctx;
 }
