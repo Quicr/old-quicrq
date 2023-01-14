@@ -1515,14 +1515,18 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
             /* Check whether the fin object for the group is known */
             if (uni_stream_ctx->last_object_id == 0) {
+                /* see if we have media stream has reported its final group already */
                 if (uni_stream_ctx->control_stream_ctx->final_group_id == uni_stream_ctx->current_group_id) {
                     uni_stream_ctx->last_object_id = uni_stream_ctx->control_stream_ctx->final_object_id;
                 }
                 else {
+                    /* check to see if we object_count from the next group for the current group */
                     uni_stream_ctx->last_object_id = quicrq_fragment_get_object_count(cache_ctx, uni_stream_ctx->current_group_id);
                 }
             }
+
             if (uni_stream_ctx->last_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->last_object_id) {
+                /* we have sent all the objects from the current group */
                 uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
             }
             else {

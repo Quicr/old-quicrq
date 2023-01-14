@@ -1034,11 +1034,21 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                  *        on the cache organization
                  */
                 if(stream_ctx->is_sender) {
-                    quicrq_uni_stream_ctx_t * uni_stream_ctx = stream_ctx->first_uni_stream;
+
                     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
                     uint64_t max_group_id = 0; /* TODO: check that! */
 
+                    if (stream_ctx->first_uni_stream == NULL) {
+                        uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
+                        quicrq_uni_stream_ctx_t *uni_stream_ctx = quicrq_find_or_create_uni_stream(
+                                uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
+                        picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx,
+                                                    uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+                        return;
+                    }
+
                     /* loop through all the unistreams, since more than one can be active */
+                    quicrq_uni_stream_ctx_t *uni_stream_ctx = stream_ctx->first_uni_stream;
                     while(uni_stream_ctx != NULL) {
                         if (uni_stream_ctx->current_group_id > max_group_id) {
                             max_group_id = uni_stream_ctx->current_group_id;
@@ -1047,24 +1057,16 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                         uni_stream_ctx = uni_stream_ctx->next_uni_stream;
                     }
 
-                    if ( max_group_id == 0 && uni_stream_ctx == NULL) {
-                        /* first ever unistream */
+                    /* create uni_streams for unseen group_id from the cache */
+                    for(uint64_t i = max_group_id; i < highest_group_id; i++) {
                         uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
-                        uni_stream_ctx = quicrq_find_or_create_uni_stream(uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
-                        picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
-                    } else {
-                        /* create uni_streams for unseen group_id from the cache */
-                        for(uint64_t i = max_group_id; i < highest_group_id; i++) {
-                            uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
-                            quicrq_uni_stream_ctx_t *uni_stream_ctx = quicrq_find_or_create_uni_stream(
+                        quicrq_uni_stream_ctx_t *ctx = quicrq_find_or_create_uni_stream(
                                 uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
-                            picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx,
-                                                        uni_stream_ctx->stream_id, 1, uni_stream_ctx);
-                        }
+                        picoquic_mark_active_stream(ctx->control_stream_ctx->cnx_ctx->cnx,
+                                                    ctx->stream_id, 1, ctx);
                     }
                 }
 
-            /* TODO: how to reset/mark a uni_stream as finished .should it be done in here or somewhere else*/
         }
         else if (stream_ctx->cnx_ctx->cnx != NULL) {
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
