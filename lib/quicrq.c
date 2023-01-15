@@ -1327,7 +1327,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-            else if (stream_ctx->transport_mode == quicrq_transport_mode_single_stream && quicrq_fragment_is_ready_to_send(stream_ctx->media_ctx, space, current_time)) {
+            else if ((stream_ctx->transport_mode == quicrq_transport_mode_single_stream || stream_ctx->transport_mode == quicrq_transport_mode_warp) && quicrq_fragment_is_ready_to_send(stream_ctx->media_ctx, space, current_time)) {
                 stream_ctx->send_state = quicrq_sending_stream;
             }
             else {
@@ -1528,6 +1528,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             if (uni_stream_ctx->last_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->last_object_id) {
                 /* we have sent all the objects from the current group */
                 uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
+                uni_stream_ctx->current_group_id++;
             }
             else {
                 /* Check whether the next fragment is available */
