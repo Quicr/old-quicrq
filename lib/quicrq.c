@@ -1516,7 +1516,8 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             /* Check whether the fin object for the group is known */
             if (uni_stream_ctx->last_object_id == 0) {
                 /* see if we have media stream has reported its final group already */
-                if (uni_stream_ctx->control_stream_ctx->final_group_id == uni_stream_ctx->current_group_id) {
+                if (uni_stream_ctx->control_stream_ctx->final_group_id > 0 &&
+                    uni_stream_ctx->control_stream_ctx->final_group_id == uni_stream_ctx->current_group_id) {
                     uni_stream_ctx->last_object_id = uni_stream_ctx->control_stream_ctx->final_object_id;
                 }
                 else {
@@ -1528,7 +1529,6 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             if (uni_stream_ctx->last_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->last_object_id) {
                 /* we have sent all the objects from the current group */
                 uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
-                uni_stream_ctx->current_group_id++;
             }
             else {
                 /* Check whether the next fragment is available */
@@ -1572,7 +1572,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
 
     if (uni_stream_ctx->message_buffer.message_size == 0) {
         if (uni_stream_ctx->send_state == quicrq_sending_warp_all_sent) {
-            /* TODO; send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
+            /* Send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
             (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
             uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
         }
@@ -1988,6 +1988,12 @@ quicrq_stream_ctx_t*  quicrq_get_control_stream_for_media_id(quicrq_cnx_ctx_t* c
 int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_ctx_t* uni_stream_ctx, uint8_t* bytes, size_t length, int is_fin) {
     // warp-header:grp-id [obj1 , obj2 ]
     int ret = 0;
+
+#if 1
+    if (is_fin) {
+        DBG_PRINTF("Received Fin");
+    }
+#endif
 
     while (ret == 0 && length > 0) {
         /* There may be a set of messages back to back, and all have to be received. */
