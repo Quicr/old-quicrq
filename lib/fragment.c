@@ -1133,7 +1133,7 @@ size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t 
     while (fragment_node != NULL) {
         quicrq_cached_fragment_t* fragment_state =
                 (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
-        if (fragment_state->group_id != group_id || fragment_state->object_id != group_id || fragment_state->offset != current_offset) {
+        if (fragment_state->group_id != group_id || fragment_state->object_id != object_id || fragment_state->offset != current_offset) {
             /* Next fragment in order is not what we expect, so give up */
             break;
         }

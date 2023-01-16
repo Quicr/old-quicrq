@@ -1169,7 +1169,7 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
     }
     stream_ctx->is_sender = 1;
     if (stream_ctx->transport_mode == quicrq_transport_mode_single_stream) {
-        stream_ctx->send_state = quicrq_sending_stream;
+        stream_ctx->send_state = quicrq_sending_single_stream;
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     }
@@ -1328,7 +1328,7 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, quicrq_transport_m
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, more_to_send, stream_ctx);
     }
     else if (transport_mode == quicrq_transport_mode_single_stream){
-        stream_ctx->send_state = quicrq_sending_stream;
+        stream_ctx->send_state = quicrq_sending_single_stream;
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     } else if (transport_mode == quicrq_transport_mode_warp) {

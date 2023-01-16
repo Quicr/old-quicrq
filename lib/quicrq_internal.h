@@ -326,7 +326,7 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
  /* Quic media consumer */
 typedef enum {
     quicrq_sending_ready = 0,
-    quicrq_sending_stream,
+    quicrq_sending_single_stream,
     quicrq_sending_initial,
     quicrq_sending_repair,
     quicrq_sending_final_point,

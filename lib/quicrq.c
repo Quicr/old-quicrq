@@ -1327,8 +1327,8 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                     }
                 }
             }
-            else if ((stream_ctx->transport_mode == quicrq_transport_mode_single_stream || stream_ctx->transport_mode == quicrq_transport_mode_warp) && quicrq_fragment_is_ready_to_send(stream_ctx->media_ctx, space, current_time)) {
-                stream_ctx->send_state = quicrq_sending_stream;
+            else if (stream_ctx->transport_mode == quicrq_transport_mode_single_stream && quicrq_fragment_is_ready_to_send(stream_ctx->media_ctx, space, current_time)) {
+                stream_ctx->send_state = quicrq_sending_single_stream;
             }
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
@@ -1388,7 +1388,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             /* Nothing to send. Mark the stream as not active. */
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
             break;
-        case quicrq_sending_stream:
+        case quicrq_sending_single_stream:
             /* Send available stream data. Check whether the FIN is reached. */
             ret = quicrq_prepare_to_send_media_to_stream(stream_ctx, context, space, current_time);
             break;
@@ -1789,7 +1789,7 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             }
                             else if (incoming.transport_mode == quicrq_transport_mode_single_stream) {
                                 /* Start sending stream without endpoint message */
-                                stream_ctx->send_state = quicrq_sending_stream;
+                                stream_ctx->send_state = quicrq_sending_single_stream;
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
@@ -2042,7 +2042,8 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                 }
                                 break;
                             case QUICRQ_ACTION_OBJECT_HEADER:
-                                if (uni_stream_ctx->receive_state != quicrq_receive_warp_header) {
+                                if (uni_stream_ctx->receive_state != quicrq_receive_warp_header &&
+                                    uni_stream_ctx->receive_state != quicrq_receive_object_header) {
                                     /* Protocol error */
                                     ret = -1;
                                 }
@@ -2054,7 +2055,7 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                     ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
                                                                   incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
                                                                   incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
-                                                                  incoming.is_last_fragment, incoming.length);
+                                                                  1, incoming.length);
                                     ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 0, 0, ret);
                                 }
                                 break;
