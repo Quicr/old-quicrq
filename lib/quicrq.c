@@ -1516,7 +1516,8 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             /* Check whether the fin object for the group is known */
             if (uni_stream_ctx->last_object_id == 0) {
                 /* see if we have media stream has reported its final group already */
-                if (uni_stream_ctx->control_stream_ctx->final_group_id > 0 &&
+                if ((uni_stream_ctx->control_stream_ctx->final_group_id > 0 ||
+                    uni_stream_ctx->control_stream_ctx->final_object_id > 0) &&
                     uni_stream_ctx->control_stream_ctx->final_group_id == uni_stream_ctx->current_group_id) {
                     uni_stream_ctx->last_object_id = uni_stream_ctx->control_stream_ctx->final_object_id;
                 }
@@ -1989,12 +1990,6 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
     // warp-header:grp-id [obj1 , obj2 ]
     int ret = 0;
 
-#if 1
-    if (is_fin) {
-        DBG_PRINTF("Received Fin");
-    }
-#endif
-
     while (ret == 0 && length > 0) {
         /* There may be a set of messages back to back, and all have to be received. */
         if (uni_stream_ctx->receive_state == quicrq_receive_done) {
@@ -2062,7 +2057,10 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                                                   incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
                                                                   incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
                                                                   1, incoming.length);
-                                    ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 0, 0, ret);
+                                    /* this is only needed when the stream is finished */
+                                    if (is_fin) {
+                                        ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 1, 0, ret);
+                                    }
                                 }
                                 break;
                                 default:
@@ -2079,7 +2077,12 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
     }
 
     if (is_fin) {
-        /* TODO: What needs to be done here */
+        /* TODO: What needs to be done here:
+         * Update control stream context, this GOP is received. 
+         * Delete the uni stream context.
+         * Mark FIN when all GOP are received.
+         */
+
     }
 
     return ret;

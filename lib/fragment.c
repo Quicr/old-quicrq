@@ -1129,6 +1129,7 @@ size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t 
     key.object_id = object_id;
     key.offset = 0;
     fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
+    *nb_objects_previous_group = 0;
 
     while (fragment_node != NULL) {
         quicrq_cached_fragment_t* fragment_state =
@@ -1136,6 +1137,9 @@ size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t 
         if (fragment_state->group_id != group_id || fragment_state->object_id != object_id || fragment_state->offset != current_offset) {
             /* Next fragment in order is not what we expect, so give up */
             break;
+        }
+        if (fragment_state->object_id == 0 && fragment_state->offset == 0) {
+            *nb_objects_previous_group = fragment_state->nb_objects_previous_group;
         }
         /* compute the object size and fill the passed in buffer, if non-null*/
         object_size += fragment_state->data_length;

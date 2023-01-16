@@ -1057,18 +1057,27 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                         if (uni_stream_ctx->current_group_id > max_group_id) {
                             max_group_id = uni_stream_ctx->current_group_id;
                         }
-                        picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+                        if (uni_stream_ctx->send_state != quicrq_sending_warp_should_close) {
+                            /* TODO: these contexts should be removed. */
+                            picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+                        }
                         uni_stream_ctx = uni_stream_ctx->next_uni_stream;
                     }
 
                     /* create uni_streams for unseen group_id from the cache */
-#if 0
-                    for(uint64_t i = max_group_id; i < highest_group_id; i++) {
+#if 1
+                    for(uint64_t i = max_group_id + 1; i <= highest_group_id; i++) {
                         uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
                         quicrq_uni_stream_ctx_t *ctx = quicrq_find_or_create_uni_stream(
                                 uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
-                        picoquic_mark_active_stream(ctx->control_stream_ctx->cnx_ctx->cnx,
-                                                    ctx->stream_id, 1, ctx);
+                        if (ctx != NULL) {
+                            ctx->current_group_id = i;
+                            picoquic_mark_active_stream(ctx->control_stream_ctx->cnx_ctx->cnx,
+                                ctx->stream_id, 1, ctx);
+                        }
+                        else {
+                            break;
+                        }
                     }
 #endif
                 }
