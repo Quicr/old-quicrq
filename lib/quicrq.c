@@ -1563,9 +1563,12 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
                             }
                         }
                     }
-                } // next_object_size > 0
+                }
+                else {
+                    /* Not available. Could it be because the final object ID has been reached? */
+                    quicrq_fragment_notify_final_to_control(cache_ctx, uni_stream_ctx->control_stream_ctx);
+                }
             }
-
         } else {
             /* no op */
         }
@@ -2058,9 +2061,15 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                                                   incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
                                                                   1, incoming.length);
                                     /* this is only needed when the stream is finished */
-                                    if (is_fin) {
+#if 1
+                                    if (uni_stream_ctx->current_group_id == 4 && incoming.object_id >= 58) {
+                                        DBG_PRINTF("Got %" PRIu64 "/%" PRIu64, uni_stream_ctx->current_group_id, incoming.object_id);
+                                    }
+#else
+                                    if (1) {
                                         ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 1, 0, ret);
                                     }
+#endif
                                 }
                                 break;
                                 default:
@@ -2082,7 +2091,11 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
          * Delete the uni stream context.
          * Mark FIN when all GOP are received.
          */
-
+#if 1
+        if (uni_stream_ctx->current_group_id == 5) {
+            DBG_PRINTF("%s", "Finished");
+        }
+#endif
     }
 
     return ret;

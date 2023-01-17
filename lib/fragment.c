@@ -1071,7 +1071,6 @@ int quicrq_fragment_datagram_publisher_fn(
          * received. At this point, we only check that the final ID is marked, and all fragments have 
          * been sent.
          */
-
         if ((media_ctx->cache_ctx->final_group_id != 0 || media_ctx->cache_ctx->final_object_id != 0) &&
             media_ctx->current_fragment != NULL &&
             media_ctx->is_current_fragment_sent &&
@@ -1086,6 +1085,19 @@ int quicrq_fragment_datagram_publisher_fn(
     }
 
     return ret;
+}
+
+/* Check whether the final object is known */
+void quicrq_fragment_notify_final_to_control(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t* control_stream_ctx)
+{
+    if ((cache_ctx->final_group_id != 0 || cache_ctx->final_object_id != 0) &&
+        control_stream_ctx->final_group_id == 0 && control_stream_ctx->final_object_id == 0){
+        /* Set the endpoints for the stream, prepare sending a final message */
+        control_stream_ctx->final_group_id = cache_ctx->final_group_id;
+        control_stream_ctx->final_object_id = cache_ctx->final_object_id;
+        /* Wake up the control stream so the final message can be sent. */
+        picoquic_mark_active_stream(control_stream_ctx->cnx_ctx->cnx, control_stream_ctx->stream_id, 1, control_stream_ctx);
+    }
 }
 
 /* Check whether the number of objects in the next group is known */
