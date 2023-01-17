@@ -249,58 +249,12 @@ int quicrq_msg_buffer_prepare_to_send_message(quicrq_message_buffer_t* msg_buffe
 
 int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space, int more_to_send)
 {
-#if 1
     quicrq_message_buffer_t* msg_buffer = &stream_ctx->message_sent;
     int ret = quicrq_msg_buffer_prepare_to_send_message(msg_buffer, context, space, more_to_send);
 
     if (msg_buffer->message_size == 0) {
         stream_ctx->send_state = quicrq_sending_ready;
     }
-    return ret;
-#else
-    int ret = 0;
-    quicrq_message_buffer_t* msg_buffer = &stream_ctx->message_sent;
-    size_t total_size = msg_buffer->message_size;
-    size_t total_to_send = 2 + total_size;
-
-    if (msg_buffer->nb_bytes_read < total_to_send) {
-        uint8_t* buffer;
-        size_t available = total_to_send - msg_buffer->nb_bytes_read;
-        if (available > space) {
-            more_to_send = 1;
-            available = space;
-        }
-
-        buffer = picoquic_provide_stream_data_buffer(context, available, 0, more_to_send);
-        if (buffer != NULL) {
-            /* Feed the message length on two bytes */
-            while (msg_buffer->nb_bytes_read < 2 && available > 0) {
-                uint8_t b = (msg_buffer->nb_bytes_read == 0) ?
-                    (uint8_t)((total_size >> 8) & 255) :
-                    (uint8_t)(total_size & 255);
-                *buffer = b;
-                buffer++;
-                available--;
-                msg_buffer->nb_bytes_read++;
-            }
-            /* feed the remaining header content at offset */
-            if (available > 0 && msg_buffer->nb_bytes_read < msg_buffer->message_size + 2) {
-                size_t offset = msg_buffer->nb_bytes_read - 2;
-                memcpy(buffer, msg_buffer->buffer + offset, available);
-                msg_buffer->nb_bytes_read += available;
-            }
-        }
-        else {
-            ret = -1;
-        }
-
-        if (msg_buffer->nb_bytes_read >= total_to_send) {
-            stream_ctx->send_state = quicrq_sending_ready;
-            msg_buffer->nb_bytes_read = 0;
-            msg_buffer->message_size = 0;
-        }
-    }
-#endif
     return ret;
 }
 
@@ -1579,6 +1533,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             /* Send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
             (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
             uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
+            /* TODO: dispose of uni stream context. */
         }
         else {
             /* Nothing to send */
@@ -1975,7 +1930,6 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
     return ret;
 }
 
-
 quicrq_stream_ctx_t*  quicrq_get_control_stream_for_media_id(quicrq_cnx_ctx_t* cnx, uint64_t  media_id) {
     quicrq_stream_ctx_t* ctrl_stream_ctx = cnx->first_stream;
     while (ctrl_stream_ctx != NULL) {
@@ -2060,16 +2014,6 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                                                   incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
                                                                   incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
                                                                   1, incoming.length);
-                                    /* this is only needed when the stream is finished */
-#if 1
-                                    if (uni_stream_ctx->current_group_id == 4 && incoming.object_id >= 58) {
-                                        DBG_PRINTF("Got %" PRIu64 "/%" PRIu64, uni_stream_ctx->current_group_id, incoming.object_id);
-                                    }
-#else
-                                    if (1) {
-                                        ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 1, 0, ret);
-                                    }
-#endif
                                 }
                                 break;
                                 default:
@@ -2087,15 +2031,10 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
 
     if (is_fin) {
         /* TODO: What needs to be done here:
-         * Update control stream context, this GOP is received. 
+         * Update control stream context, this GOP is received. (Maybe not, the information is in the cache)
          * Delete the uni stream context.
-         * Mark FIN when all GOP are received.
+         * Mark FIN when all GOP are received -- not so obvious in relay + error scenarios.
          */
-#if 1
-        if (uni_stream_ctx->current_group_id == 5) {
-            DBG_PRINTF("%s", "Finished");
-        }
-#endif
     }
 
     return ret;

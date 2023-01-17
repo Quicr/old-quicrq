@@ -1038,6 +1038,9 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
                     uint64_t max_group_id = 0; /* TODO: check that! */
 
+                    /* TODO: do we really need this block? It would be better if all uni stream
+                     * creation was in a single place.
+                     */
                     if (stream_ctx->first_uni_stream == NULL) {
                         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
 
@@ -1054,18 +1057,19 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                     /* loop through all the unistreams, since more than one can be active */
                     quicrq_uni_stream_ctx_t *uni_stream_ctx = stream_ctx->first_uni_stream;
                     while(uni_stream_ctx != NULL) {
+                        /* TODO: this should not be needed if we keep track of
+                         * warp_next_group_id in control stream context */
                         if (uni_stream_ctx->current_group_id > max_group_id) {
                             max_group_id = uni_stream_ctx->current_group_id;
                         }
                         if (uni_stream_ctx->send_state != quicrq_sending_warp_should_close) {
-                            /* TODO: these contexts should be removed. */
+                            /* TODO: the used contexts should be removed, so the test above will not be needed. */
                             picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
                         }
                         uni_stream_ctx = uni_stream_ctx->next_uni_stream;
                     }
 
                     /* create uni_streams for unseen group_id from the cache */
-#if 1
                     for(uint64_t i = max_group_id + 1; i <= highest_group_id; i++) {
                         uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
                         quicrq_uni_stream_ctx_t *ctx = quicrq_find_or_create_uni_stream(
@@ -1074,12 +1078,12 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                             ctx->current_group_id = i;
                             picoquic_mark_active_stream(ctx->control_stream_ctx->cnx_ctx->cnx,
                                 ctx->stream_id, 1, ctx);
+                            /* TODO: update warp_next_group_id in stream context */
                         }
                         else {
                             break;
                         }
                     }
-#endif
                 }
 
         }
