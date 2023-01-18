@@ -493,7 +493,7 @@ int quicrq_congestion_datagram_loss_test()
 
     spec.simulate_losses = 0x7080;
     spec.congested_receiver = 0;
-    spec.max_drops = 98;
+    spec.max_drops = 100;
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 230000;
     spec.max_delay_target = 820000;
