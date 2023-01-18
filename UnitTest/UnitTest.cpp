@@ -538,5 +538,11 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(warp_basic) {
+			int ret = quicrq_warp_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }

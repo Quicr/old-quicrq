@@ -45,6 +45,7 @@ quicrq_media_object_source_ctx_t* quicrq_publish_object_source(quicrq_ctx_t* qr_
         if (object_source_ctx->cache_ctx == NULL) {
             ret = -1;
         } else {
+            /* create  qucirq_srce_media_ctx and set it on the cache_ctx */
             ret = quicrq_publish_fragment_cached_media(qr_ctx, object_source_ctx->cache_ctx, url, url_length, 1, object_source_ctx->properties.use_real_time_caching);
             /* If needs be, set the media start point. */
             if (ret == 0 && (object_source_ctx->properties.start_group_id != 0 || object_source_ctx->properties.start_object_id != 0)) {

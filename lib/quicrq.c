@@ -201,10 +201,9 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer)
  * The "data" and "data_length" must be the same across all calls for the same message.
  * If message is fully sent, the state moves to "ready"
  */
-int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space, int more_to_send)
+int quicrq_msg_buffer_prepare_to_send_message(quicrq_message_buffer_t* msg_buffer, void* context, size_t space, int more_to_send)
 {
     int ret = 0;
-    quicrq_message_buffer_t* msg_buffer = &stream_ctx->message_sent;
     size_t total_size = msg_buffer->message_size;
     size_t total_to_send = 2 + total_size;
 
@@ -221,8 +220,8 @@ int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* con
             /* Feed the message length on two bytes */
             while (msg_buffer->nb_bytes_read < 2 && available > 0) {
                 uint8_t b = (msg_buffer->nb_bytes_read == 0) ?
-                    (uint8_t)((total_size >> 8) & 255) :
-                    (uint8_t)(total_size & 255);
+                            (uint8_t)((total_size >> 8) & 255) :
+                            (uint8_t)(total_size & 255);
                 *buffer = b;
                 buffer++;
                 available--;
@@ -240,13 +239,25 @@ int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* con
         }
 
         if (msg_buffer->nb_bytes_read >= total_to_send) {
-            stream_ctx->send_state = quicrq_sending_ready;
             msg_buffer->nb_bytes_read = 0;
             msg_buffer->message_size = 0;
         }
     }
     return ret;
 }
+
+
+int quicrq_msg_buffer_prepare_to_send(quicrq_stream_ctx_t* stream_ctx, void* context, size_t space, int more_to_send)
+{
+    quicrq_message_buffer_t* msg_buffer = &stream_ctx->message_sent;
+    int ret = quicrq_msg_buffer_prepare_to_send_message(msg_buffer, context, space, more_to_send);
+
+    if (msg_buffer->message_size == 0) {
+        stream_ctx->send_state = quicrq_sending_ready;
+    }
+    return ret;
+}
+
 
 /* Sending in sequence on a stream. 
  * We do not want to spend too much effort there, so we are going to reuse the "fragment" message
@@ -1271,7 +1282,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
                 }
             }
             else if (stream_ctx->transport_mode == quicrq_transport_mode_single_stream && quicrq_fragment_is_ready_to_send(stream_ctx->media_ctx, space, current_time)) {
-                stream_ctx->send_state = quicrq_sending_stream;
+                stream_ctx->send_state = quicrq_sending_single_stream;
             }
             else {
                 /* This is a bug. If there is nothing to send, we should not be sending any stream data */
@@ -1331,7 +1342,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             /* Nothing to send. Mark the stream as not active. */
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 0, stream_ctx);
             break;
-        case quicrq_sending_stream:
+        case quicrq_sending_single_stream:
             /* Send available stream data. Check whether the FIN is reached. */
             ret = quicrq_prepare_to_send_media_to_stream(stream_ctx, context, space, current_time);
             break;
@@ -1387,6 +1398,7 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             (void)picoquic_provide_stream_data_buffer(context, 0, 0, 0);
             break;
         case quicrq_sending_fin:
+            /* TODO; send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
             (void) picoquic_provide_stream_data_buffer(context, 0, 1, 0);
             stream_ctx->send_state = quicrq_sending_no_more;
             stream_ctx->is_local_finished = 1;
@@ -1404,6 +1416,135 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
             ret = -1;
             break;
         }
+    }
+
+    return ret;
+}
+
+int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx, void* context, size_t space, uint64_t current_time)
+{
+    int ret = 0;
+    int more_to_send = 0;
+    /*
+     *  if (no bytes ready to send) {
+     *    if(warp header not sent)  {
+     *      prepare warp header
+     *    } else if (object is ready) {
+            prepare obj header
+          } else {
+            // no-op
+          }
+     *  }
+     *
+     *
+     *  if (bytes are ready) {
+     *     // just send the next bytes to be sent
+     *     // update num bytes sent
+     *  }
+     *
+     *
+     *
+     */
+    /* prepare the message that needs to be sent */
+    if (uni_stream_ctx->message_buffer.message_size == 0) {
+        if (uni_stream_ctx->send_state == quicrq_sending_open) {
+            /* prepare warp_header, since its the first time we are dealing with this stream */
+            quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
+            if (quicrq_msg_buffer_alloc(message, quicrq_warp_header_msg_reserve(uni_stream_ctx->control_stream_ctx->media_id, uni_stream_ctx->current_group_id), 0) != 0) {
+                ret = -1;
+            } else {
+                uint8_t *message_next = quicrq_warp_header_msg_encode(message->buffer,
+                                                                      message->buffer + message->buffer_alloc,
+                                                                      QUICRQ_ACTION_WARP_HEADER,
+                                                                      uni_stream_ctx->control_stream_ctx->media_id,
+                                                                      uni_stream_ctx->current_group_id);
+                if (message_next == NULL) {
+                    ret = -1;
+                }
+                message->message_size = message_next - message->buffer;
+                uni_stream_ctx->send_state = quicrq_sending_warp_header_sent;
+            }
+        } else if(uni_stream_ctx->send_state == quicrq_sending_warp_header_sent) {
+            quicrq_fragment_publisher_context_t* media_ctx = uni_stream_ctx->control_stream_ctx->media_ctx;
+            quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
+            /* Check whether the fin object for the group is known */
+            if (uni_stream_ctx->last_object_id == 0) {
+                /* see if we have media stream has reported its final group already */
+                if ((uni_stream_ctx->control_stream_ctx->final_group_id > 0 ||
+                    uni_stream_ctx->control_stream_ctx->final_object_id > 0) &&
+                    uni_stream_ctx->control_stream_ctx->final_group_id == uni_stream_ctx->current_group_id) {
+                    uni_stream_ctx->last_object_id = uni_stream_ctx->control_stream_ctx->final_object_id;
+                }
+                else {
+                    /* check to see if we object_count from the next group for the current group */
+                    uni_stream_ctx->last_object_id = quicrq_fragment_get_object_count(cache_ctx, uni_stream_ctx->current_group_id);
+                }
+            }
+
+            if (uni_stream_ctx->last_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->last_object_id) {
+                /* we have sent all the objects from the current group */
+                uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
+            }
+            else {
+                /* Check whether the next fragment is available */
+                uint8_t flags = 0;
+                uint64_t nb_objects_previous_group = 0;
+                size_t next_object_size = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id,
+                    &nb_objects_previous_group, &flags, NULL);
+
+                if (next_object_size > 0) {
+                    quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
+                    if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, 0, next_object_size), 0) != 0) {
+                        ret = -1;
+                    }
+                    else {
+                        uint8_t* message_next = quicrq_object_header_msg_encode(message->buffer,
+                            message->buffer + message->buffer_alloc,
+                            QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
+                            0, flags, next_object_size, NULL);
+                        if (message_next == NULL) {
+                            ret = -1;
+                        }
+                        else {
+                            size_t copied = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id, &nb_objects_previous_group, &flags, message_next);
+                            if (copied != next_object_size) {
+                                ret = -1;
+                            }
+                            else {
+                                message->message_size = message_next - message->buffer;
+                                message->message_size += next_object_size;
+                                uni_stream_ctx->current_object_id++;
+                            }
+                        }
+                    }
+                }
+                else {
+                    /* Not available. Could it be because the final object ID has been reached? */
+                    quicrq_fragment_notify_final_to_control(cache_ctx, uni_stream_ctx->control_stream_ctx);
+                }
+            }
+        } else {
+            /* no op */
+        }
+    }
+
+    if (uni_stream_ctx->message_buffer.message_size == 0) {
+        if (uni_stream_ctx->send_state == quicrq_sending_warp_all_sent) {
+            /* Send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
+            (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+            uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
+            /* TODO: dispose of uni stream context. */
+        }
+        else {
+            /* Nothing to send */
+            ret = picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, uni_stream_ctx);
+        }
+    }
+    else {
+        int more_to_send = uni_stream_ctx->send_state != quicrq_sending_warp_should_close;
+        quicrq_log_message(uni_stream_ctx->control_stream_ctx->cnx_ctx, "Send:UniStream %" PRIu64 ",  message buffer size = %" PRIu8,
+                           uni_stream_ctx->stream_id, uni_stream_ctx->message_buffer.message_size);
+        ret = quicrq_msg_buffer_prepare_to_send_message(&uni_stream_ctx->message_buffer, context, space, more_to_send);
     }
 
     return ret;
@@ -1607,11 +1748,12 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             }
                             else if (incoming.transport_mode == quicrq_transport_mode_single_stream) {
                                 /* Start sending stream without endpoint message */
-                                stream_ctx->send_state = quicrq_sending_stream;
+                                stream_ctx->send_state = quicrq_sending_single_stream;
                                 stream_ctx->receive_state = quicrq_receive_done;
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
-                            else if (incoming.transport_mode == quicrq_transport_mode_datagram) {
+                            else if (incoming.transport_mode == quicrq_transport_mode_datagram
+                                || incoming.transport_mode == quicrq_transport_mode_warp) {
                                 /* Start sending datagrams without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
@@ -1788,6 +1930,115 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
     return ret;
 }
 
+quicrq_stream_ctx_t*  quicrq_get_control_stream_for_media_id(quicrq_cnx_ctx_t* cnx, uint64_t  media_id) {
+    quicrq_stream_ctx_t* ctrl_stream_ctx = cnx->first_stream;
+    while (ctrl_stream_ctx != NULL) {
+        if (ctrl_stream_ctx->media_id == media_id) {
+            return ctrl_stream_ctx;
+        }
+        ctrl_stream_ctx = ctrl_stream_ctx->next_stream;
+    }
+    return NULL;
+}
+/*
+ * todo: add documentation
+ */
+int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_ctx_t* uni_stream_ctx, uint8_t* bytes, size_t length, int is_fin) {
+    // warp-header:grp-id [obj1 , obj2 ]
+    int ret = 0;
+
+    while (ret == 0 && length > 0) {
+        /* There may be a set of messages back to back, and all have to be received. */
+        if (uni_stream_ctx->receive_state == quicrq_receive_done) {
+            /* Protocol violation, was not expecting any message */
+            ret = -1;
+            break;
+        }
+        else {
+            /* Receive the next message on the stream, if any */
+            int is_finished = 0;
+            uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &uni_stream_ctx->message_buffer, &is_finished);
+            if (next_bytes == NULL) {
+                /* Something went wrong */
+                ret = -1;
+            }
+            else
+            {
+                length = (bytes + length) - next_bytes;
+                bytes = next_bytes;
+                if (is_finished) {
+                    /* Decode the incoming message */
+                    quicrq_message_t incoming = { 0 };
+                    const uint8_t* r_bytes = quicrq_msg_decode(uni_stream_ctx->message_buffer.buffer, uni_stream_ctx->message_buffer.buffer + uni_stream_ctx->message_buffer.message_size, &incoming);
+
+                    if (r_bytes == NULL) {
+                        /* Message was incorrect */
+                        ret = -1;
+                    } else {
+                        quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received message type=%" PRIu8,
+                                           uni_stream_ctx->stream_id, incoming.message_type);
+
+                        switch (incoming.message_type) {
+                            case QUICRQ_ACTION_WARP_HEADER:
+                                uni_stream_ctx->current_group_id = incoming.group_id;
+                                uni_stream_ctx->receive_state = quicrq_receive_warp_header;
+                                quicrq_stream_ctx_t* ctrl_stream_ctx = quicrq_get_control_stream_for_media_id(cnx_ctx, incoming.media_id);
+                                if (ctrl_stream_ctx == NULL) {
+                                    /* Protocol error: unknown media ID. */
+                                    quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", unknown media id=%" PRIu64,
+                                        uni_stream_ctx->stream_id,incoming.media_id);
+                                    ret = -1;
+                                }
+                                else {
+                                    uni_stream_ctx->receive_state = quicrq_receive_warp_header;
+                                    if (uni_stream_ctx->control_stream_ctx == NULL) {
+                                        quicrq_chain_uni_stream_to_control_stream(uni_stream_ctx, ctrl_stream_ctx);
+                                    }
+                                    quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received warp header message uni_id= %" PRIu64,
+                                        ", ControlStream id= %" PRIu64 " media id=%" PRIu64,
+                                        uni_stream_ctx->stream_id, uni_stream_ctx->control_stream_ctx->stream_id, incoming.media_id);
+                                }
+                                break;
+                            case QUICRQ_ACTION_OBJECT_HEADER:
+                                if (uni_stream_ctx->receive_state != quicrq_receive_warp_header &&
+                                    uni_stream_ctx->receive_state != quicrq_receive_object_header) {
+                                    /* Protocol error */
+                                    ret = -1;
+                                }
+                                else {
+                                    uni_stream_ctx->receive_state = quicrq_receive_object_header;
+                                    quicrq_stream_ctx_t* ctrl_stream_ctx = quicrq_get_control_stream_for_media_id(cnx_ctx, incoming.media_id);
+                                    uni_stream_ctx->control_stream_ctx = ctrl_stream_ctx;
+                                    /* Pass the repair data to the media consumer. */
+                                    ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
+                                                                  incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
+                                                                  incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
+                                                                  1, incoming.length);
+                                }
+                                break;
+                                default:
+                                    /* Some unknown message, maybe not implemented yet */
+                                    ret = -1;
+                                    break;
+                        }
+                    }
+                    /* As the message was processed, reset the message buffer. */
+                    quicrq_msg_buffer_reset(&uni_stream_ctx->message_buffer);
+                }
+            }
+        }
+    }
+
+    if (is_fin) {
+        /* TODO: What needs to be done here:
+         * Update control stream context, this GOP is received. (Maybe not, the information is in the cache)
+         * Delete the uni stream context.
+         * Mark FIN when all GOP are received -- not so obvious in relay + error scenarios.
+         */
+    }
+
+    return ret;
+}
 /* Callback from Quic
  */
 int quicrq_callback(picoquic_cnx_t* cnx,
@@ -1797,7 +2048,14 @@ int quicrq_callback(picoquic_cnx_t* cnx,
 
     int ret = 0;
     quicrq_cnx_ctx_t* cnx_ctx = (quicrq_cnx_ctx_t*)callback_ctx;
-    quicrq_stream_ctx_t* stream_ctx = (quicrq_stream_ctx_t*)v_stream_ctx;
+    quicrq_stream_ctx_t* stream_ctx = NULL;
+    quicrq_uni_stream_ctx_t* uni_stream_ctx = NULL;
+    if((stream_id & 2) == 0) {
+        stream_ctx = (quicrq_stream_ctx_t*)v_stream_ctx;
+    } else {
+        uni_stream_ctx = (quicrq_uni_stream_ctx_t*)v_stream_ctx;
+    }
+
 
     /* If this is the first reference to the connection, the application context is set
      * to the default value defined for the server. This default value contains the pointer
@@ -1828,30 +2086,58 @@ int quicrq_callback(picoquic_cnx_t* cnx,
         case picoquic_callback_stream_data:
         case picoquic_callback_stream_fin:
             /* Data arrival on stream #x, maybe with fin mark */
-            if (stream_ctx == NULL) {
-                /* Retrieve, or create and initialize stream context */
-                stream_ctx = quicrq_find_or_create_stream(stream_id, cnx_ctx, 1);
-            }
 
-            if (stream_ctx == NULL) {
-                /* Internal error */
-                (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
-                return(-1);
-            }
-            else {
+            if ((stream_id & 2) == 0) {
+                if (stream_ctx == NULL) {
+                    /* Retrieve, or create and initialize stream context for control channel */
+                    stream_ctx = quicrq_find_or_create_stream(stream_id, cnx_ctx, 1);
+                    if (stream_ctx == NULL) {
+                        /* Internal error */
+                        (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
+                        return(-1);
+                    }
+                }
+
+                /* we consider unidir streams as warp/rush streams. may be we need something more explicit */
                 ret = quicrq_receive_stream_data(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
             }
+            else {
+                uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_id, cnx_ctx, NULL, 1);
+                if (uni_stream_ctx == NULL) {
+                    /* Internal error */
+                    (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
+                    return (-1);
+                }
+
+                /* we consider unidirectional streams as warp/rush streams. maybe we need something more explicit */
+                ret = quicrq_receive_warp_or_rush_stream_data(cnx_ctx, uni_stream_ctx, bytes, length,
+                    (fin_or_event == picoquic_callback_stream_fin));
+            }
+
             break;
         case picoquic_callback_prepare_to_send:
-            /* Active sending API */
-            if (stream_ctx == NULL) {
-                /* This should never happen */
-                picoquic_log_app_message(cnx, "QUICRQ callback returns %d, event %d", ret, fin_or_event);
-                DBG_PRINTF("Prepare to send on NULL context, steam: %" PRIu64, stream_id);
-                ret = -1;
-            }
-            else {
-                ret = quicrq_prepare_to_send_on_stream(stream_ctx, bytes, length, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
+            /* Active sending API, called after wake up and picoquic conditions (congestion/rate control are ready to be sent */
+            if ((stream_id & 2) == 0) {
+                if (stream_ctx == NULL) {
+                    /* This should never happen */
+                    picoquic_log_app_message(cnx, "QUICRQ callback returns %d, event %d", ret, fin_or_event);
+                    DBG_PRINTF("Prepare to send on NULL context, steam: %" PRIu64, stream_id);
+                    ret = -1;
+                }
+                else {
+                    ret = quicrq_prepare_to_send_on_stream(stream_ctx, bytes, length, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
+                }
+
+            }  else {
+                if (uni_stream_ctx == NULL) {
+                    /* This should never happen */
+                    picoquic_log_app_message(cnx, "QUICRQ callback returns %d, event %d", ret, fin_or_event);
+                    DBG_PRINTF("Prepare to send on NULL Unistream context, steam: %" PRIu64, stream_id);
+                    ret = -1;
+                }
+                else {
+                    ret = quicrq_prepare_to_send_on_unistream(uni_stream_ctx, bytes, length, picoquic_get_quic_time(uni_stream_ctx->control_stream_ctx->cnx_ctx->qr_ctx->quic));
+                }
             }
             break;
         case picoquic_callback_datagram:
@@ -2249,6 +2535,33 @@ quicrq_cnx_ctx_t* quicrq_first_connection(quicrq_ctx_t* qr_ctx)
     return qr_ctx->first_cnx;
 }
 
+void quicrq_delete_uni_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_ctx_t* uni_stream_ctx)
+{
+
+    if (uni_stream_ctx->next_uni_stream == NULL) {
+        cnx_ctx->last_uni_stream = uni_stream_ctx->previous_uni_stream;
+    }
+    else {
+        uni_stream_ctx->next_uni_stream->previous_uni_stream = uni_stream_ctx->previous_uni_stream;
+    }
+    if (uni_stream_ctx->previous_uni_stream == NULL) {
+        cnx_ctx->first_uni_stream = uni_stream_ctx->next_uni_stream;
+    }
+    else {
+        uni_stream_ctx->previous_uni_stream->next_uni_stream = uni_stream_ctx->next_uni_stream;
+    }
+
+
+    if (cnx_ctx->cnx != NULL) {
+        (void)picoquic_mark_active_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, NULL);
+        (void)picoquic_add_to_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, NULL, 0, 1);
+    }
+
+    quicrq_msg_buffer_release(&uni_stream_ctx->message_buffer);
+
+    free(uni_stream_ctx);
+}
+
 void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx)
 {
     quicrq_datagram_ack_ctx_release(stream_ctx);
@@ -2316,10 +2629,46 @@ quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uin
         }
         stream_ctx->previous_stream = cnx_ctx->last_stream;
         cnx_ctx->last_stream = stream_ctx;
+        cnx_ctx->control_stream = stream_ctx;
         quicrq_datagram_ack_ctx_init(stream_ctx);
     }
 
     return stream_ctx;
+}
+
+void quicrq_chain_uni_stream_to_control_stream(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_stream_ctx_t* stream_ctx)
+{
+    uni_stream_ctx->control_stream_ctx = stream_ctx;
+    if (stream_ctx->first_uni_stream == NULL) {
+        stream_ctx->first_uni_stream = uni_stream_ctx;
+    }
+    else {
+        stream_ctx->first_uni_stream->next_uni_stream = uni_stream_ctx;
+    }
+    stream_ctx->last_uni_stream = uni_stream_ctx;
+}
+
+quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(
+    quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t * stream_ctx, uint64_t stream_id)
+{
+    quicrq_uni_stream_ctx_t* uni_stream_ctx = (quicrq_uni_stream_ctx_t*)malloc(sizeof(quicrq_uni_stream_ctx_t));
+    if (uni_stream_ctx != NULL) {
+        memset(uni_stream_ctx, 0, sizeof(quicrq_uni_stream_ctx_t));
+        uni_stream_ctx->stream_id = stream_id;
+        if (cnx_ctx->last_uni_stream == NULL) {
+            cnx_ctx->first_uni_stream = uni_stream_ctx;
+        }
+        else {
+            cnx_ctx->last_uni_stream->next_uni_stream = uni_stream_ctx;
+        }
+        uni_stream_ctx->previous_uni_stream = cnx_ctx->last_uni_stream;
+        cnx_ctx->last_uni_stream = uni_stream_ctx;
+        //quicrq_datagram_ack_ctx_init(stream_ctx->cnx_ctx->control_stream);
+        if (stream_ctx != NULL) {
+            quicrq_chain_uni_stream_to_control_stream(uni_stream_ctx, stream_ctx);
+        }
+    }
+    return uni_stream_ctx;
 }
 
 quicrq_stream_ctx_t* quicrq_find_or_create_stream(
@@ -2341,6 +2690,46 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
 
     return stream_ctx;
 }
+
+quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
+        uint64_t stream_id,
+        quicrq_cnx_ctx_t *cnx_ctx,
+        quicrq_stream_ctx_t *stream_ctx,
+        int should_create)
+{
+    quicrq_uni_stream_ctx_t* uni_stream_ctx = cnx_ctx->first_uni_stream;
+
+    while (uni_stream_ctx != NULL) {
+        if (uni_stream_ctx->stream_id == stream_id) {
+            break;
+        }
+        uni_stream_ctx = uni_stream_ctx->next_uni_stream;
+    }
+
+    if (uni_stream_ctx == NULL && should_create) {
+        uni_stream_ctx = quicrq_create_uni_stream_context(cnx_ctx, stream_ctx, stream_id);
+    }
+
+    return uni_stream_ctx;
+}
+
+
+
+quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
+        quicrq_stream_ctx_t* control_stream,
+        uint64_t group_id)
+{
+    quicrq_uni_stream_ctx_t* uni_stream_ctx = control_stream->first_uni_stream;
+
+    while (uni_stream_ctx != NULL) {
+        if (uni_stream_ctx->current_group_id == group_id) {
+            return  uni_stream_ctx;
+        }
+        uni_stream_ctx = uni_stream_ctx->next_uni_stream;
+    }
+    return NULL;
+}
+
 
 int quicrq_cnx_has_stream(quicrq_cnx_ctx_t* cnx_ctx)
 {

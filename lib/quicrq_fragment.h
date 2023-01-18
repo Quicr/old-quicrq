@@ -43,6 +43,8 @@ typedef struct st_quicrq_fragment_cache_t {
     uint64_t next_group_id; /* Updated as objects are added sequentially to cache */
     uint64_t next_object_id; /* Updated as objects are added sequentially to cache */
     uint64_t next_offset; /* Updated as objects are added sequentially to cache */
+    uint64_t highest_group_id; /* Highest group id received, whether in order or not. */
+    uint64_t highest_object_id; /* Highest object id received within the highest group id. */
     quicrq_cached_fragment_t* first_fragment; /* Fragments in order of arrival */
     quicrq_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree; /* Splay ordered by group_id/object_id/offset */
@@ -273,6 +275,12 @@ int quicrq_fragment_datagram_publisher_fn(
     int* media_was_sent,
     int* at_least_one_active,
     uint64_t current_time);
+
+void quicrq_fragment_notify_final_to_control(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t* control_stream_ctx);
+
+uint64_t quicrq_fragment_get_object_count(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id);
+
+size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint64_t* nb_objects_previous_group, uint8_t* flags, uint8_t* buffer);
 
 void* quicrq_fragment_publisher_subscribe(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t* stream_ctx);
 

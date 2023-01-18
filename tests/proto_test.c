@@ -409,12 +409,89 @@ static uint8_t cache_policy_bytes[] = {
     1
 };
 
+static quicrq_message_t warp_header = {
+    QUICRQ_ACTION_WARP_HEADER,
+    0,
+    NULL,
+    33,
+    17,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    NULL,
+    0,
+    0,
+    0
+};
+
+static uint8_t warp_header_bytes[] = {
+    QUICRQ_ACTION_WARP_HEADER,
+    0x21,
+    0x11
+};
+
+static quicrq_message_t warp_object = {
+    QUICRQ_ACTION_OBJECT_HEADER,
+    0,
+    NULL,
+    0,
+    0,
+    129,
+    0,
+    0,
+    0x83,
+    0,
+    sizeof(repair_bytes),
+    repair_bytes,
+    0,
+    0,
+    0
+};
+
+static uint8_t warp_object_bytes[] = {
+    QUICRQ_ACTION_OBJECT_HEADER,
+    0x40,
+    0x81,
+    0x83,
+    (uint8_t)sizeof(repair_bytes),
+    REPAIR_BYTES
+};
+
+static quicrq_message_t warp_object0 = {
+    QUICRQ_ACTION_OBJECT_HEADER,
+    0,
+    NULL,
+    0,
+    0,
+    0,
+    63,
+    0,
+    0x83,
+    0,
+    sizeof(repair_bytes),
+    repair_bytes,
+    0,
+    0,
+    0
+};
+
+static uint8_t warp_object0_bytes[] = {
+    QUICRQ_ACTION_OBJECT_HEADER,
+    0x00,
+    0x3f,
+    0x83,
+    (uint8_t)sizeof(repair_bytes),
+    REPAIR_BYTES
+};
 
 
 typedef struct st_proto_test_case_t {
     uint8_t* const data;
     size_t data_length;
-    quicrq_message_t*  result;
+    quicrq_message_t* result;
 } proto_test_case_t;
 
 #define PROTO_TEST_ITEM(case_name, case_bytes) { case_bytes, sizeof(case_bytes), &case_name }
@@ -433,7 +510,10 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(start_msg, start_msg_bytes),
     PROTO_TEST_ITEM(subscribe_msg, subscribe_msg_bytes),
     PROTO_TEST_ITEM(notify_msg, notify_msg_bytes),
-    PROTO_TEST_ITEM(cache_policy_msg, cache_policy_bytes)
+    PROTO_TEST_ITEM(cache_policy_msg, cache_policy_bytes),
+    PROTO_TEST_ITEM(warp_header, warp_header_bytes),
+    PROTO_TEST_ITEM(warp_object, warp_object_bytes),
+    PROTO_TEST_ITEM(warp_object0, warp_object0_bytes)
 };
 
 static uint8_t bad_bytes1[] = {
@@ -603,6 +683,35 @@ static uint8_t bad_bytes21[] = {
     0x03
 };
 
+static uint8_t bad_bytes22[] = {
+    QUICRQ_ACTION_WARP_HEADER,
+    0x21
+};
+
+static uint8_t bad_bytes23[] = {
+    QUICRQ_ACTION_WARP_HEADER,
+    0x21,
+    0xFF
+};
+
+static uint8_t bad_bytes24[] = {
+    QUICRQ_ACTION_OBJECT_HEADER,
+    0x40,
+    0x81,
+    0x83,
+    (uint8_t)sizeof(repair_bytes) + 1,
+    REPAIR_BYTES
+};
+
+static uint8_t bad_bytes25[] = {
+    QUICRQ_ACTION_OBJECT_HEADER,
+    0x0,
+    0xC1,
+    0x83,
+    (uint8_t)sizeof(repair_bytes),
+    REPAIR_BYTES
+};
+
 typedef struct st_proto_test_bad_case_t {
     uint8_t* const data;
     size_t data_length;
@@ -633,7 +742,11 @@ static proto_test_bad_case_t proto_bad_cases[] = {
     PROTO_TEST_BAD_ITEM(bad_bytes18),
     PROTO_TEST_BAD_ITEM(bad_bytes19),
     PROTO_TEST_BAD_ITEM(bad_bytes20),
-    PROTO_TEST_BAD_ITEM(bad_bytes21)
+    PROTO_TEST_BAD_ITEM(bad_bytes21),
+    PROTO_TEST_BAD_ITEM(bad_bytes22),
+    PROTO_TEST_BAD_ITEM(bad_bytes23),
+    PROTO_TEST_BAD_ITEM(bad_bytes24),
+    PROTO_TEST_BAD_ITEM(bad_bytes25)
 };
 
 int proto_msg_test()
@@ -678,7 +791,13 @@ int proto_msg_test()
         else if (result.object_id != proto_cases[i].result->object_id) {
             ret = -1;
         }
+        else if (result.nb_objects_previous_group != proto_cases[i].result->nb_objects_previous_group) {
+            ret = -1;
+        }
         else if (result.offset != proto_cases[i].result->offset) {
+            ret = -1;
+        }
+        else if (result.flags != proto_cases[i].result->flags) {
             ret = -1;
         }
         else if (result.is_last_fragment != proto_cases[i].result->is_last_fragment) {

@@ -60,9 +60,6 @@ typedef struct st_quicrq_relay_context_t {
     quicrq_cnx_ctx_t* cnx_ctx;
     quicrq_transport_mode_enum transport_mode;
     unsigned int is_origin_only : 1;
-#if 0
-    unsigned int use_datagrams : 1;
-#endif
 } quicrq_relay_context_t;
 
 /* Management of the relay cache

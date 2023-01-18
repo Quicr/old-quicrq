@@ -71,6 +71,9 @@ void quicrq_msg_buffer_release(quicrq_message_buffer_t* msg_buffer);
 #define QUICRQ_ACTION_SUBSCRIBE 9
 #define QUICRQ_ACTION_NOTIFY 10
 #define QUICRQ_ACTION_CACHE_POLICY 11
+#define QUICRQ_ACTION_WARP_HEADER 12
+#define QUICRQ_ACTION_OBJECT_HEADER 13
+#define QUICRQ_ACTION_RUSH_HEADER 14
 
 /* Protocol message.
  * This structure is used when decoding messages
@@ -156,6 +159,14 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
 size_t quicrq_cache_policy_msg_reserve();
 uint8_t* quicrq_cache_policy_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint8_t cache_policy);
 const uint8_t* quicrq_cache_policy_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t * message_type, uint8_t * cache_policy);
+size_t quicrq_warp_header_msg_reserve(uint64_t media_id, uint64_t group_id);
+uint8_t* quicrq_warp_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t media_id, uint64_t group_id);
+const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* media_id, uint64_t* group_id);
+size_t quicrq_object_header_msg_reserve(uint64_t object_id, uint64_t nb_objects_previous_group, size_t data_length);
+uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t object_id,
+    uint64_t nb_objects_previous_group, uint8_t flags, size_t length, const uint8_t* data);
+const uint8_t* quicrq_object_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+    uint64_t* object_id, uint64_t* nb_objects_previous_group, uint8_t* flags, size_t* length, const uint8_t** data);
 
 /* Encode and decode the header of datagram packets. */
 #define QUICRQ_DATAGRAM_HEADER_MAX 16
@@ -315,7 +326,7 @@ int quicrq_cnx_subscribe_media_ex(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url,
  /* Quic media consumer */
 typedef enum {
     quicrq_sending_ready = 0,
-    quicrq_sending_stream,
+    quicrq_sending_single_stream,
     quicrq_sending_initial,
     quicrq_sending_repair,
     quicrq_sending_final_point,
@@ -337,6 +348,25 @@ typedef enum {
     quicrq_receive_notify,
     quicrq_receive_done
 }  quicrq_stream_receive_state_enum;
+
+/* Uni Stream State Enums */
+/*
+ * open, header_sent, obj_header, obj -> header_sent
+ */
+typedef enum {
+    quicrq_sending_open = 0,
+    quicrq_sending_warp_header_sent,
+    quicrq_sending_object_header,
+    quicrq_sending_warp_all_sent,
+    quicrq_sending_warp_should_close
+} quicrq_uni_stream_sending_state_enum;
+
+typedef enum {
+    quicrq_receive_open = 0,
+    quicrq_receive_warp_header,
+    quicrq_receive_object_header,
+    quicrq_receive_object_data,
+}  quicrq_uni_stream_receive_state_enum;
 
 typedef struct st_quicrq_datagram_ack_state_t {
     picosplay_node_t datagram_ack_node;
@@ -371,6 +401,27 @@ typedef struct st_quicrq_notify_url_t {
     uint8_t* url;
 } quicrq_notify_url_t;
 
+/* Context representing unidirectional streams*/
+struct st_quicrq_uni_stream_ctx_t {
+    struct st_quicrq_uni_stream_ctx_t* next_uni_stream;
+    struct st_quicrq_uni_stream_ctx_t* previous_uni_stream;
+    /* Control stream context - has media_source */
+    struct st_quicrq_stream_ctx_t* control_stream_ctx;
+    uint64_t stream_id;
+    uint64_t current_group_id;
+    uint64_t current_object_id;
+    uint64_t last_object_id; 
+    /* UniStream state */
+    quicrq_uni_stream_sending_state_enum send_state;
+    quicrq_uni_stream_receive_state_enum receive_state;
+
+    /* Control flags */
+    unsigned int is_sender : 1;
+
+    quicrq_message_buffer_t message_buffer;
+    /* TODO: Add priority */
+};
+
 struct st_quicrq_stream_ctx_t {
     struct st_quicrq_stream_ctx_t* next_stream;
     struct st_quicrq_stream_ctx_t* previous_stream;
@@ -395,6 +446,11 @@ struct st_quicrq_stream_ctx_t {
     uint64_t start_object_id;
     uint64_t final_group_id;
     uint64_t final_object_id;
+    /* When sending warp streams, keep track of the next GOP
+     * for which a uni stream should be started */
+    /* TODO: use this variable to clean up the "wake up media stream" function */
+    /* TODO: immediately dispose of uni_stream_contexts when "should close" */
+    uint64_t warp_next_group_id;
     /* Control of datagrams sent for that media
      * We only keep track of fragments that are above the horizon.
      * The one below horizon are already acked, or otherwise forgotten.
@@ -444,13 +500,19 @@ struct st_quicrq_stream_ctx_t {
     unsigned int is_start_object_id_sent : 1;
     unsigned int is_final_object_id_sent : 1;
     unsigned int is_cache_policy_sent : 1;
+    unsigned int is_warp_mode_started: 1;
 
     quicrq_message_buffer_t message_sent;
     quicrq_message_buffer_t message_receive;
 
     quicrq_media_consumer_fn consumer_fn; /* Callback function for media data arrival  */
     struct st_quicrq_fragment_publisher_context_t* media_ctx; /* Callback argument for receiving or sending data */
+    /* set of uni_streams for a given media_id - is there a better way handle the individual stream - priorities, reset.. */
+    struct st_quicrq_uni_stream_ctx_t* first_uni_stream;
+    struct st_quicrq_uni_stream_ctx_t* last_uni_stream;
+    uint64_t next_largest_group_id; /* group_id expected next */
 };
+
 
 int quicrq_set_media_stream_ctx(quicrq_stream_ctx_t* stream_ctx, quicrq_media_consumer_fn media_fn, void* media_ctx);
 
@@ -480,6 +542,12 @@ struct st_quicrq_cnx_ctx_t {
     uint64_t next_abandon_datagram_id; /* used to test whether unexpected datagrams are OK */
     struct st_quicrq_stream_ctx_t* first_stream;
     struct st_quicrq_stream_ctx_t* last_stream;
+    /* reference to the unidirectional streams */
+    struct st_quicrq_uni_stream_ctx_t* first_uni_stream;
+    struct st_quicrq_uni_stream_ctx_t* last_uni_stream;
+
+    /* reference to the control stream */
+    struct st_quicrq_stream_ctx_t* control_stream;
 };
 
 /* Prototype function for managing the cache of relays.
@@ -548,10 +616,23 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
     uint64_t stream_id,
     quicrq_cnx_ctx_t* cnx_ctx,
     int should_create);
-
 quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uint64_t stream_id);
 
+quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
+    uint64_t stream_id,
+    quicrq_cnx_ctx_t* cnx_ctx,
+    quicrq_stream_ctx_t* stream_ctx,
+    int should_create);
+
+quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
+        quicrq_stream_ctx_t* control_stream_ctx,
+        uint64_t group_id);
+
+void quicrq_chain_uni_stream_to_control_stream(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_stream_ctx_t* stream_ctx);
+
+
 void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* stream_ctx);
+void quicrq_delete_uni_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_ctx_t* stream_ctx);
 
 /* Encode and decode the object header */
 const uint8_t* quicr_decode_object_header(const uint8_t* fh, const uint8_t* fh_max, quicrq_media_object_header_t* hdr);

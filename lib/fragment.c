@@ -99,12 +99,20 @@ void quicrq_fragment_cache_media_init(quicrq_fragment_cache_t* cached_media)
 
 /* Fragment cache progress.
  * Manage the "next_group" and "next_object" items.
+ * Also manage "highest group" and "highest object"
  */
 void quicrq_fragment_cache_progress(quicrq_fragment_cache_t* cache_ctx,
     quicrq_cached_fragment_t* fragment)
 {
     /* Check whether the next object is present */
     picosplay_node_t* next_fragment_node = &fragment->fragment_node;
+
+    if (fragment->group_id > cache_ctx->highest_group_id ||
+        (fragment->group_id == cache_ctx->highest_group_id &&
+            fragment->object_id > cache_ctx->highest_object_id)) {
+        cache_ctx->highest_group_id = fragment->group_id;
+        cache_ctx->highest_object_id = fragment->object_id;
+    }
 
     do {
         int is_expected = 0;
@@ -1063,7 +1071,6 @@ int quicrq_fragment_datagram_publisher_fn(
          * received. At this point, we only check that the final ID is marked, and all fragments have 
          * been sent.
          */
-
         if ((media_ctx->cache_ctx->final_group_id != 0 || media_ctx->cache_ctx->final_object_id != 0) &&
             media_ctx->current_fragment != NULL &&
             media_ctx->is_current_fragment_sent &&
@@ -1078,6 +1085,89 @@ int quicrq_fragment_datagram_publisher_fn(
     }
 
     return ret;
+}
+
+/* Check whether the final object is known */
+void quicrq_fragment_notify_final_to_control(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t* control_stream_ctx)
+{
+    if ((cache_ctx->final_group_id != 0 || cache_ctx->final_object_id != 0) &&
+        control_stream_ctx->final_group_id == 0 && control_stream_ctx->final_object_id == 0){
+        /* Set the endpoints for the stream, prepare sending a final message */
+        control_stream_ctx->final_group_id = cache_ctx->final_group_id;
+        control_stream_ctx->final_object_id = cache_ctx->final_object_id;
+        /* Wake up the control stream so the final message can be sent. */
+        picoquic_mark_active_stream(control_stream_ctx->cnx_ctx->cnx, control_stream_ctx->stream_id, 1, control_stream_ctx);
+    }
+}
+
+/* Check whether the number of objects in the next group is known */
+uint64_t quicrq_fragment_get_object_count(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id)
+{
+    /* Find whether the next object is in cache */
+    quicrq_cached_fragment_t key = { 0 };
+    picosplay_node_t* fragment_node;
+    uint64_t nb_objects = 0;
+    key.group_id = group_id + 1;
+    key.object_id = 0;
+    key.offset = 0;
+    fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
+
+    if (fragment_node != NULL) {
+        quicrq_cached_fragment_t* fragment_state =
+            (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+        nb_objects = fragment_state->nb_objects_previous_group;
+    }
+    return nb_objects;
+}
+
+/* Copy a full object from the cache.
+ * - return the size of the object if it is completely received
+ * - returns 0 if the object is not yet received
+ * - copy the bytes into buffer if "buffer" is not NULL.
+ * - the nb_objects_previous_group and flags will be set to the value documented in the first fragment
+ */
+size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint64_t* nb_objects_previous_group, uint8_t * flags, uint8_t* buffer)
+{
+    /* TODO: read fragments in sequence until the next fragment */
+    /* Find all cache fragments that might be before the start point,
+   * and delete them */
+    size_t object_size = 0;
+    uint64_t current_offset = 0;
+    picosplay_node_t* fragment_node = NULL;
+
+    /* find the fragment tree for the group/object */
+    quicrq_cached_fragment_t key = { 0 };
+    key.group_id = group_id;
+    key.object_id = object_id;
+    key.offset = 0;
+    fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
+    *nb_objects_previous_group = 0;
+
+    while (fragment_node != NULL) {
+        quicrq_cached_fragment_t* fragment_state =
+                (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+        if (fragment_state->group_id != group_id || fragment_state->object_id != object_id || fragment_state->offset != current_offset) {
+            /* Next fragment in order is not what we expect, so give up */
+            break;
+        }
+        if (fragment_state->object_id == 0 && fragment_state->offset == 0) {
+            *nb_objects_previous_group = fragment_state->nb_objects_previous_group;
+        }
+        /* compute the object size and fill the passed in buffer, if non-null*/
+        object_size += fragment_state->data_length;
+        if (buffer != NULL) {
+            memcpy(buffer, fragment_state->data + current_offset, fragment_state->data_length);
+            current_offset += fragment_state->data_length;
+        }
+
+        if (fragment_state->is_last_fragment) {
+            /* we found all the fragments, return total length */
+            *flags = fragment_state->flags;
+            return object_size;
+        }
+    }
+
+    return 0;
 }
 
 void* quicrq_fragment_publisher_subscribe(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t * stream_ctx)

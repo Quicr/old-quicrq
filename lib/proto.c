@@ -539,6 +539,121 @@ const uint8_t* quicrq_accept_msg_decode(const uint8_t* bytes, const uint8_t* byt
     return bytes;
 }
 
+/* Encoding or decoding the warp_header message
+ *
+ * quicrq_warp_header_message {
+ *     message_type(i),
+ *     media_id(i),
+ *     group_id(i)
+ * }
+ */
+
+size_t quicrq_warp_header_msg_reserve(uint64_t media_id, uint64_t group_id)
+{
+    size_t len = 1 +
+                 picoquic_frames_varint_encode_length(media_id) +
+                 picoquic_frames_varint_encode_length(group_id);
+    return len;
+}
+
+uint8_t* quicrq_warp_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t media_id, uint64_t group_id)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, media_id)) != NULL) {
+        bytes = picoquic_frames_varint_encode(bytes, bytes_max, group_id);
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type, uint64_t* media_id, uint64_t* group_id)
+{
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, media_id)) != NULL){
+        bytes = picoquic_frames_varint_decode(bytes, bytes_max, group_id);
+    }
+    return bytes;
+}
+
+
+/* Encoding or decoding the object_header message
+ *
+ * quicrq_object_header_message {
+ *     message_type(i),
+ *     object_id(i),
+ *     [nb_objects_previous_group(i),]
+ *     flags[8],
+ *     length(i),
+ *     data(...)
+ * }
+ * 
+ * The nb_objects_previous_group is only set if the object_id is zero.
+ */
+
+size_t quicrq_object_header_msg_reserve(uint64_t object_id, uint64_t nb_objects_previous_group, size_t data_length)
+{
+    size_t len = 1 + picoquic_frames_varint_encode_length(object_id) +
+        ((object_id == 0) ? picoquic_frames_varint_encode_length(nb_objects_previous_group) : 0)
+        + 1;
+    len += picoquic_frames_varint_encode_length(data_length);
+    len += data_length;
+    return len;
+}
+
+uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t object_id,
+    uint64_t nb_objects_previous_group, uint8_t flags, size_t length, const uint8_t *data)
+{
+    if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id)) != NULL) {
+        if (object_id == 0) {
+            bytes = picoquic_frames_varint_encode(bytes, bytes_max, nb_objects_previous_group);
+        }
+        if (bytes != NULL) {
+            if (bytes < bytes_max) {
+                *bytes++ = flags;
+                if (data != NULL) {
+                    bytes = picoquic_frames_length_data_encode(bytes, bytes_max, length, data);
+                }
+                else {
+                    bytes = picoquic_frames_varint_encode(bytes, bytes_max, length);
+                }
+            }
+            else {
+                bytes = NULL;
+            }
+        }
+    }
+    return bytes;
+}
+
+const uint8_t* quicrq_object_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
+    uint64_t *object_id, uint64_t *nb_objects_previous_group, uint8_t* flags, size_t *length, const uint8_t **data)
+{
+    *object_id = 0;
+    *nb_objects_previous_group = 0;
+    *flags = 0;
+    *length = 0;
+    *data = NULL;
+    if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
+        (bytes = picoquic_frames_varint_decode(bytes, bytes_max, object_id)) != NULL){
+        if (*object_id == 0) {
+            bytes = picoquic_frames_varint_decode(bytes, bytes_max, nb_objects_previous_group);
+        }
+        if (bytes != NULL) {
+            if (bytes < bytes_max) {
+                *flags = *bytes++;
+                if ((bytes = picoquic_frames_varlen_decode(bytes, bytes_max, length)) != NULL) {
+                    *data = bytes;
+                    bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *length);
+                }
+            }
+            else {
+                bytes = NULL;
+            }
+        }
+    }
+    return bytes;
+}
+
 
 /* Generic decoding of QUICRQ control message */
 const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, quicrq_message_t* msg)
@@ -582,6 +697,13 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
             break;
         case QUICRQ_ACTION_CACHE_POLICY:
             bytes = quicrq_cache_policy_msg_decode(bytes, bytes_max, &msg->message_type, &msg->cache_policy);
+            break;
+        case QUICRQ_ACTION_WARP_HEADER:
+            bytes = quicrq_warp_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->media_id, &msg->group_id);
+            break;
+        case QUICRQ_ACTION_OBJECT_HEADER:
+            bytes = quicrq_object_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->object_id,
+                &msg->nb_objects_previous_group, &msg->flags, &msg->length, &msg->data);
             break;
         default:
             /* Unexpected message type */
@@ -629,6 +751,13 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         break;
     case QUICRQ_ACTION_CACHE_POLICY:
         bytes = quicrq_cache_policy_msg_encode(bytes, bytes_max, msg->message_type, msg->cache_policy);
+        break;
+    case QUICRQ_ACTION_WARP_HEADER:
+        bytes = quicrq_warp_header_msg_encode(bytes, bytes_max, msg->message_type, msg->media_id, msg->group_id);
+        break;
+    case QUICRQ_ACTION_OBJECT_HEADER:
+        bytes = quicrq_object_header_msg_encode(bytes, bytes_max, msg->message_type, msg->object_id,
+            msg->nb_objects_previous_group, msg->flags, msg->length, msg->data);
         break;
     default:
         /* Unexpected message type */
@@ -725,6 +854,8 @@ quicrq_media_source_ctx_t* quicrq_publish_datagram_source(quicrq_ctx_t* qr_ctx, 
             srce_ctx->cache_ctx = cache_ctx;
             srce_ctx->is_local_object_source = is_local_object_source;
 
+            // Called in the case there exists streams on the cnx
+            // For publish object source, it is a no-op
             if (quicrq_notify_url_to_all(qr_ctx, url, url_length) < 0) {
                 DBG_PRINTF("%s", "Fail to notify new source");
                 quicrq_delete_source(srce_ctx, qr_ctx);
@@ -882,6 +1013,7 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
     }
 }
 
+/// stream_ctx - this is for control channel
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     if (stream_ctx->cnx_ctx->cnx != NULL) {
@@ -893,6 +1025,67 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                 (stream_ctx->is_cache_real_time && !stream_ctx->is_cache_policy_sent)) {
                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
             }
+        } else if (stream_ctx->transport_mode == quicrq_transport_mode_warp) {
+                /* handle case of handling warp mode */
+                /*
+                 * Scenarios
+                 *  TODO: Can it support out of order sending of groups
+                 *  TODO: mix of transport types (datagram & stream) along the path and its implications
+                 *        on the cache organization
+                 */
+                if(stream_ctx->is_sender) {
+
+                    uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
+                    uint64_t max_group_id = 0; /* TODO: check that! */
+
+                    /* TODO: do we really need this block? It would be better if all uni stream
+                     * creation was in a single place.
+                     */
+                    if (stream_ctx->first_uni_stream == NULL) {
+                        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+
+                        uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
+                        quicrq_uni_stream_ctx_t *uni_stream_ctx = quicrq_find_or_create_uni_stream(
+                                uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
+                        picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx,
+                                                    uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+
+
+                        return;
+                    }
+
+                    /* loop through all the unistreams, since more than one can be active */
+                    quicrq_uni_stream_ctx_t *uni_stream_ctx = stream_ctx->first_uni_stream;
+                    while(uni_stream_ctx != NULL) {
+                        /* TODO: this should not be needed if we keep track of
+                         * warp_next_group_id in control stream context */
+                        if (uni_stream_ctx->current_group_id > max_group_id) {
+                            max_group_id = uni_stream_ctx->current_group_id;
+                        }
+                        if (uni_stream_ctx->send_state != quicrq_sending_warp_should_close) {
+                            /* TODO: the used contexts should be removed, so the test above will not be needed. */
+                            picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
+                        }
+                        uni_stream_ctx = uni_stream_ctx->next_uni_stream;
+                    }
+
+                    /* create uni_streams for unseen group_id from the cache */
+                    for(uint64_t i = max_group_id + 1; i <= highest_group_id; i++) {
+                        uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
+                        quicrq_uni_stream_ctx_t *ctx = quicrq_find_or_create_uni_stream(
+                                uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
+                        if (ctx != NULL) {
+                            ctx->current_group_id = i;
+                            picoquic_mark_active_stream(ctx->control_stream_ctx->cnx_ctx->cnx,
+                                ctx->stream_id, 1, ctx);
+                            /* TODO: update warp_next_group_id in stream context */
+                        }
+                        else {
+                            break;
+                        }
+                    }
+                }
+
         }
         else if (stream_ctx->cnx_ctx->cnx != NULL) {
             picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
@@ -982,24 +1175,23 @@ int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * u
 {
     int ret = 0;
     /* Process initial request */
-    stream_ctx->transport_mode = (use_datagram) ? quicrq_transport_mode_datagram : quicrq_transport_mode_single_stream;
     /* Open the media -- TODO, variants with different actions. */
     ret = quicrq_subscribe_local_media(stream_ctx, url, url_length);
     if (ret == 0) {
         quicrq_wakeup_media_stream(stream_ctx);
     }
     stream_ctx->is_sender = 1;
-    if (use_datagram) {
+    if (stream_ctx->transport_mode == quicrq_transport_mode_single_stream) {
+        stream_ctx->send_state = quicrq_sending_single_stream;
+        stream_ctx->receive_state = quicrq_receive_done;
+        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+    }
+    else {
         /* There is no data to send or receive on the control stream at this point.
-         * The sender might send repair messages and will send a final object eventually.
+         * The sender will send a final object eventually.
          * The receiver will close the stream when not needed anymore. */
         stream_ctx->send_state = quicrq_sending_ready;
         stream_ctx->receive_state = quicrq_receive_done;
-    }
-    else {
-        stream_ctx->send_state = quicrq_sending_stream;
-        stream_ctx->receive_state = quicrq_receive_done;
-        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     }
 
     return ret;
@@ -1149,11 +1341,12 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, quicrq_transport_m
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, more_to_send, stream_ctx);
     }
     else if (transport_mode == quicrq_transport_mode_single_stream){
-        stream_ctx->send_state = quicrq_sending_stream;
+        stream_ctx->send_state = quicrq_sending_single_stream;
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-    }
-    else {
+    } else if (transport_mode == quicrq_transport_mode_warp) {
+
+    } else {
         /* TODO: WARP, RUSH */
         ret = -1;
     }

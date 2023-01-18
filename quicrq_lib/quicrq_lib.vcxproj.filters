@@ -53,5 +53,8 @@
     <ClInclude Include="..\include\quicrq_relay.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\lib\quicrq_fragment.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

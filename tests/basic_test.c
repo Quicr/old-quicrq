@@ -694,6 +694,13 @@ int quicrq_datagram_unsubscribe_test()
     return quicrq_basic_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 0, 1);
 }
 
+
+/* Basic warp test. Same as the basic test, but using warp instead of streams. */
+int quicrq_warp_basic_test()
+{
+    return quicrq_basic_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 0, 0);
+}
+
 int quicrq_get_addr_test()
 {
     int ret = 0;
