@@ -1033,7 +1033,7 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                  *  TODO: mix of transport types (datagram & stream) along the path and its implications
                  *        on the cache organization
                  */
-                if(stream_ctx->is_sender) {
+                if(stream_ctx->is_sender && stream_ctx->media_id != UINT64_MAX) {
 
                     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
                     uint64_t max_group_id = 0; /* TODO: check that! */
