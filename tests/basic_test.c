@@ -701,6 +701,13 @@ int quicrq_warp_basic_test()
     return quicrq_basic_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 0, 0);
 }
 
+/* Basic client test for warp mode */
+int quicrq_warp_basic_client_test()
+{
+    return quicrq_basic_test_one(1, quicrq_transport_mode_warp, 0, 1, 0, 0, 0);
+}
+
+
 int quicrq_get_addr_test()
 {
     int ret = 0;

@@ -107,7 +107,9 @@ static const quicrq_test_def_t test_table[] =
     { "fourlegs_datagram_loss", quicrq_fourlegs_datagram_loss_test },
     { "fragment_cache_fill", quicrq_fragment_cache_fill_test },
     { "get_addr", quicrq_get_addr_test },
-    { "warp_basic", quicrq_warp_basic_test }
+    { "warp_basic", quicrq_warp_basic_test },
+    { "warp_basic_client", quicrq_warp_basic_client_test },
+
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);

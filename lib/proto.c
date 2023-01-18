@@ -1345,6 +1345,10 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, quicrq_transport_m
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     } else if (transport_mode == quicrq_transport_mode_warp) {
+        stream_ctx->media_id = media_id;
+        stream_ctx->send_state = quicrq_sending_ready;
+        stream_ctx->receive_state = quicrq_receive_done;
+        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
 
     } else {
         /* TODO: WARP, RUSH */
