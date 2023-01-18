@@ -93,6 +93,7 @@ extern "C" {
     int quicrq_fragment_cache_fill_test();
     int quicrq_get_addr_test();
     int quicrq_warp_basic_test();
+    int quicrq_warp_basic_client_test();
 
 #ifdef __cplusplus
 }

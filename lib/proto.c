@@ -1033,26 +1033,10 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                  *  TODO: mix of transport types (datagram & stream) along the path and its implications
                  *        on the cache organization
                  */
-                if(stream_ctx->is_sender) {
-
+                if(stream_ctx->is_sender && stream_ctx->media_id != UINT64_MAX) {
+                    /* TODO: do not create uni stream if group id below "start" */
                     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
-                    uint64_t max_group_id = 0; /* TODO: check that! */
-
-                    /* TODO: do we really need this block? It would be better if all uni stream
-                     * creation was in a single place.
-                     */
-                    if (stream_ctx->first_uni_stream == NULL) {
-                        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-
-                        uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
-                        quicrq_uni_stream_ctx_t *uni_stream_ctx = quicrq_find_or_create_uni_stream(
-                                uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
-                        picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx,
-                                                    uni_stream_ctx->stream_id, 1, uni_stream_ctx);
-
-
-                        return;
-                    }
+                    uint64_t max_group_id = 0;
 
                     /* loop through all the unistreams, since more than one can be active */
                     quicrq_uni_stream_ctx_t *uni_stream_ctx = stream_ctx->first_uni_stream;
@@ -1070,7 +1054,7 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                     }
 
                     /* create uni_streams for unseen group_id from the cache */
-                    for(uint64_t i = max_group_id + 1; i <= highest_group_id; i++) {
+                    for(uint64_t i = (stream_ctx->first_uni_stream == NULL)?0:max_group_id + 1; i <= highest_group_id; i++) {
                         uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
                         quicrq_uni_stream_ctx_t *ctx = quicrq_find_or_create_uni_stream(
                                 uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
@@ -1345,6 +1329,10 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, quicrq_transport_m
         stream_ctx->receive_state = quicrq_receive_done;
         picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
     } else if (transport_mode == quicrq_transport_mode_warp) {
+        stream_ctx->media_id = media_id;
+        stream_ctx->send_state = quicrq_sending_ready;
+        stream_ctx->receive_state = quicrq_receive_done;
+        picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
 
     } else {
         /* TODO: WARP, RUSH */
