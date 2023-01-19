@@ -1363,8 +1363,9 @@ int quicrq_cnx_post_accepted(quicrq_stream_ctx_t* stream_ctx, quicrq_transport_m
 int quicrq_cnx_handle_consumer_finished(quicrq_stream_ctx_t* stream_ctx, int is_final, int is_datagram, int ret)
 {
     if (ret == quicrq_consumer_finished) {
-        quicrq_log_message(stream_ctx->cnx_ctx, "Stream %"PRIu64" finished after %s, ret=%d",
-            stream_ctx->stream_id, (is_final) ? "final offset" : ((is_datagram) ? "datagram" : "repair"), ret);
+        quicrq_log_message(stream_ctx->cnx_ctx, "Stream %"PRIu64", %s, finished after %s, ret=%d",
+            stream_ctx->stream_id, quicrq_transport_mode_to_string(stream_ctx->transport_mode),
+            (is_final) ? "final offset" : ((is_datagram) ? "datagram" : "repair"), ret);
         DBG_PRINTF("Stream %"PRIu64" finished after %s, ret=%d", stream_ctx->stream_id, (is_final)?"final offset":((is_datagram)?"datagram":"repair"), ret);
         stream_ctx->is_receive_complete = 1;
         stream_ctx->send_state = quicrq_sending_fin;
