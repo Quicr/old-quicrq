@@ -94,6 +94,7 @@ extern "C" {
     int quicrq_get_addr_test();
     int quicrq_warp_basic_test();
     int quicrq_warp_basic_client_test();
+    int quicrq_relay_basic_warp_test();
 
 #ifdef __cplusplus
 }

@@ -2100,11 +2100,6 @@ int quicrq_callback(picoquic_cnx_t* cnx,
 
                 /* we consider unidir streams as warp/rush streams. may be we need something more explicit */
                 ret = quicrq_receive_stream_data(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
-#if 1
-                if(ret == -1) {
-                    DBG_PRINTF("quicrq_receive_stream_data NULL, steam: %" PRIu64, stream_id);
-                }
-#endif
             }
             else {
                 uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_id, cnx_ctx, NULL, 1);
@@ -2117,12 +2112,6 @@ int quicrq_callback(picoquic_cnx_t* cnx,
                 /* we consider unidirectional streams as warp/rush streams. maybe we need something more explicit */
                 ret = quicrq_receive_warp_or_rush_stream_data(cnx_ctx, uni_stream_ctx, bytes, length,
                     (fin_or_event == picoquic_callback_stream_fin));
-#if 1
-                if(ret == -1) {
-                    DBG_PRINTF("quicrq_receive_stream_data NULL, steam: %" PRIu64, stream_id);
-                }
-#endif
-
             }
 
             break;
@@ -2223,7 +2212,6 @@ int quicrq_callback(picoquic_cnx_t* cnx,
         picoquic_log_app_message(cnx, "QUICRQ callback returns %d, event %d", ret, fin_or_event);
         DBG_PRINTF("QUICRQ callback returns %d, event %d", ret, fin_or_event);
     }
-
 
     return ret;
 }
