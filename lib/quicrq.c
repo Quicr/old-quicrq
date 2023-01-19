@@ -2014,6 +2014,9 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                                                   incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
                                                                   incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
                                                                   1, incoming.length);
+                                    if (ret == quicrq_consumer_finished) {
+                                        ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 0, 1, ret);
+                                    }
                                 }
                                 break;
                                 default:
