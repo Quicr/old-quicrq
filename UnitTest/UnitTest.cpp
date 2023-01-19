@@ -550,5 +550,11 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(relay_basic_warp) {
+			int ret = quicrq_relay_basic_warp_test();
+
+			Assert::AreEqual(ret, 0);
+		}
 	};
 }
