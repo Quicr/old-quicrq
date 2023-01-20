@@ -403,10 +403,13 @@ typedef struct st_quicrq_notify_url_t {
 
 /* Context representing unidirectional streams*/
 struct st_quicrq_uni_stream_ctx_t {
-    struct st_quicrq_uni_stream_ctx_t* next_uni_stream;
-    struct st_quicrq_uni_stream_ctx_t* previous_uni_stream;
+    struct st_quicrq_uni_stream_ctx_t* next_uni_stream_for_cnx;
+    struct st_quicrq_uni_stream_ctx_t* previous_uni_stream_for_cnx;
     /* Control stream context - has media_source */
     struct st_quicrq_stream_ctx_t* control_stream_ctx;
+    struct st_quicrq_uni_stream_ctx_t* next_uni_stream_for_control_stream;
+    struct st_quicrq_uni_stream_ctx_t* previous_uni_stream_for_control_stream;
+    /* properties */
     uint64_t stream_id;
     uint64_t current_group_id;
     uint64_t current_object_id;
@@ -414,9 +417,6 @@ struct st_quicrq_uni_stream_ctx_t {
     /* UniStream state */
     quicrq_uni_stream_sending_state_enum send_state;
     quicrq_uni_stream_receive_state_enum receive_state;
-
-    /* Control flags */
-    unsigned int is_sender : 1;
 
     quicrq_message_buffer_t message_buffer;
     /* TODO: Add priority */

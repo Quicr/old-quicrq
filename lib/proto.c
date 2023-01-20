@@ -1031,7 +1031,7 @@ void quicrq_wakeup_media_uni_stream(quicrq_stream_ctx_t* stream_ctx)
             /* TODO: the used contexts should be removed, so the test above will not be needed. */
             picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
         }
-        uni_stream_ctx = uni_stream_ctx->next_uni_stream;
+        uni_stream_ctx = uni_stream_ctx->next_uni_stream_for_control_stream;
     }
 
     /* create uni_streams for unseen group_id from the cache */

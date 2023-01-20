@@ -2543,34 +2543,51 @@ void quicrq_delete_uni_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_c
 {
     quicrq_stream_ctx_t* ctrl_stream = uni_stream_ctx->control_stream_ctx;
 
-    /* update connection context */
-    if (uni_stream_ctx->next_uni_stream == NULL) {
-        cnx_ctx->last_uni_stream = uni_stream_ctx->previous_uni_stream;
-        if (ctrl_stream != NULL) {
-            ctrl_stream->last_uni_stream = uni_stream_ctx->previous_uni_stream;
-        }
+    /* update chain in connection context */
+    if (uni_stream_ctx->next_uni_stream_for_cnx == NULL) {
+        cnx_ctx->last_uni_stream = uni_stream_ctx->previous_uni_stream_for_cnx;
     }
     else {
-        uni_stream_ctx->next_uni_stream->previous_uni_stream = uni_stream_ctx->previous_uni_stream;
+        uni_stream_ctx->next_uni_stream_for_cnx->previous_uni_stream_for_cnx = uni_stream_ctx->previous_uni_stream_for_cnx;
     }
-
-    if (uni_stream_ctx->previous_uni_stream == NULL) {
-        cnx_ctx->first_uni_stream = uni_stream_ctx->next_uni_stream;
-        if(ctrl_stream != NULL) {
-            ctrl_stream->first_uni_stream = uni_stream_ctx->next_uni_stream;
-        }
+    if (uni_stream_ctx->previous_uni_stream_for_cnx == NULL) {
+        cnx_ctx->first_uni_stream = uni_stream_ctx->next_uni_stream_for_cnx;
     }
     else {
-        uni_stream_ctx->previous_uni_stream->next_uni_stream = uni_stream_ctx->next_uni_stream;
+        uni_stream_ctx->previous_uni_stream_for_cnx->next_uni_stream_for_cnx = uni_stream_ctx->next_uni_stream_for_cnx;
     }
-
-    if (cnx_ctx->cnx != NULL && uni_stream_ctx->is_sender) {
-        (void)picoquic_mark_active_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, NULL);
-        (void)picoquic_add_to_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, NULL, 0, 1);
+    /* Update chain in control stream context */
+    if (ctrl_stream != NULL) {
+        if (uni_stream_ctx->next_uni_stream_for_control_stream == NULL) {
+            ctrl_stream->last_uni_stream = uni_stream_ctx->previous_uni_stream_for_control_stream;
+        }
+        else {
+            uni_stream_ctx->next_uni_stream_for_control_stream->previous_uni_stream_for_control_stream = 
+                uni_stream_ctx->previous_uni_stream_for_control_stream;
+        }
+        if (uni_stream_ctx->previous_uni_stream_for_control_stream == NULL) {
+            ctrl_stream->first_uni_stream = uni_stream_ctx->next_uni_stream_for_control_stream;
+        }
+        else {
+            uni_stream_ctx->previous_uni_stream_for_control_stream->next_uni_stream_for_control_stream = 
+                uni_stream_ctx->next_uni_stream_for_control_stream;
+        }
     }
-
+    /* Unlink the unistream context from the picoquic stream context */
+    if (cnx_ctx->cnx != NULL) {
+        if (ctrl_stream != NULL && ctrl_stream->is_sender) {
+            (void)picoquic_mark_active_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, NULL);
+            if (uni_stream_ctx->send_state < quicrq_sending_warp_should_close) {
+                /* This is an error case: reset the stream before closing it will force an abandon. */
+                (void)picoquic_reset_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0);
+            }
+        }
+        else {
+            picoquic_set_app_stream_ctx(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0);
+        }
+    }
+    /* Release memory*/
     quicrq_msg_buffer_release(&uni_stream_ctx->message_buffer);
-
     free(uni_stream_ctx);
 }
 
@@ -2588,7 +2605,12 @@ void quicrq_delete_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_stream_ctx_t* st
         free(stream_ctx->subscribe_prefix);
         stream_ctx->subscribe_prefix = NULL;
     }
+    /* Delete the uni streams controlled by this context */
+    while (stream_ctx->first_uni_stream != NULL) {
+        quicrq_delete_uni_stream_ctx(stream_ctx->cnx_ctx, stream_ctx->first_uni_stream);
+    }
 
+    /* Remove stream context from connection context */
     if (stream_ctx->next_stream == NULL) {
         cnx_ctx->last_stream = stream_ctx->previous_stream;
     }
@@ -2655,7 +2677,7 @@ void quicrq_chain_uni_stream_to_control_stream(quicrq_uni_stream_ctx_t* uni_stre
         stream_ctx->first_uni_stream = uni_stream_ctx;
     }
     else {
-        stream_ctx->first_uni_stream->next_uni_stream = uni_stream_ctx;
+        stream_ctx->first_uni_stream->next_uni_stream_for_control_stream = uni_stream_ctx;
     }
     stream_ctx->last_uni_stream = uni_stream_ctx;
 }
@@ -2665,16 +2687,18 @@ quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(
 {
     quicrq_uni_stream_ctx_t* uni_stream_ctx = (quicrq_uni_stream_ctx_t*)malloc(sizeof(quicrq_uni_stream_ctx_t));
     if (uni_stream_ctx != NULL) {
+        /* Chain to connection */
         memset(uni_stream_ctx, 0, sizeof(quicrq_uni_stream_ctx_t));
         uni_stream_ctx->stream_id = stream_id;
         if (cnx_ctx->last_uni_stream == NULL) {
             cnx_ctx->first_uni_stream = uni_stream_ctx;
         }
         else {
-            cnx_ctx->last_uni_stream->next_uni_stream = uni_stream_ctx;
+            cnx_ctx->last_uni_stream->next_uni_stream_for_cnx = uni_stream_ctx;
         }
-        uni_stream_ctx->previous_uni_stream = cnx_ctx->last_uni_stream;
+        uni_stream_ctx->previous_uni_stream_for_cnx = cnx_ctx->last_uni_stream;
         cnx_ctx->last_uni_stream = uni_stream_ctx;
+        /* Chain to control stream */
         if (stream_ctx != NULL) {
             quicrq_chain_uni_stream_to_control_stream(uni_stream_ctx, stream_ctx);
         }
@@ -2714,7 +2738,7 @@ quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
         if (uni_stream_ctx->stream_id == stream_id) {
             break;
         }
-        uni_stream_ctx = uni_stream_ctx->next_uni_stream;
+        uni_stream_ctx = uni_stream_ctx->next_uni_stream_for_cnx;
     }
 
     if (uni_stream_ctx == NULL && should_create) {
@@ -2736,7 +2760,7 @@ quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
         if (uni_stream_ctx->current_group_id == group_id) {
             return  uni_stream_ctx;
         }
-        uni_stream_ctx = uni_stream_ctx->next_uni_stream;
+        uni_stream_ctx = uni_stream_ctx->next_uni_stream_for_control_stream;
     }
     return NULL;
 }
