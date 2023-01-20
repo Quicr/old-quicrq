@@ -1534,6 +1534,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
             uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
             /* TODO: dispose of uni stream context. */
+            quicrq_delete_uni_stream_ctx(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx);
         }
         else {
             /* Nothing to send */
@@ -2038,6 +2039,7 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
          * Delete the uni stream context.
          * Mark FIN when all GOP are received -- not so obvious in relay + error scenarios.
          */
+        quicrq_delete_uni_stream_ctx(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx);
     }
 
     return ret;
@@ -2539,22 +2541,30 @@ quicrq_cnx_ctx_t* quicrq_first_connection(quicrq_ctx_t* qr_ctx)
 
 void quicrq_delete_uni_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_ctx_t* uni_stream_ctx)
 {
+    quicrq_stream_ctx_t* ctrl_stream = uni_stream_ctx->control_stream_ctx;
 
+    /* update connection context */
     if (uni_stream_ctx->next_uni_stream == NULL) {
         cnx_ctx->last_uni_stream = uni_stream_ctx->previous_uni_stream;
+        if (ctrl_stream != NULL) {
+            ctrl_stream->last_uni_stream = uni_stream_ctx->previous_uni_stream;
+        }
     }
     else {
         uni_stream_ctx->next_uni_stream->previous_uni_stream = uni_stream_ctx->previous_uni_stream;
     }
+
     if (uni_stream_ctx->previous_uni_stream == NULL) {
         cnx_ctx->first_uni_stream = uni_stream_ctx->next_uni_stream;
+        if(ctrl_stream != NULL) {
+            ctrl_stream->first_uni_stream = uni_stream_ctx->next_uni_stream;
+        }
     }
     else {
         uni_stream_ctx->previous_uni_stream->next_uni_stream = uni_stream_ctx->next_uni_stream;
     }
 
-
-    if (cnx_ctx->cnx != NULL) {
+    if (cnx_ctx->cnx != NULL && uni_stream_ctx->is_sender) {
         (void)picoquic_mark_active_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, NULL);
         (void)picoquic_add_to_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, NULL, 0, 1);
     }
@@ -2665,7 +2675,6 @@ quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(
         }
         uni_stream_ctx->previous_uni_stream = cnx_ctx->last_uni_stream;
         cnx_ctx->last_uni_stream = uni_stream_ctx;
-        //quicrq_datagram_ack_ctx_init(stream_ctx->cnx_ctx->control_stream);
         if (stream_ctx != NULL) {
             quicrq_chain_uni_stream_to_control_stream(uni_stream_ctx, stream_ctx);
         }
