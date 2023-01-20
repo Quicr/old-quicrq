@@ -2564,7 +2564,7 @@ void quicrq_delete_uni_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_c
         uni_stream_ctx->previous_uni_stream->next_uni_stream = uni_stream_ctx->next_uni_stream;
     }
 
-    if (cnx_ctx->cnx != NULL && uni_stream_ctx->is_sender) {
+    if (cnx_ctx->cnx != NULL && ctrl_stream != NULL && ctrl_stream->is_sender) {
         (void)picoquic_mark_active_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, NULL);
         (void)picoquic_add_to_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, NULL, 0, 1);
     }
