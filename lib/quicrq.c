@@ -2133,7 +2133,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
                     ret = -1;
                 }
                 else {
-                    ret = quicrq_prepare_to_send_on_stream(stream_ctx, bytes, length, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
+                    ret = quicrq_prepare_to_send_on_stream(stream_ctx, bytes, length, picoquic_get_quic_time(cnx_ctx->qr_ctx->quic));
                 }
 
             }  else {
@@ -2144,7 +2144,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
                     ret = -1;
                 }
                 else {
-                    ret = quicrq_prepare_to_send_on_unistream(uni_stream_ctx, bytes, length, picoquic_get_quic_time(uni_stream_ctx->control_stream_ctx->cnx_ctx->qr_ctx->quic));
+                    ret = quicrq_prepare_to_send_on_unistream(uni_stream_ctx, bytes, length, picoquic_get_quic_time(cnx_ctx->qr_ctx->quic));
                 }
             }
             break;
@@ -2730,10 +2730,10 @@ quicrq_stream_ctx_t* quicrq_find_or_create_stream(
 }
 
 quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
-        uint64_t stream_id,
-        quicrq_cnx_ctx_t *cnx_ctx,
-        quicrq_stream_ctx_t *stream_ctx,
-        int should_create)
+    uint64_t stream_id,
+    quicrq_cnx_ctx_t* cnx_ctx,
+    quicrq_stream_ctx_t* stream_ctx,
+    int should_create)
 {
     quicrq_uni_stream_ctx_t* uni_stream_ctx = cnx_ctx->first_uni_stream;
 

@@ -207,14 +207,6 @@ int quicrq_relay_basic_test()
     return ret;
 }
 
-/* Same as basic relay test, for warp mode */
-int quicrq_relay_basic_warp_test()
-{
-    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_warp, 0, 0);
-
-    return ret;
-}
-
 int quicrq_relay_datagram_test()
 {
     int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0, 0);
@@ -229,14 +221,6 @@ int quicrq_relay_datagram_loss_test()
     return ret;
 }
 
-
-int quicrq_warp_relay_datagram_loss_test()
-{
-    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_warp, 0x7080, 0);
-
-    return ret;
-}
-
 int quicrq_relay_basic_client_test()
 {
     int ret = quicrq_relay_test_one(1, quicrq_transport_mode_single_stream, 0, 1);
@@ -247,6 +231,21 @@ int quicrq_relay_basic_client_test()
 int quicrq_relay_datagram_client_test()
 {
     int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0, 1);
+
+    return ret;
+}
+
+/* Same as basic relay test, for warp mode */
+int quicrq_warp_relay_test()
+{
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_warp, 0, 0);
+
+    return ret;
+}
+
+int quicrq_warp_relay_loss_test()
+{
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_warp, 0x7080, 0);
 
     return ret;
 }

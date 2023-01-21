@@ -553,20 +553,20 @@ namespace UnitTest
 		}
 
 		TEST_METHOD(warp_relay) {
-			int ret = quicrq_relay_basic_warp_test();
+			int ret = quicrq_warp_relay_test();
 
 			Assert::AreEqual(ret, 0);
 		}
 
-        TEST_METHOD(warp_datagram_loss)
+        TEST_METHOD(warp_basic_loss)
         {
-            int ret = quicrq_warp_datagram_loss_test();
+            int ret = quicrq_warp_basic_loss_test();
 
             Assert::AreEqual(ret, 0);
         }
 
-        TEST_METHOD(warp_relay_datagram_loss) {
-            int ret = quicrq_warp_relay_datagram_loss_test();
+        TEST_METHOD(warp_relay_loss) {
+            int ret = quicrq_warp_relay_loss_test();
 
             Assert::AreEqual(ret, 0);
         }

@@ -1015,18 +1015,11 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
 
 void quicrq_wakeup_media_uni_stream(quicrq_stream_ctx_t* stream_ctx)
 {
-    /* TODO: do not create uni stream if group id below "start" */
     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
-    uint64_t max_group_id = 0;
 
     /* loop through all the unistreams, since more than one can be active */
     quicrq_uni_stream_ctx_t* uni_stream_ctx = stream_ctx->first_uni_stream;
     while (uni_stream_ctx != NULL) {
-        /* TODO: this should not be needed if we keep track of
-         * warp_next_group_id in control stream context */
-        if (uni_stream_ctx->current_group_id > max_group_id) {
-            max_group_id = uni_stream_ctx->current_group_id;
-        }
         if (uni_stream_ctx->send_state != quicrq_sending_warp_should_close) {
             /* TODO: the used contexts should be removed, so the test above will not be needed. */
             picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
@@ -1035,12 +1028,13 @@ void quicrq_wakeup_media_uni_stream(quicrq_stream_ctx_t* stream_ctx)
     }
 
     /* create uni_streams for unseen group_id from the cache */
-    for (uint64_t i = (stream_ctx->first_uni_stream == NULL) ? 0 : max_group_id + 1; i <= highest_group_id; i++) {
+    for (uint64_t i = stream_ctx->next_warp_group_id; i <= highest_group_id; i++) {
         uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
         quicrq_uni_stream_ctx_t* ctx = quicrq_find_or_create_uni_stream(
             uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
         if (ctx != NULL) {
             ctx->current_group_id = i;
+            stream_ctx->next_warp_group_id = i + 1;
             picoquic_mark_active_stream(ctx->control_stream_ctx->cnx_ctx->cnx,
                 ctx->stream_id, 1, ctx);
             /* TODO: update warp_next_group_id in stream context */

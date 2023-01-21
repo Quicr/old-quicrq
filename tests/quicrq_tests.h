@@ -94,9 +94,9 @@ extern "C" {
     int quicrq_get_addr_test();
     int quicrq_warp_basic_test();
     int quicrq_warp_basic_client_test();
-    int quicrq_relay_basic_warp_test();
-    int quicrq_warp_datagram_loss_test();
-    int quicrq_warp_relay_datagram_loss_test();
+    int quicrq_warp_relay_test();
+    int quicrq_warp_basic_loss_test();
+    int quicrq_warp_relay_loss_test();
 
 #ifdef __cplusplus
 }
