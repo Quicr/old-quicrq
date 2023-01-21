@@ -278,6 +278,7 @@ quicrq_media_source_ctx_t* quicrq_find_local_media_source(quicrq_ctx_t* qr_ctx, 
 int quicrq_subscribe_local_media(quicrq_stream_ctx_t* stream_ctx, const uint8_t* url, const size_t url_length);
 void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx);
 void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx);
+void quicrq_wakeup_media_uni_stream(quicrq_stream_ctx_t* stream_ctx);
 
 /* Quic media consumer. Old definition, moved to internal only.
  * 
@@ -545,9 +546,6 @@ struct st_quicrq_cnx_ctx_t {
     /* reference to the unidirectional streams */
     struct st_quicrq_uni_stream_ctx_t* first_uni_stream;
     struct st_quicrq_uni_stream_ctx_t* last_uni_stream;
-
-    /* reference to the control stream */
-    struct st_quicrq_stream_ctx_t* control_stream;
 };
 
 /* Prototype function for managing the cache of relays.

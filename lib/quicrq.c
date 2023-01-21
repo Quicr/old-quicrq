@@ -1494,14 +1494,14 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
 
                 if (next_object_size > 0) {
                     quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
-                    if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, 0, next_object_size), 0) != 0) {
+                    if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, nb_objects_previous_group, next_object_size), 0) != 0) {
                         ret = -1;
                     }
                     else {
                         uint8_t* message_next = quicrq_object_header_msg_encode(message->buffer,
                             message->buffer + message->buffer_alloc,
                             QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
-                            0, flags, next_object_size, NULL);
+                            nb_objects_previous_group, flags, next_object_size, NULL);
                         if (message_next == NULL) {
                             ret = -1;
                         }
@@ -1533,7 +1533,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
             /* Send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
             (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
             uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
-            /* TODO: dispose of uni stream context. */
+            /* Dispose of uni stream context. */
             quicrq_delete_uni_stream_ctx(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx);
         }
         else {
@@ -2107,11 +2107,14 @@ int quicrq_callback(picoquic_cnx_t* cnx,
                 ret = quicrq_receive_stream_data(stream_ctx, bytes, length, (fin_or_event == picoquic_callback_stream_fin));
             }
             else {
-                uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_id, cnx_ctx, NULL, 1);
                 if (uni_stream_ctx == NULL) {
-                    /* Internal error */
-                    (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
-                    return (-1);
+                    uni_stream_ctx = quicrq_find_or_create_uni_stream(stream_id, cnx_ctx, NULL, 1);
+                    if (uni_stream_ctx == NULL) {
+                        /* Internal error */
+                        (void)picoquic_reset_stream(cnx, stream_id, QUICRQ_ERROR_INTERNAL);
+                        return (-1);
+                    }
+                    (void)picoquic_set_app_stream_ctx(cnx, stream_id, uni_stream_ctx);
                 }
 
                 /* we consider unidirectional streams as warp/rush streams. maybe we need something more explicit */
@@ -2572,6 +2575,7 @@ void quicrq_delete_uni_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_c
             uni_stream_ctx->previous_uni_stream_for_control_stream->next_uni_stream_for_control_stream = 
                 uni_stream_ctx->next_uni_stream_for_control_stream;
         }
+        uni_stream_ctx->control_stream_ctx = NULL;
     }
     /* Unlink the unistream context from the picoquic stream context */
     if (cnx_ctx->cnx != NULL) {
@@ -2583,7 +2587,7 @@ void quicrq_delete_uni_stream_ctx(quicrq_cnx_ctx_t* cnx_ctx, quicrq_uni_stream_c
             }
         }
         else {
-            picoquic_set_app_stream_ctx(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0);
+            picoquic_unlink_app_stream_ctx(cnx_ctx->cnx, uni_stream_ctx->stream_id);
         }
     }
     /* Release memory*/
@@ -2663,7 +2667,6 @@ quicrq_stream_ctx_t* quicrq_create_stream_context(quicrq_cnx_ctx_t* cnx_ctx, uin
         }
         stream_ctx->previous_stream = cnx_ctx->last_stream;
         cnx_ctx->last_stream = stream_ctx;
-        cnx_ctx->control_stream = stream_ctx;
         quicrq_datagram_ack_ctx_init(stream_ctx);
     }
 
