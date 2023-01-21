@@ -140,6 +140,7 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
 		TEST_METHOD(datagram_loss)
 		{
 			int ret = quicrq_datagram_loss_test();
@@ -556,5 +557,19 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
-	};
+
+        TEST_METHOD(warp_datagram_loss)
+        {
+            int ret = quicrq_warp_datagram_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+        TEST_METHOD(warp_relay_datagram_loss) {
+            int ret = quicrq_warp_relay_datagram_loss_test();
+
+            Assert::AreEqual(ret, 0);
+        }
+
+    };
 }

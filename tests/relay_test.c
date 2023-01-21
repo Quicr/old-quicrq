@@ -229,6 +229,14 @@ int quicrq_relay_datagram_loss_test()
     return ret;
 }
 
+
+int quicrq_warp_relay_datagram_loss_test()
+{
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_warp, 0x7080, 0);
+
+    return ret;
+}
+
 int quicrq_relay_basic_client_test()
 {
     int ret = quicrq_relay_test_one(1, quicrq_transport_mode_single_stream, 0, 1);

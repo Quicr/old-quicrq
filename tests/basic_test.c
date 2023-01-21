@@ -664,6 +664,12 @@ int quicrq_datagram_loss_test()
     return quicrq_basic_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 0, 0);
 }
 
+/* Datagram test, with forced packet losses when using warp mode*/
+int quicrq_warp_datagram_loss_test()
+{
+    return quicrq_basic_test_one(1, quicrq_transport_mode_warp, 0x7080, 0, 0, 0, 0);
+}
+
 /* Datagram test, with forced packet losses and extra repeat */
 int quicrq_datagram_extra_test()
 {
