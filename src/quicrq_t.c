@@ -109,6 +109,7 @@ static const quicrq_test_def_t test_table[] =
     { "get_addr", quicrq_get_addr_test },
     { "warp_basic", quicrq_warp_basic_test },
     { "warp_basic_client", quicrq_warp_basic_client_test },
+    { "warp_relay", quicrq_relay_basic_warp_test}
 
 };
 

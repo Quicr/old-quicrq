@@ -207,6 +207,14 @@ int quicrq_relay_basic_test()
     return ret;
 }
 
+/* Same as basic relay test, for warp mode */
+int quicrq_relay_basic_warp_test()
+{
+    int ret = quicrq_relay_test_one(1, quicrq_transport_mode_warp, 0, 0);
+
+    return ret;
+}
+
 int quicrq_relay_datagram_test()
 {
     int ret = quicrq_relay_test_one(1, quicrq_transport_mode_datagram, 0, 0);
