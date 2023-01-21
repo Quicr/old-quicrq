@@ -447,11 +447,7 @@ struct st_quicrq_stream_ctx_t {
     uint64_t start_object_id;
     uint64_t final_group_id;
     uint64_t final_object_id;
-    /* When sending warp streams, keep track of the next GOP
-     * for which a uni stream should be started */
-    /* TODO: use this variable to clean up the "wake up media stream" function */
-    /* TODO: immediately dispose of uni_stream_contexts when "should close" */
-    uint64_t warp_next_group_id;
+    uint64_t next_warp_group_id; /* group_id to create next in warp mode */
     /* Control of datagrams sent for that media
      * We only keep track of fragments that are above the horizon.
      * The one below horizon are already acked, or otherwise forgotten.
@@ -511,7 +507,6 @@ struct st_quicrq_stream_ctx_t {
     /* set of uni_streams for a given media_id - is there a better way handle the individual stream - priorities, reset.. */
     struct st_quicrq_uni_stream_ctx_t* first_uni_stream;
     struct st_quicrq_uni_stream_ctx_t* last_uni_stream;
-    uint64_t next_largest_group_id; /* group_id expected next */
 };
 
 
