@@ -1508,17 +1508,23 @@ int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_s
                 size_t next_object_size = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id,
                     &nb_objects_previous_group, &flags, NULL);
 
-                if (next_object_size > 0) {
+                if (next_object_size > 0 || flags == 0xff ) {
                     int has_backlog = 0;
                     int should_skip = 0;
                     quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
                     uint8_t* message_next = NULL;
 
-                    /* Check whether there is ongoing congestion */
-                    has_backlog = quicrq_evaluate_warp_backlog(uni_stream_ctx, cache_ctx);
-                    if (uni_stream_ctx->current_object_id > 0) {
-                        should_skip = quicrq_congestion_check_per_cnx(uni_stream_ctx->control_stream_ctx->cnx_ctx,
-                            flags, has_backlog, current_time);
+                    if (flags == 0xff && next_object_size == 0) {
+                        /* This object was marked skipped at a rpevious relay */
+                        should_skip = 1;
+                    }
+                    else {
+                        /* Check whether there is ongoing congestion */
+                        has_backlog = quicrq_evaluate_warp_backlog(uni_stream_ctx, cache_ctx);
+                        if (uni_stream_ctx->current_object_id > 0 && flags != 0xff) {
+                            should_skip = quicrq_congestion_check_per_cnx(uni_stream_ctx->control_stream_ctx->cnx_ctx,
+                                flags, has_backlog, current_time);
+                        }
                     }
                     if (should_skip) {
                         uint8_t place_holder = 0;
@@ -2056,10 +2062,13 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                     /* Protocol error */
                                     ret = -1;
                                 }
-                                else {
+                                else if (uni_stream_ctx->control_stream_ctx == NULL) {
+                                    /* Protocol error -- the control stream MUST be initialized in the authorized states */
+                                    ret = -1;
+                                } else {
+                                    quicrq_stream_ctx_t* ctrl_stream_ctx = uni_stream_ctx->control_stream_ctx;
+
                                     uni_stream_ctx->receive_state = quicrq_receive_object_header;
-                                    quicrq_stream_ctx_t* ctrl_stream_ctx = quicrq_get_control_stream_for_media_id(cnx_ctx, incoming.media_id);
-                                    uni_stream_ctx->control_stream_ctx = ctrl_stream_ctx;
                                     /* Pass the data to the media consumer. */
                                     ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
                                                                   incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
