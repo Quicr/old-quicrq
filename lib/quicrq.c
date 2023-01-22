@@ -1421,7 +1421,23 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
     return ret;
 }
 
-int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx, void* context, size_t space, uint64_t current_time)
+/* Checking congestion in warp mode */
+int quicrq_evaluate_warp_backlog(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_fragment_cache_t* cache_ctx)
+{
+    int has_backlog = 0;
+    const uint64_t backlog_threshold = 5;
+    
+    if (uni_stream_ctx->current_group_id < cache_ctx->next_group_id ||
+        (uni_stream_ctx->current_group_id == cache_ctx->next_group_id &&
+            uni_stream_ctx->current_object_id + backlog_threshold < cache_ctx->next_object_id)) {
+        has_backlog = 1;
+    }
+
+    return has_backlog;
+}
+
+/* Sending data on unidirectional stream, for warp mode */
+int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_stream_ctx_t * uni_stream_ctx, void* context, size_t space, uint64_t current_time)
 {
     int ret = 0;
     int more_to_send = 0;
@@ -1493,15 +1509,49 @@ int quicrq_prepare_to_send_on_unistream(quicrq_uni_stream_ctx_t * uni_stream_ctx
                     &nb_objects_previous_group, &flags, NULL);
 
                 if (next_object_size > 0) {
+                    int has_backlog = 0;
+                    int should_skip = 0;
                     quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
-                    if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, nb_objects_previous_group, next_object_size), 0) != 0) {
-                        ret = -1;
+                    uint8_t* message_next = NULL;
+
+                    /* Check whether there is ongoing congestion */
+                    has_backlog = quicrq_evaluate_warp_backlog(uni_stream_ctx, cache_ctx);
+                    if (uni_stream_ctx->current_object_id > 0) {
+                        should_skip = quicrq_congestion_check_per_cnx(uni_stream_ctx->control_stream_ctx->cnx_ctx,
+                            flags, has_backlog, current_time);
+                    }
+                    if (should_skip) {
+                        uint8_t place_holder = 0;
+
+                        flags = 0xff;
+                        if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, nb_objects_previous_group, 0), 0) != 0) {
+                            ret = -1;
+                        }
+                        else {
+                            /* Format the place holder message */
+                            message_next = quicrq_object_header_msg_encode(message->buffer,
+                                message->buffer + message->buffer_alloc,
+                                QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
+                                nb_objects_previous_group, flags, 0, &place_holder);
+                            if (message_next == NULL) {
+                                ret = -1;
+                            }
+                            else {
+                                message->message_size = message_next - message->buffer;
+                                uni_stream_ctx->current_object_id++;
+                            }
+                        }
                     }
                     else {
-                        uint8_t* message_next = quicrq_object_header_msg_encode(message->buffer,
-                            message->buffer + message->buffer_alloc,
-                            QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
-                            nb_objects_previous_group, flags, next_object_size, NULL);
+                        if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, nb_objects_previous_group, next_object_size), 0) != 0) {
+                            ret = -1;
+                        }
+                        else {
+                            message_next = quicrq_object_header_msg_encode(message->buffer,
+                                message->buffer + message->buffer_alloc,
+                                QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
+                                nb_objects_previous_group, flags, next_object_size, NULL);
+                        }
                         if (message_next == NULL) {
                             ret = -1;
                         }
@@ -2010,7 +2060,7 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                     uni_stream_ctx->receive_state = quicrq_receive_object_header;
                                     quicrq_stream_ctx_t* ctrl_stream_ctx = quicrq_get_control_stream_for_media_id(cnx_ctx, incoming.media_id);
                                     uni_stream_ctx->control_stream_ctx = ctrl_stream_ctx;
-                                    /* Pass the repair data to the media consumer. */
+                                    /* Pass the data to the media consumer. */
                                     ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
                                                                   incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
                                                                   incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
@@ -2144,7 +2194,7 @@ int quicrq_callback(picoquic_cnx_t* cnx,
                     ret = -1;
                 }
                 else {
-                    ret = quicrq_prepare_to_send_on_unistream(uni_stream_ctx, bytes, length, picoquic_get_quic_time(cnx_ctx->qr_ctx->quic));
+                    ret = quicrq_prepare_to_send_on_unistream(cnx_ctx, uni_stream_ctx, bytes, length, picoquic_get_quic_time(cnx_ctx->qr_ctx->quic));
                 }
             }
             break;
@@ -2445,6 +2495,11 @@ void quicrq_delete_cnx_context(quicrq_cnx_ctx_t* cnx_ctx, quicrq_media_close_rea
         quicrq_delete_stream_ctx(cnx_ctx, cnx_ctx->first_stream);
     }
 
+    /* Delete any uni stream context that was not chained to a stream context */
+    while (cnx_ctx->first_uni_stream != NULL) {
+        quicrq_delete_uni_stream_ctx(cnx_ctx, cnx_ctx->first_uni_stream);
+    }
+
     /* Delete the quic connection */
     if (cnx_ctx->cnx != NULL) {
         picoquic_set_callback(cnx_ctx->cnx, NULL, NULL);
@@ -2680,9 +2735,10 @@ void quicrq_chain_uni_stream_to_control_stream(quicrq_uni_stream_ctx_t* uni_stre
         stream_ctx->first_uni_stream = uni_stream_ctx;
     }
     else {
-        stream_ctx->first_uni_stream->next_uni_stream_for_control_stream = uni_stream_ctx;
+        stream_ctx->last_uni_stream->next_uni_stream_for_control_stream = uni_stream_ctx;
     }
-    stream_ctx->last_uni_stream = uni_stream_ctx;
+    uni_stream_ctx->previous_uni_stream_for_control_stream = stream_ctx->last_uni_stream;
+    stream_ctx->last_uni_stream = uni_stream_ctx; 
 }
 
 quicrq_uni_stream_ctx_t* quicrq_create_uni_stream_context(
