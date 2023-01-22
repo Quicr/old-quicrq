@@ -382,6 +382,13 @@ int quicrq_triangle_datagram_extra_test()
     return ret;
 }
 
+int quicrq_triangle_warp_test()
+{
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 0, 0);
+
+    return ret;
+}
+
 /* The start point test verifies what happens if a source does not start
  * at Group=0, Object=0. That would be, for example, a source resuming
  * after a hiatus. This test will have to be rewritten after we change

@@ -521,7 +521,10 @@ int quicrq_reassembly_learn_final_object_id(
         ret = -1;
     }
 
-    if (ret == 0 && reassembly_ctx->next_object_id >= final_object_id) {
+    if (ret == 0 && (
+        reassembly_ctx->next_group_id > final_group_id || (
+            reassembly_ctx->next_group_id == final_group_id &&
+            reassembly_ctx->next_object_id >= final_object_id))) {
         reassembly_ctx->is_finished = 1;
     }
 

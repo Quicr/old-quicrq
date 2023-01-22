@@ -109,6 +109,8 @@ static const quicrq_test_def_t test_table[] =
     { "get_addr", quicrq_get_addr_test },
     { "warp_basic", quicrq_warp_basic_test },
     { "warp_basic_client", quicrq_warp_basic_client_test },
+    { "warp_triangle", quicrq_triangle_warp_test },
+    { "warp_congestion", quicrq_congestion_warp_test },
     { "warp_relay", quicrq_warp_relay_test },
     { "warp_basic_loss", quicrq_warp_basic_loss_test },
     { "warp_relay_loss", quicrq_warp_relay_loss_test }

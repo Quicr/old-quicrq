@@ -554,3 +554,20 @@ int quicrq_congestion_datagram_zero_test()
 
     return ret;
 }
+
+int quicrq_congestion_warp_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 73;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 210000;
+    spec.max_delay_target = 700000;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_warp, &spec);
+
+    return ret;
+}
