@@ -111,7 +111,7 @@ int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, in
         cnx_ctx->congestion.congestion_check_time += 50000; /* TODO: should be RTT of connection */
     }
     /* Evaluate whether this packet should be skipped */
-    if (cnx_ctx->qr_ctx->do_congestion_control && cnx_ctx->congestion.is_congested && flags >= cnx_ctx->congestion.priority_threshold) {
+    if (cnx_ctx->qr_ctx->congestion_control_mode != 0 && cnx_ctx->congestion.is_congested && flags >= cnx_ctx->congestion.priority_threshold) {
         should_skip = 1;
     }
     return should_skip;
@@ -1132,9 +1132,13 @@ uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time)
 
 /* Enable of disablecongestion control*/
 
-void quicrq_enable_congestion_control(quicrq_ctx_t* qr, int enable_congestion_control)
+void quicrq_enable_congestion_control(quicrq_ctx_t* qr, quicrq_congestion_control_enum congestion_control_mode)
 {
-    qr->do_congestion_control = (enable_congestion_control == 0) ? 0 : 1;
+    if (congestion_control_mode < 0 || congestion_control_mode >= quicrq_congestion_control_max)
+        qr->congestion_control_mode = quicrq_congestion_control_delay;
+    else {
+        qr->congestion_control_mode = (quicrq_congestion_control_enum)congestion_control_mode;
+    }
 }
 
 /* Prepare to send a datagram */

@@ -601,8 +601,8 @@ struct st_quicrq_ctx_t {
     uint64_t extra_repeat_delay;
     /* Count of media fragments received with numbers < start point */
     uint64_t useless_fragments;
-    /* Control whether to enable congestion control -- mostly for testability */
-    unsigned int do_congestion_control : 1;
+    /* Control how enable congestion control -- mostly for testability */
+    quicrq_congestion_control_enum congestion_control_mode : 1;
 };
 
 quicrq_stream_ctx_t* quicrq_find_or_create_stream(

@@ -313,9 +313,17 @@ void quicrq_set_extra_repeat_delay(quicrq_ctx_t* qr, uint64_t delay_in_microseco
 uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time);
 
 /* Enable of disable congestion control.
- * Default to disable.
+ * Default to "none", i.e., disable.
  */
-void quicrq_enable_congestion_control(quicrq_ctx_t* qr, int enable_congestion_control);
+
+typedef enum {
+    quicrq_congestion_control_node = 0,
+    quicrq_congestion_control_delay = 1,
+    quicrq_congestion_control_group = 2,
+    quicrq_congestion_control_max
+} quicrq_congestion_control_enum;
+
+void quicrq_enable_congestion_control(quicrq_ctx_t* qr, quicrq_congestion_control_enum congestion_control_mode);
 
 #ifdef __cplusplus
 }
