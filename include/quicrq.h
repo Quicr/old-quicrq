@@ -317,7 +317,7 @@ uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time);
  */
 
 typedef enum {
-    quicrq_congestion_control_node = 0,
+    quicrq_congestion_control_none = 0,
     quicrq_congestion_control_delay = 1,
     quicrq_congestion_control_group = 2,
     quicrq_congestion_control_max

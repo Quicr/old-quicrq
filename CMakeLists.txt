@@ -27,6 +27,7 @@ message(STATUS "OpenSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
 
 
 add_library(quicrq-core
+    lib/congestion.c
     lib/fragment.c
     lib/quicrq.c
     lib/proto.c

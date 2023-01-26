@@ -36,6 +36,9 @@
     <ClCompile Include="..\lib\fragment.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\lib\congestion.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\lib\quicrq_relay_internal.h">

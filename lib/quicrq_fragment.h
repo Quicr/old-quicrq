@@ -68,6 +68,7 @@ typedef struct st_quicrq_fragment_publisher_context_t {
     uint64_t current_group_id;
     uint64_t current_object_id;
     size_t current_offset;
+    quicrq_congestion_control_enum congestion_control_mode;
     int is_object_complete;
     int is_media_complete;
     int is_sending_object;
@@ -290,6 +291,15 @@ void quicrq_fragment_publisher_delete(void* v_pub_ctx);
 int quicrq_publish_fragment_cached_media(quicrq_ctx_t* qr_ctx,
     quicrq_fragment_cache_t* cache_ctx, const uint8_t* url, const size_t url_length,
     int is_local_object_source, int is_cache_real_time);
+
+/* Evaluation of backlog for single stream transmission */
+int quicrq_fragment_evaluate_backlog(quicrq_fragment_publisher_context_t* media_ctx);
+
+/* Checking congestion in warp transmission mode */
+int quicrq_evaluate_warp_backlog(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_fragment_publisher_context_t* media_ctx);
+
+/* Backlog evaluation in datagram mode */
+int quicrq_evaluate_datagram_backlog(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time);
 
 #ifdef __cplusplus
 }
