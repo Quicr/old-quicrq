@@ -390,7 +390,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
     int mode,
     const char* server_name,
     quicrq_transport_mode_enum transport_mode,
-    int congestion_mode,
+    quicrq_congestion_control_enum congestion_control_mode,
     int server_port,
     char const* scenario)
 {
@@ -427,7 +427,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
         }
         else {
             /* Enable congestion control or not, based on CLI choice */
-            quicrq_enable_congestion_control(cb_ctx.qr_ctx, congestion_mode);
+            quicrq_enable_congestion_control(cb_ctx.qr_ctx, congestion_control_mode);
 
             /* Setting logs, etc. */
             quicrq_set_quic(cb_ctx.qr_ctx, quic);
@@ -570,7 +570,7 @@ int main(int argc, char** argv)
             switch (opt) {
             case 'f':
                 congestion_mode = atoi(optarg);
-                if (congestion_mode <= 0 || congestion_mode > 1) {
+                if (congestion_mode <= 0 || congestion_mode >= quicrq_congestion_control_max) {
                     fprintf(stderr, "Invalid congestion mode: %s\n", optarg);
                     usage();
                 }
@@ -659,7 +659,7 @@ int main(int argc, char** argv)
     }
 
     /* Run */
-    ret = quic_app_loop(&config, mode, server_name, transport_mode, congestion_mode, server_port, scenario);
+    ret = quic_app_loop(&config, mode, server_name, transport_mode, (quicrq_congestion_control_enum)congestion_mode, server_port, scenario);
     /* Clean up */
     picoquic_config_clear(&config);
     /* Exit */

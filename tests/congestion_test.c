@@ -24,10 +24,10 @@ typedef struct st_quicrq_congestion_test_t {
     int congested_receiver;
     int max_drops;
     congestion_mode_enum congestion_mode;
+    quicrq_congestion_control_enum congestion_control_mode;
     uint8_t min_loss_flag;
     uint64_t average_delay_target;
     uint64_t max_delay_target;
-
 } quicrq_congestion_test_t;
 
 /* Create a test network */
@@ -63,7 +63,7 @@ quicrq_test_config_t* quicrq_test_congestion_config_create(quicrq_congestion_tes
         }
 
         for (int i = 0; i < 3; i++) {
-            quicrq_enable_congestion_control(config->nodes[i], 1);
+            quicrq_enable_congestion_control(config->nodes[i], spec->congestion_control_mode);
         }
     }
 
@@ -144,8 +144,8 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
     int half_congestion = spec->congestion_mode == congestion_mode_half;
     uint64_t client2_close_time = UINT64_MAX;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%c-%llx-%d-%d.txt", is_real_time,
-        quicrq_transport_mode_to_letter(transport_mode),
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%c%d-%llx-%d-%d.txt", is_real_time,
+        quicrq_transport_mode_to_letter(transport_mode), (int)spec->congestion_control_mode,
         (unsigned long long)spec->simulate_losses, spec->congested_receiver, (int)spec->congestion_mode);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
@@ -344,7 +344,7 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
                         }
                         else if (spec->max_delay_target > 0 &&
                             delay_max > spec->max_delay_target) {
-                            DBG_PRINTF("Average delay %" PRIu64 ", exceeds %" PRIu64,
+                            DBG_PRINTF("Max delay %" PRIu64 ", exceeds %" PRIu64,
                                 delay_max, spec->max_delay_target);
                             ret = -1;
                         }
@@ -375,6 +375,7 @@ int quicrq_congestion_basic_test()
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 250000;
     spec.max_delay_target = 700000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
@@ -393,6 +394,7 @@ int quicrq_congestion_basic_half_test()
     spec.congestion_mode = congestion_mode_half;
     spec.average_delay_target = 110000;
     spec.max_delay_target = 500000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
@@ -410,6 +412,7 @@ int quicrq_congestion_basic_loss_test()
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 210000;
     spec.max_delay_target = 700000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
@@ -427,6 +430,7 @@ int quicrq_congestion_basic_recv_test()
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 215000;
     spec.max_delay_target = 580000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
@@ -445,6 +449,25 @@ int quicrq_congestion_basic_zero_test()
     spec.congestion_mode = congestion_mode_zero;
     spec.average_delay_target = 26000;
     spec.max_delay_target = 110000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_basic_g_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 60;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 550000;
+    spec.max_delay_target = 1150000;
+    spec.congestion_control_mode = quicrq_congestion_control_group;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
@@ -462,6 +485,7 @@ int quicrq_congestion_datagram_test()
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 210000;
     spec.max_delay_target = 700000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
@@ -480,6 +504,7 @@ int quicrq_congestion_datagram_half_test()
     spec.congestion_mode = congestion_mode_half;
     spec.average_delay_target = 125000;
     spec.max_delay_target = 610000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
@@ -497,6 +522,7 @@ int quicrq_congestion_datagram_loss_test()
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 230000;
     spec.max_delay_target = 820000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
@@ -514,6 +540,7 @@ int quicrq_congestion_datagram_recv_test()
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 220000;
     spec.max_delay_target = 760000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
@@ -531,6 +558,7 @@ int quicrq_congestion_datagram_rloss_test()
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 220000;
     spec.max_delay_target = 800000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
@@ -549,6 +577,25 @@ int quicrq_congestion_datagram_zero_test()
     spec.congestion_mode = congestion_mode_zero;
     spec.average_delay_target = 26000;
     spec.max_delay_target = 115000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_datagram_g_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 73;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 550000;
+    spec.max_delay_target = 1150000;
+    spec.congestion_control_mode = quicrq_congestion_control_group;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
 
@@ -566,6 +613,25 @@ int quicrq_congestion_warp_test()
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 210000;
     spec.max_delay_target = 700000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_warp, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_warp_g_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 60;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 540000;
+    spec.max_delay_target = 1150000;
+    spec.congestion_control_mode = quicrq_congestion_control_group;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_warp, &spec);
 

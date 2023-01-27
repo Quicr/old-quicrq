@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\lib\congestion.c" />
     <ClCompile Include="..\lib\fragment.c" />
     <ClCompile Include="..\lib\object_consumer.c" />
     <ClCompile Include="..\lib\object_source.c" />

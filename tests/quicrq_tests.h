@@ -19,12 +19,14 @@ extern "C" {
     int quicrq_congestion_basic_loss_test();
     int quicrq_congestion_basic_zero_test();
     int quicrq_congestion_basic_half_test();
+    int quicrq_congestion_basic_g_test();
     int quicrq_congestion_datagram_test();
     int quicrq_congestion_datagram_loss_test();
     int quicrq_congestion_datagram_recv_test();
     int quicrq_congestion_datagram_rloss_test();
     int quicrq_congestion_datagram_zero_test();
     int quicrq_congestion_datagram_half_test();
+    int quicrq_congestion_datagram_g_test();
     int quicrq_datagram_basic_test();
     int quicrq_datagram_loss_test();
     int quicrq_datagram_extra_test();
@@ -96,6 +98,7 @@ extern "C" {
     int quicrq_warp_basic_client_test();
     int quicrq_triangle_warp_test();
     int quicrq_congestion_warp_test();
+    int quicrq_congestion_warp_g_test();
     int quicrq_warp_relay_test();
     int quicrq_warp_basic_loss_test();
     int quicrq_warp_relay_loss_test();

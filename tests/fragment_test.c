@@ -383,12 +383,18 @@ int quicrq_fragment_cache_publish_test_one(int is_datagram)
     uint64_t sequential_group_id = 0;
     uint64_t sequential_object_id = 0;
     size_t sequential_offset = 0;
+    uint64_t simulated_time = 0;
+    struct sockaddr_storage addr = { 0 };
+    quicrq_ctx_t * qr_ctx = quicrq_create(QUICRQ_ALPN, NULL, NULL, NULL, NULL, NULL, NULL, 0, &simulated_time);
+    quicrq_cnx_ctx_t * cnx_ctx = (qr_ctx == NULL)?NULL:quicrq_create_client_cnx(qr_ctx, NULL, (struct sockaddr*)&addr);
+    quicrq_stream_ctx_t * stream_ctx = (cnx_ctx == NULL)?NULL:quicrq_create_stream_context(cnx_ctx, 0);
     quicrq_media_source_ctx_t* srce_ctx = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
     quicrq_fragment_cache_t* cache_ctx = quicrq_fragment_cache_create_ctx(NULL);
     quicrq_media_source_ctx_t* srce_ctx_p = (quicrq_media_source_ctx_t*)malloc(sizeof(quicrq_media_source_ctx_t));
     quicrq_fragment_cache_t* cache_ctx_p = quicrq_fragment_cache_create_ctx(NULL);
     quicrq_fragment_publisher_context_t* pub_ctx = (quicrq_fragment_publisher_context_t*)malloc(sizeof(quicrq_fragment_publisher_context_t));
-    if (cache_ctx == NULL || srce_ctx == NULL || cache_ctx_p == NULL || srce_ctx_p == NULL || pub_ctx == NULL) {
+    if (cache_ctx == NULL || srce_ctx == NULL || cache_ctx_p == NULL || srce_ctx_p == NULL || pub_ctx == NULL ||
+        stream_ctx == NULL || cnx_ctx == NULL || qr_ctx == NULL) {
         ret = -1;
     }
     else {
@@ -398,6 +404,8 @@ int quicrq_fragment_cache_publish_test_one(int is_datagram)
         cache_ctx_p->srce_ctx = srce_ctx_p;
         memset(pub_ctx, 0, sizeof(quicrq_fragment_publisher_context_t));
         pub_ctx->cache_ctx = cache_ctx;
+        pub_ctx->stream_ctx = stream_ctx;
+        stream_ctx->media_ctx = pub_ctx;
     }
 
     /* send a first set of segments,
@@ -487,7 +495,10 @@ int quicrq_fragment_cache_publish_test_one(int is_datagram)
     if (pub_ctx != NULL) {
         free(pub_ctx);
     }
-
+    if (qr_ctx != NULL) {
+        /* This will also delete stream_ctx and cnx_ctx */
+        quicrq_delete(qr_ctx);
+    }
     return ret;
 }
 
