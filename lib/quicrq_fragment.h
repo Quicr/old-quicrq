@@ -64,11 +64,13 @@ typedef struct st_quicrq_fragment_publisher_object_state_t {
 } quicrq_fragment_publisher_object_state_t;
 
 typedef struct st_quicrq_fragment_publisher_context_t {
+    quicrq_stream_ctx_t* stream_ctx;
     quicrq_fragment_cache_t* cache_ctx;
     uint64_t current_group_id;
     uint64_t current_object_id;
     size_t current_offset;
     quicrq_congestion_control_enum congestion_control_mode;
+    uint64_t end_of_congestion_group_id;
     int is_object_complete;
     int is_media_complete;
     int is_sending_object;
@@ -202,15 +204,6 @@ int quicrq_fragment_publisher_fn(
 
 int quicrq_fragment_is_ready_to_send(void* v_media_ctx, size_t data_max_size, uint64_t current_time);
 
-
-/* Evaluate whether the media context has backlog, and check
-* whether the current object should be skipped.
-*/
-int quicrq_fragment_datagram_publisher_object_eval(
-    quicrq_stream_ctx_t* stream_ctx,
-    quicrq_fragment_publisher_context_t* media_ctx, int* should_skip, uint64_t current_time);
-
-
 /* datagram_publisher_check_object:
  * evaluate and if necessary progress the "current fragment" pointer.
  * After this evaluation, expect the following results:
@@ -292,14 +285,15 @@ int quicrq_publish_fragment_cached_media(quicrq_ctx_t* qr_ctx,
     quicrq_fragment_cache_t* cache_ctx, const uint8_t* url, const size_t url_length,
     int is_local_object_source, int is_cache_real_time);
 
-/* Evaluation of backlog for single stream transmission */
-int quicrq_fragment_evaluate_backlog(quicrq_fragment_publisher_context_t* media_ctx);
+/* Evaluation of congestion for single stream transmission */
+int quicrq_evaluate_stream_congestion(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time);
 
-/* Checking congestion in warp transmission mode */
-int quicrq_evaluate_warp_backlog(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_fragment_publisher_context_t* media_ctx);
+/* Evaluation of congestion in warp transmission mode */
+int quicrq_evaluate_warp_congestion(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_fragment_publisher_context_t* media_ctx,
+    size_t next_object_size, uint8_t flags, uint64_t current_time);
 
-/* Backlog evaluation in datagram mode */
-int quicrq_evaluate_datagram_backlog(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time);
+/* Evaluation of congestion in datagram mode */
+int quicrq_evaluate_datagram_congestion(quicrq_stream_ctx_t* stream_ctx, quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time);
 
 #ifdef __cplusplus
 }

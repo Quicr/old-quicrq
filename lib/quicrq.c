@@ -193,7 +193,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     int is_new_group = 0;
     int is_last_fragment = 0;
     int is_still_active = 0;
-    int is_object_skipped = 0;
+    int should_skip = 0;
     int has_backlog = 0;
     size_t available = 0;
     size_t data_length = 0;
@@ -226,24 +226,18 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         else {
             /* Find how much data is actually available */
             ret = quicrq_fragment_publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, 
-                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
+                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &should_skip, current_time);
             if (is_new_group) {
                 stream_ctx->next_group_id += 1;
                 nb_objects_previous_group = stream_ctx->next_object_id;
                 stream_ctx->next_object_id = 0;
                 stream_ctx->next_object_offset = 0;
             }
-
-            if (available > 0 && stream_ctx->next_object_offset == 0 && 
-                stream_ctx->next_object_id != 0 && !is_new_group) {
-                /* Check the cache time, compare to current time, determine congestion */
-                is_object_skipped = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx, flags, has_backlog, current_time);
-            }
         }
     }
 
     if (ret == 0) {
-        if (is_object_skipped) {
+        if (should_skip) {
             /* Prepare and a place holder for the object, pretending 0 length, setting the flags to 0xFF
              * Call the publisher APi to signal that the object should be skipped. 
              */
@@ -1056,7 +1050,7 @@ void quicrq_enable_congestion_control(quicrq_ctx_t* qr, quicrq_congestion_contro
     if (congestion_control_mode < 0 || congestion_control_mode >= quicrq_congestion_control_max)
         qr->congestion_control_mode = quicrq_congestion_control_delay;
     else {
-        qr->congestion_control_mode = (quicrq_congestion_control_enum)congestion_control_mode;
+        qr->congestion_control_mode = congestion_control_mode;
     }
 }
 
@@ -1422,18 +1416,8 @@ int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_s
                     quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
                     uint8_t* message_next = NULL;
 
-                    if (flags == 0xff && next_object_size == 0) {
-                        /* This object was marked skipped at a rpevious relay */
-                        should_skip = 1;
-                    }
-                    else {
-                        /* Check whether there is ongoing congestion */
-                        has_backlog = quicrq_evaluate_warp_backlog(uni_stream_ctx, media_ctx);
-                        if (uni_stream_ctx->current_object_id > 0 && flags != 0xff) {
-                            should_skip = quicrq_congestion_check_per_cnx(uni_stream_ctx->control_stream_ctx->cnx_ctx,
-                                flags, has_backlog, current_time);
-                        }
-                    }
+                    should_skip = quicrq_evaluate_warp_congestion(uni_stream_ctx, media_ctx, next_object_size, flags, current_time);
+
                     if (should_skip) {
                         uint8_t place_holder = 0;
 

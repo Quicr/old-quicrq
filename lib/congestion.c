@@ -10,7 +10,8 @@
 #include "quicrq_fragment.h"
 
 
-/* Handle congestion. This should be done per connection, at least once per RTT.
+/* Handle delay based congestion.
+* This should be done per connection, at least once per RTT.
 * Check whether there is congestion, and also check the highest (least urgent)
 * priority level among the streams.
 * 
@@ -90,28 +91,124 @@ int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, in
     }
     return should_skip;
 }
+/* Handle Group Based congestion:
+ * 
+ * When congestion is experienced, group based congestion drops the packets
+ * belonging to all but the latest group. This will cause receivers to jump
+ * ahead to the latest group. It avoids reliance on priority markings per
+ * packets, and is only indirectly linked to scheduling priorities. Scheduling
+ * determines which media stream is sent first, and thus which media stream
+ * will experience queues. Congestion control only looks at these queues.
+ * 
+ * Congestion is detected when the current group ID is lower than the
+ * latest group ID, and the transmission is more than 5 packets behind
+ * the latest packet available. 
+ * 
+ * We are concerned about the special case of audio streams, which send
+ * each packet in a group by itself. Congestion then is only detected if
+ * the current group ID is 5 groups behind the latest one.
+ * 
+ * Once congestion is detected, the algorithm sets an "end of congestion"
+ * mark to the next group ID. Packets in groups below that mark will be
+ * automatically dropped.
+ */
 
-int quicrq_compute_group_mode_backlog(quicrq_fragment_cache_t* cache_ctx, uint64_t current_group_id, uint64_t current_object_id)
+int quicrq_compute_group_mode_congestion(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_group_id, uint64_t current_object_id)
 {
     int has_backlog = 0;
+    int should_drop = 0;
+    const uint64_t backlog_threshold = 5;
 
-    if (current_group_id < cache_ctx->next_group_id) {
-        if (current_group_id + 1 == cache_ctx->next_group_id) {
+    if (current_group_id < media_ctx->end_of_congestion_group_id) {
+        should_drop = 1;
+    } else {
+        quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
 
+        if (current_group_id < cache_ctx->next_group_id) {
+            /* Compute the size of the backlog */
+            uint64_t backlog = cache_ctx->next_object_id;
+            uint64_t previous_group_id = cache_ctx->next_group_id - 1;
+            uint64_t previous_group_size = quicrq_fragment_get_object_count(cache_ctx, previous_group_id - 1);
+            if (previous_group_size == 0) {
+                /* Next group size not known yet. Do not detect congestion. */
+                backlog = 0;
+            } else {
+                while (previous_group_id > current_group_id) {
+                    previous_group_id--;
+                    backlog += previous_group_size;
+                    if (backlog >= backlog_threshold) {
+                        break;
+                    }
+                    previous_group_size = quicrq_fragment_get_object_count(cache_ctx, previous_group_id - 1);
+                    if (previous_group_size == 0) {
+                        previous_group_size = 1;
+                    }
+                }
+                if (previous_group_size > current_object_id) {
+                    /* The only case in which previous_group_size is not the current group is when 
+                     * backlog >= backlog_threshold. We can thus add the extra count here without
+                     * worrying too much.
+                     */
+                    backlog += previous_group_size - current_object_id;
+                }
+                if (backlog >= backlog_threshold) {
+                    should_drop = 1;
+                    media_ctx->end_of_congestion_group_id = current_group_id + 1;
+                }
+            }
         }
     }
-    return has_backlog;
+    return should_drop;
 }
 
-/* Evaluation of backlog for single stream transmission
+/* Evaluation of congestion for single stream transmission
  */
-int quicrq_fragment_evaluate_backlog(quicrq_fragment_publisher_context_t* media_ctx)
+int quicrq_evaluate_stream_congestion(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time)
 {
+    int is_object_skipped = 0;
     int has_backlog = 0;
     const uint64_t backlog_threshold = 5;
 
-    if (media_ctx->current_offset > 0 || media_ctx->length_sent > 0) {
-        has_backlog = media_ctx->has_backlog;
+    switch (media_ctx->congestion_control_mode) {
+    case quicrq_congestion_control_none:
+        break;
+    case quicrq_congestion_control_group:
+        /* TODO: compute group mode congestion control */
+        break;
+    case quicrq_congestion_control_delay:
+    default:
+        if (media_ctx->current_offset > 0 || media_ctx->length_sent > 0) {
+            has_backlog = media_ctx->has_backlog;
+        }
+        else if (media_ctx->current_group_id < media_ctx->cache_ctx->next_group_id ||
+            (media_ctx->current_group_id == media_ctx->cache_ctx->next_group_id &&
+                media_ctx->current_object_id + backlog_threshold < media_ctx->cache_ctx->next_object_id)) {
+            has_backlog = 1;
+            media_ctx->has_backlog = 1;
+        }
+        else {
+            has_backlog = 0;
+            media_ctx->has_backlog = 0;
+        }
+        /* Check the cache time, compare to current time, determine congestion */
+        is_object_skipped = quicrq_congestion_check_per_cnx(media_ctx->stream_ctx->cnx_ctx,
+            media_ctx->current_fragment->flags, has_backlog, current_time);
+        break;
+    }
+    return is_object_skipped;
+}
+/* Evaluation of congestion in warp mode */
+int quicrq_evaluate_warp_congestion(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_fragment_publisher_context_t* media_ctx, 
+    size_t next_object_size, uint8_t flags, uint64_t current_time)
+{
+    int should_skip = 0;
+    int has_backlog = 0;
+    const uint64_t backlog_threshold = 5;
+    quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
+
+    if (flags == 0xff && next_object_size == 0) {
+        /* This object was marked skipped at a previous relay */
+        should_skip = 1;
     }
     else {
         switch (media_ctx->congestion_control_mode) {
@@ -122,65 +219,46 @@ int quicrq_fragment_evaluate_backlog(quicrq_fragment_publisher_context_t* media_
             break;
         case quicrq_congestion_control_delay:
         default:
-            if (media_ctx->current_group_id < media_ctx->cache_ctx->next_group_id ||
-                (media_ctx->current_group_id == media_ctx->cache_ctx->next_group_id &&
-                    media_ctx->current_object_id + backlog_threshold < media_ctx->cache_ctx->next_object_id)) {
+            /* Check whether there is ongoing congestion */
+            if (uni_stream_ctx->current_group_id < cache_ctx->next_group_id ||
+                (uni_stream_ctx->current_group_id == cache_ctx->next_group_id &&
+                    uni_stream_ctx->current_object_id + backlog_threshold < cache_ctx->next_object_id)) {
                 has_backlog = 1;
-                media_ctx->has_backlog = 1;
-            }
-            else {
-                has_backlog = 0;
-                media_ctx->has_backlog = 0;
+            } 
+            if (uni_stream_ctx->current_object_id > 0 && flags != 0xff) {
+                should_skip = quicrq_congestion_check_per_cnx(uni_stream_ctx->control_stream_ctx->cnx_ctx,
+                    flags, has_backlog, current_time);
             }
             break;
         }
     }
-    return has_backlog;
+
+    return should_skip;
 }
 
-/* Checking congestion in warp mode */
-int quicrq_evaluate_warp_backlog(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_fragment_publisher_context_t* media_ctx)
-{
-    int has_backlog = 0;
-    const uint64_t backlog_threshold = 5;
-    quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
-
-    switch (media_ctx->congestion_control_mode) {
-    case quicrq_congestion_control_none:
-        break;
-    case quicrq_congestion_control_group:
-        /* TODO: compute group mode congestion control */
-        break;
-    case quicrq_congestion_control_delay:
-    default:
-        if (uni_stream_ctx->current_group_id < cache_ctx->next_group_id ||
-            (uni_stream_ctx->current_group_id == cache_ctx->next_group_id &&
-                uni_stream_ctx->current_object_id + backlog_threshold < cache_ctx->next_object_id)) {
-            has_backlog = 1;
-        }
-        break;
-    }
-
-    return has_backlog;
-}
-
-/* Backlog evaluation in datagram mode */
-int quicrq_evaluate_datagram_backlog(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time)
+/* Evaluation of congestion in datagram mode */
+int quicrq_evaluate_datagram_congestion(quicrq_stream_ctx_t * stream_ctx, quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time)
 {
     const int64_t delta_t_max = 5 * 33333;
     int has_backlog = 0;
+    int should_skip = 0;
 
-    switch (media_ctx->congestion_control_mode) {
-    case quicrq_congestion_control_none:
-        break;
-    case quicrq_congestion_control_group:
-        /* TODO: compute group mode congestion control */
-        break;
-    case quicrq_congestion_control_delay:
-    default:
-        has_backlog = (current_time - media_ctx->current_fragment->cache_time) > delta_t_max;
-        break;
+    if (media_ctx->current_fragment->object_id != 0 &&
+        media_ctx->current_fragment->data_length > 0) {
+        switch (media_ctx->congestion_control_mode) {
+        case quicrq_congestion_control_none:
+            break;
+        case quicrq_congestion_control_group:
+            /* TODO: compute group mode congestion control */
+            break;
+        case quicrq_congestion_control_delay:
+        default:
+            has_backlog = (current_time - media_ctx->current_fragment->cache_time) > delta_t_max;
+            should_skip = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx,
+                media_ctx->current_fragment->flags, has_backlog, current_time);
+            break;
+        }
     }
 
-    return has_backlog;
+    return should_skip;
 }

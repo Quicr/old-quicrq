@@ -548,12 +548,12 @@ int quicrq_fragment_is_ready_to_send(void* v_media_ctx, size_t data_max_size, ui
     int is_last_fragment = 0;
     int is_media_finished = 0;
     int is_still_active = 0;
-    int has_backlog = 0;
+    int should_skip = 0;
     uint8_t flags = 0;
     size_t data_length = 0;
 
     if (0 == quicrq_fragment_publisher_fn(quicrq_media_source_get_data, v_media_ctx, NULL, data_max_size,
-        &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time)) {
+        &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &should_skip, current_time)) {
         if (data_length > 0) {
             is_ready = 1; 
         }
@@ -572,7 +572,7 @@ int quicrq_fragment_publisher_fn(
     int* is_last_fragment,
     int* is_media_finished,
     int* is_still_active,
-    int* has_backlog,
+    int* should_skip,
     uint64_t current_time)
 {
     int ret = 0;
@@ -584,7 +584,7 @@ int quicrq_fragment_publisher_fn(
         *is_last_fragment = 0;
         *is_still_active = 0;
         *data_length = 0;
-        *has_backlog = 0;
+        *should_skip = 0;
         /* In sequence access to objects
          * variable current_object_id = in sequence.
          * variable current_offset = current_offset sent.
@@ -662,6 +662,7 @@ int quicrq_fragment_publisher_fn(
             else {
                 size_t available = media_ctx->current_fragment->data_length - media_ctx->length_sent;
                 size_t copied = data_max_size;
+                int has_backlog = 0;
                 int end_of_fragment = 0;
 
                 *flags = media_ctx->current_fragment->flags;
@@ -673,7 +674,12 @@ int quicrq_fragment_publisher_fn(
                 }
                 *data_length = copied;
                 *is_still_active = 1;
-                *has_backlog = quicrq_fragment_evaluate_backlog(media_ctx);
+                if (data == NULL) {
+                    if (available > 0 && media_ctx->current_fragment->object_id != 0 &&
+                        media_ctx->stream_ctx->next_object_id != 0 ) {
+                        *should_skip = quicrq_evaluate_stream_congestion(media_ctx, current_time);
+                    }
+                }
 
                 if (data != NULL) {
                     /* If data is set to NULL, return the available size but do not copy anything */
@@ -705,44 +711,6 @@ int quicrq_fragment_publisher_fn(
     }
     return ret;
 }
-
-
-/* Evaluate whether the media context has backlog, and check
-* whether the current object should be skipped.
-*/
-
-int quicrq_fragment_datagram_publisher_object_eval(
-    quicrq_stream_ctx_t* stream_ctx,
-    quicrq_fragment_publisher_context_t* media_ctx, int* should_skip, uint64_t current_time)
-{
-    int ret = 0;
-    int has_backlog = 0;
-
-    *should_skip = 0;
-    if (media_ctx->current_fragment->object_id != 0 &&
-        media_ctx->current_fragment->data_length > 0) {
-        switch (stream_ctx->cnx_ctx->qr_ctx->congestion_control_mode) {
-        case quicrq_congestion_control_none:
-            break;
-        case quicrq_congestion_control_group:
-            /* TODO: warp mode evaluation */
-            break;
-        case quicrq_congestion_control_delay:
-        default:
-            if (stream_ctx->cnx_ctx->qr_ctx->quic != NULL &&
-                media_ctx->current_fragment != NULL) {
-                has_backlog = quicrq_evaluate_datagram_backlog(media_ctx, current_time);
-
-                *should_skip = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx,
-                    media_ctx->current_fragment->flags, has_backlog, current_time);
-            }
-            break;
-        }
-    }
-
-    return ret;
-}
-
 
 /* datagram_publisher_check_object:
  * evaluate and if necessary progress the "current fragment" pointer.
@@ -796,7 +764,7 @@ int quicrq_fragment_datagram_publisher_check_fragment(
                 }
                 else {
                     /* this is a new object. The fragment should be processed. */
-                    ret = quicrq_fragment_datagram_publisher_object_eval(stream_ctx, media_ctx, should_skip, current_time);
+                    *should_skip = quicrq_evaluate_datagram_congestion(stream_ctx, media_ctx, current_time);
                     break;
                 }
             }
@@ -1165,6 +1133,7 @@ void* quicrq_fragment_publisher_subscribe(quicrq_fragment_cache_t* cache_ctx, qu
         malloc(sizeof(quicrq_fragment_publisher_context_t));
     if (media_ctx != NULL) {
         memset(media_ctx, 0, sizeof(quicrq_fragment_publisher_context_t));
+        media_ctx->stream_ctx = stream_ctx;
         media_ctx->cache_ctx = cache_ctx;
         media_ctx->congestion_control_mode = stream_ctx->cnx_ctx->qr_ctx->congestion_control_mode;
         if (stream_ctx != NULL) {

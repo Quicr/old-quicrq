@@ -602,7 +602,7 @@ struct st_quicrq_ctx_t {
     /* Count of media fragments received with numbers < start point */
     uint64_t useless_fragments;
     /* Control how enable congestion control -- mostly for testability */
-    quicrq_congestion_control_enum congestion_control_mode : 1;
+    quicrq_congestion_control_enum congestion_control_mode;
 };
 
 quicrq_stream_ctx_t* quicrq_find_or_create_stream(
