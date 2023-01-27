@@ -38,6 +38,7 @@ static const quicrq_test_def_t test_table[] =
     { "congestion_datagram_recv", quicrq_congestion_datagram_recv_test },
     { "congestion_datagram_rloss", quicrq_congestion_datagram_rloss_test },
     { "congestion_datagram_zero", quicrq_congestion_datagram_zero_test },
+    { "congestion_datagram_g", quicrq_congestion_datagram_g_test },
     { "media_video1", quicrq_media_video1_test },
     { "media_video1_rt", quicrq_media_video1_rt_test },
     { "media_audio1", quicrq_media_audio1_test },

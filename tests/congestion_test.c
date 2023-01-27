@@ -144,8 +144,8 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
     int half_congestion = spec->congestion_mode == congestion_mode_half;
     uint64_t client2_close_time = UINT64_MAX;
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%c-%llx-%d-%d.txt", is_real_time,
-        quicrq_transport_mode_to_letter(transport_mode),
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "congestion_textlog-%d-%c%d-%llx-%d-%d.txt", is_real_time,
+        quicrq_transport_mode_to_letter(transport_mode), (int)spec->congestion_control_mode,
         (unsigned long long)spec->simulate_losses, spec->congested_receiver, (int)spec->congestion_mode);
     /* TODO: name shall indicate the triangle configuration */
     ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
@@ -584,6 +584,24 @@ int quicrq_congestion_datagram_zero_test()
     return ret;
 }
 
+int quicrq_congestion_datagram_g_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 73;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 550000;
+    spec.max_delay_target = 1150000;
+    spec.congestion_control_mode = quicrq_congestion_control_group;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_datagram, &spec);
+
+    return ret;
+}
+
 int quicrq_congestion_warp_test()
 {
     quicrq_congestion_test_t spec = { 0 };
@@ -609,7 +627,7 @@ int quicrq_congestion_warp_g_test()
 
     spec.simulate_losses = 0;
     spec.congested_receiver = 0;
-    spec.max_drops = 73;
+    spec.max_drops = 60;
     spec.min_loss_flag = 0x82;
     spec.average_delay_target = 540000;
     spec.max_delay_target = 1150000;
