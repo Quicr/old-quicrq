@@ -9,6 +9,8 @@
 #include "quicrq_internal.h"
 #include "quicrq_fragment.h"
 
+#define QUICRQ_CONGESTION_THRESHOLD 5
+
 
 /* Handle delay based congestion.
 * This should be done per connection, at least once per RTT.
@@ -116,11 +118,10 @@ int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, in
 int quicrq_compute_group_mode_congestion(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_group_id, uint64_t current_object_id)
 {
     int has_backlog = 0;
-    int should_drop = 0;
-    const uint64_t backlog_threshold = 5;
+    int should_skip = 0;
 
     if (current_group_id < media_ctx->end_of_congestion_group_id) {
-        should_drop = 1;
+        should_skip = 1;
     } else {
         quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
 
@@ -136,7 +137,7 @@ int quicrq_compute_group_mode_congestion(quicrq_fragment_publisher_context_t* me
                 while (previous_group_id > current_group_id) {
                     previous_group_id--;
                     backlog += previous_group_size;
-                    if (backlog >= backlog_threshold) {
+                    if (backlog >= QUICRQ_CONGESTION_THRESHOLD) {
                         break;
                     }
                     previous_group_size = quicrq_fragment_get_object_count(cache_ctx, previous_group_id - 1);
@@ -151,29 +152,33 @@ int quicrq_compute_group_mode_congestion(quicrq_fragment_publisher_context_t* me
                      */
                     backlog += previous_group_size - current_object_id;
                 }
-                if (backlog >= backlog_threshold) {
-                    should_drop = 1;
+                if (backlog >= QUICRQ_CONGESTION_THRESHOLD) {
+                    should_skip = 1;
                     media_ctx->end_of_congestion_group_id = current_group_id + 1;
                 }
             }
         }
     }
-    return should_drop;
+    return should_skip;
 }
 
 /* Evaluation of congestion for single stream transmission
  */
 int quicrq_evaluate_stream_congestion(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time)
 {
-    int is_object_skipped = 0;
+    int should_skip = 0;
     int has_backlog = 0;
-    const uint64_t backlog_threshold = 5;
 
     switch (media_ctx->congestion_control_mode) {
     case quicrq_congestion_control_none:
         break;
     case quicrq_congestion_control_group:
-        /* TODO: compute group mode congestion control */
+        if (media_ctx->current_offset > 0 || media_ctx->length_sent > 0) {
+            should_skip = 0;
+        }
+        else {
+            should_skip = quicrq_compute_group_mode_congestion(media_ctx, media_ctx->current_group_id, media_ctx->current_object_id);
+        }
         break;
     case quicrq_congestion_control_delay:
     default:
@@ -182,7 +187,7 @@ int quicrq_evaluate_stream_congestion(quicrq_fragment_publisher_context_t* media
         }
         else if (media_ctx->current_group_id < media_ctx->cache_ctx->next_group_id ||
             (media_ctx->current_group_id == media_ctx->cache_ctx->next_group_id &&
-                media_ctx->current_object_id + backlog_threshold < media_ctx->cache_ctx->next_object_id)) {
+                media_ctx->current_object_id + QUICRQ_CONGESTION_THRESHOLD < media_ctx->cache_ctx->next_object_id)) {
             has_backlog = 1;
             media_ctx->has_backlog = 1;
         }
@@ -191,11 +196,11 @@ int quicrq_evaluate_stream_congestion(quicrq_fragment_publisher_context_t* media
             media_ctx->has_backlog = 0;
         }
         /* Check the cache time, compare to current time, determine congestion */
-        is_object_skipped = quicrq_congestion_check_per_cnx(media_ctx->stream_ctx->cnx_ctx,
+        should_skip = quicrq_congestion_check_per_cnx(media_ctx->stream_ctx->cnx_ctx,
             media_ctx->current_fragment->flags, has_backlog, current_time);
         break;
     }
-    return is_object_skipped;
+    return should_skip;
 }
 /* Evaluation of congestion in warp mode */
 int quicrq_evaluate_warp_congestion(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_fragment_publisher_context_t* media_ctx, 
@@ -215,7 +220,8 @@ int quicrq_evaluate_warp_congestion(quicrq_uni_stream_ctx_t* uni_stream_ctx, qui
         case quicrq_congestion_control_none:
             break;
         case quicrq_congestion_control_group:
-            /* TODO: compute group mode congestion control */
+            /* compute group mode congestion control */
+            should_skip = quicrq_compute_group_mode_congestion(media_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id);
             break;
         case quicrq_congestion_control_delay:
         default:
@@ -239,7 +245,7 @@ int quicrq_evaluate_warp_congestion(quicrq_uni_stream_ctx_t* uni_stream_ctx, qui
 /* Evaluation of congestion in datagram mode */
 int quicrq_evaluate_datagram_congestion(quicrq_stream_ctx_t * stream_ctx, quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_time)
 {
-    const int64_t delta_t_max = 5 * 33333;
+    const int64_t delta_t_max = QUICRQ_CONGESTION_THRESHOLD * 33333;
     int has_backlog = 0;
     int should_skip = 0;
 
@@ -249,7 +255,9 @@ int quicrq_evaluate_datagram_congestion(quicrq_stream_ctx_t * stream_ctx, quicrq
         case quicrq_congestion_control_none:
             break;
         case quicrq_congestion_control_group:
-            /* TODO: compute group mode congestion control */
+            /* compute group mode congestion control */
+            should_skip = quicrq_compute_group_mode_congestion(media_ctx, media_ctx->current_fragment->group_id,
+                media_ctx->current_fragment->object_id);
             break;
         case quicrq_congestion_control_delay:
         default:

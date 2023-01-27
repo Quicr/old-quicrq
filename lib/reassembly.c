@@ -361,6 +361,10 @@ int quicrq_reassembly_update_start_point(quicrq_reassembly_context_t* reassembly
                 reassembly_ctx->next_group_id += 1;
                 reassembly_ctx->next_object_id = 0;
             }
+            else {
+                /* The next group start segment is present, but there is a gap. */
+                break;
+            }
         }
         if (object == NULL || object->reassembled == NULL) {
             break;

@@ -31,6 +31,7 @@ static const quicrq_test_def_t test_table[] =
     { "congestion_basic_recv", quicrq_congestion_basic_recv_test },
     { "congestion_basic_loss", quicrq_congestion_basic_loss_test },
     { "congestion_basic_zero", quicrq_congestion_basic_zero_test },
+    { "congestion_basic_g", quicrq_congestion_basic_g_test },
     { "congestion_datagram", quicrq_congestion_datagram_test },
     { "congestion_datagram_half", quicrq_congestion_datagram_half_test },
     { "congestion_datagram_loss", quicrq_congestion_datagram_loss_test },
@@ -111,6 +112,7 @@ static const quicrq_test_def_t test_table[] =
     { "warp_basic_client", quicrq_warp_basic_client_test },
     { "warp_triangle", quicrq_triangle_warp_test },
     { "warp_congestion", quicrq_congestion_warp_test },
+    { "warp_congestion_g", quicrq_congestion_warp_g_test },
     { "warp_relay", quicrq_warp_relay_test },
     { "warp_basic_loss", quicrq_warp_basic_loss_test },
     { "warp_relay_loss", quicrq_warp_relay_loss_test }

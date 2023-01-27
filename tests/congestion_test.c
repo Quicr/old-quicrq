@@ -344,7 +344,7 @@ int quicrq_congestion_test_one(int is_real_time, quicrq_transport_mode_enum tran
                         }
                         else if (spec->max_delay_target > 0 &&
                             delay_max > spec->max_delay_target) {
-                            DBG_PRINTF("Average delay %" PRIu64 ", exceeds %" PRIu64,
+                            DBG_PRINTF("Max delay %" PRIu64 ", exceeds %" PRIu64,
                                 delay_max, spec->max_delay_target);
                             ret = -1;
                         }
@@ -450,6 +450,24 @@ int quicrq_congestion_basic_zero_test()
     spec.average_delay_target = 26000;
     spec.max_delay_target = 110000;
     spec.congestion_control_mode = quicrq_congestion_control_delay;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_basic_g_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 60;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 550000;
+    spec.max_delay_target = 1150000;
+    spec.congestion_control_mode = quicrq_congestion_control_group;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_single_stream, &spec);
 
@@ -578,6 +596,24 @@ int quicrq_congestion_warp_test()
     spec.average_delay_target = 210000;
     spec.max_delay_target = 700000;
     spec.congestion_control_mode = quicrq_congestion_control_delay;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_warp, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_warp_g_test()
+{
+    quicrq_congestion_test_t spec = { 0 };
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 73;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 540000;
+    spec.max_delay_target = 1150000;
+    spec.congestion_control_mode = quicrq_congestion_control_group;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_warp, &spec);
 

@@ -59,6 +59,13 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(congestion_basic_g)
+		{
+			int ret = quicrq_congestion_basic_g_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(congestion_datagram)
 		{
 			int ret = quicrq_congestion_datagram_test();
@@ -560,6 +567,12 @@ namespace UnitTest
 
 		TEST_METHOD(warp_congestion) {
 			int ret = quicrq_congestion_warp_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(warp_congestion_g) {
+			int ret = quicrq_congestion_warp_g_test();
 
 			Assert::AreEqual(ret, 0);
 		}
