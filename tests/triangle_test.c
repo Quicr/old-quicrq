@@ -87,14 +87,16 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
     int subscribed = 0;
     uint64_t start_group_intent = 0;
     uint64_t start_object_intent = 0;
+    char test_id[256];
 
-    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "triangle_textlog-%d-%c-%llx-%llu-%llu-%d-%d.txt", is_real_time, 
+    /* Create unique names for los and results */
+    (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "triangle-%d-%c-%llx-%llu-%llu-%d-%d", is_real_time, 
         quicrq_transport_mode_to_letter(transport_mode),
-        (unsigned long long)simulate_losses, (unsigned long long) extra_delay, (unsigned long long) start_point, test_cache_clear, test_intent);
-    /* TODO: name shall indicate the triangle configuration */
-    ret = test_media_derive_file_names((uint8_t*)QUICRQ_TEST_BASIC_SOURCE, strlen(QUICRQ_TEST_BASIC_SOURCE),
-        transport_mode, is_real_time, 1,
-        result_file_name, result_log_name, sizeof(result_file_name));
+        (unsigned long long)simulate_losses, (unsigned long long)extra_delay,
+        (unsigned long long)start_point, test_cache_clear, test_intent);
+    (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "%s_textlog.txt", test_id);
+    (void)picoquic_sprintf(result_file_name, sizeof(result_file_name), NULL, "%s_video1.bin", test_id);
+    (void)picoquic_sprintf(result_log_name, sizeof(result_log_name), NULL, "%s_video1.csv", test_id);
 
     if (config == NULL) {
         ret = -1;
@@ -410,6 +412,13 @@ int quicrq_triangle_start_point_s_test()
     return ret;
 }
 
+int quicrq_triangle_start_point_w_test()
+{
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0x7080, 10000, 1, 0, 0);
+
+    return ret;
+}
+
 int quicrq_triangle_cache_test()
 {
     int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 0);
@@ -490,6 +499,34 @@ int quicrq_triangle_intent_that_test()
 int quicrq_triangle_intent_that_s_test()
 {
     int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 3);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_warp_test()
+{
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 1, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_warp_nc_test()
+{
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 0, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_warp_loss_test()
+{
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0x7080, 0, 0, 1, 1);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_warp_next_test()
+{
+    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 1, 2);
 
     return ret;
 }

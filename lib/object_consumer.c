@@ -44,6 +44,11 @@ int quicrq_media_object_bridge_ready(
     /* if in sequence, deliver the object to the application. */
     if ((bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_peek) ||
         (!bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_repair)){
+#if 1
+        if (group_id == 0) {
+            DBG_PRINTF("%s", "Bug");
+        }
+#endif
         /* Deliver to the application */
         quicrq_object_stream_consumer_properties_t properties = { 0 };
         properties.flags = flags;

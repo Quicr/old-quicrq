@@ -370,6 +370,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(triangle_start_point_w) {
+			int ret = quicrq_triangle_start_point_w_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(triangle_cache) {
 			int ret = quicrq_triangle_cache_test();
 
@@ -441,6 +447,30 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
+		TEST_METHOD(triangle_intent_warp) {
+			int ret = quicrq_triangle_intent_warp_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+		TEST_METHOD(triangle_intent_warp_nc) {
+			int ret = quicrq_triangle_intent_warp_nc_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_warp_loss) {
+			int ret = quicrq_triangle_intent_warp_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_warp_next) {
+			int ret = quicrq_triangle_intent_warp_next_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(pyramid_basic) {
 			int ret = quicrq_pyramid_basic_test();
 
