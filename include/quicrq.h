@@ -227,6 +227,12 @@ typedef int (*quicrq_object_stream_consumer_fn)(
 typedef struct st_quicrq_object_stream_consumer_ctx quicrq_object_stream_consumer_ctx;
 
 typedef enum {
+    quicrq_subscribe_out_of_order = 0,
+    quicrq_subscribe_in_order,
+    quicrq_subscribe_in_order_skip_to_group_ahead
+} quicrq_subscribe_order_enum;
+
+typedef enum {
     quicrq_subscribe_intent_current_group = 0,
     quicrq_subscribe_intent_next_group = 1,
     quicrq_subscribe_intent_start_point = 2
@@ -240,7 +246,7 @@ typedef struct st_quicrq_subscribe_intent_t {
 
 quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
     const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode,
-    int in_order_required, quicrq_subscribe_intent_t * intent,
+    quicrq_subscribe_order_enum order_required, quicrq_subscribe_intent_t * intent,
     quicrq_object_stream_consumer_fn media_object_consumer_fn, void* media_object_ctx);
 
 void quicrq_unsubscribe_object_stream(quicrq_object_stream_consumer_ctx* subscribe_ctx);

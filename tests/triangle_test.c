@@ -219,7 +219,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
                 break;
             }
             object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, &intent, result_file_name, result_log_name);
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, quicrq_subscribe_in_order, &intent, result_file_name, result_log_name);
             if (object_stream_ctx == NULL) {
                 ret = -1;
                 break;

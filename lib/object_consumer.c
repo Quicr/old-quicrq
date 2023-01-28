@@ -21,7 +21,7 @@ typedef struct st_quicrq_object_stream_consumer_ctx {
     quicrq_reassembly_context_t reassembly_ctx;
     quicrq_object_stream_consumer_fn object_stream_consumer_fn;
     void * object_stream_consumer_ctx;
-    int in_order_required;
+    quicrq_subscribe_order_enum order_required;
 } quicrq_object_stream_consumer_ctx;
 
 
@@ -37,18 +37,28 @@ int quicrq_media_object_bridge_ready(
     quicrq_reassembly_object_mode_enum object_mode)
 {
     int ret = 0;
+    int ignore = 1;
     quicrq_object_stream_consumer_ctx* bridge_ctx = (quicrq_object_stream_consumer_ctx*)media_ctx;
 
+#if 1
     /* TODO: for some streams, we may be able to "jump ahead" and
         * use the latest object without waiting for the full sequence */
     /* if in sequence, deliver the object to the application. */
-    if ((bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_peek) ||
-        (!bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_repair)){
-#if 1
-        if (group_id == 0) {
-            DBG_PRINTF("%s", "Bug");
+    switch (bridge_ctx->order_required) {
+    case quicrq_subscribe_out_of_order:
+        if (object_mode != quicrq_reassembly_object_repair) {
+            ignore = 0;
         }
-#endif
+        break;
+    case quicrq_subscribe_in_order:
+    case quicrq_subscribe_in_order_skip_to_group_ahead:
+    default:
+        if (object_mode != quicrq_reassembly_object_peek) {
+            ignore = 0;
+        }
+        break;
+    }
+    if (!ignore) {
         /* Deliver to the application */
         quicrq_object_stream_consumer_properties_t properties = { 0 };
         properties.flags = flags;
@@ -58,7 +68,19 @@ int quicrq_media_object_bridge_ready(
             current_time, group_id, object_id,
             data, data_length,  &properties, 0, 0);
     }
-       
+#else
+    if ((bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_peek) ||
+        (!bridge_ctx->in_order_required && object_mode != quicrq_reassembly_object_repair)){
+        /* Deliver to the application */
+        quicrq_object_stream_consumer_properties_t properties = { 0 };
+        properties.flags = flags;
+        ret = bridge_ctx->object_stream_consumer_fn(
+            quicrq_media_datagram_ready,
+            bridge_ctx->object_stream_consumer_ctx,
+            current_time, group_id, object_id,
+            data, data_length,  &properties, 0, 0);
+    }
+#endif
     return ret;
 }
 
@@ -124,7 +146,7 @@ int quicrq_media_object_bridge_fn(
 /* Subscribe object stream. */
 quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx_t* cnx_ctx,
     const uint8_t* url, size_t url_length, quicrq_transport_mode_enum transport_mode,
-    int in_order_required, quicrq_subscribe_intent_t * intent,
+    quicrq_subscribe_order_enum order_required, quicrq_subscribe_intent_t * intent,
     quicrq_object_stream_consumer_fn object_stream_consumer_fn, void* object_stream_consumer_ctx)
 {
     quicrq_object_stream_consumer_ctx* bridge_ctx = (quicrq_object_stream_consumer_ctx*)malloc(sizeof(quicrq_object_stream_consumer_ctx));
@@ -135,7 +157,7 @@ quicrq_object_stream_consumer_ctx* quicrq_subscribe_object_stream(quicrq_cnx_ctx
         bridge_ctx->qr_ctx = cnx_ctx->qr_ctx;
         bridge_ctx->object_stream_consumer_fn = object_stream_consumer_fn;
         bridge_ctx->object_stream_consumer_ctx = object_stream_consumer_ctx;
-        bridge_ctx->in_order_required = in_order_required;
+        bridge_ctx->order_required = order_required;
         quicrq_reassembly_init(&bridge_ctx->reassembly_ctx);
         /* Create a media context for the stream */
         ret = quicrq_cnx_subscribe_media_ex(cnx_ctx, url, url_length, transport_mode, intent,
