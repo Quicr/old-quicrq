@@ -60,6 +60,7 @@ extern "C" {
     int quicrq_triangle_datagram_extra_test();
     int quicrq_triangle_start_point_test();
     int quicrq_triangle_start_point_s_test();
+    int quicrq_triangle_start_point_w_test();
     int quicrq_triangle_cache_test();
     int quicrq_triangle_cache_loss_test();
     int quicrq_triangle_cache_stream_test();
@@ -72,6 +73,10 @@ extern "C" {
     int quicrq_triangle_intent_next_s_test();
     int quicrq_triangle_intent_that_test();
     int quicrq_triangle_intent_that_s_test();
+    int quicrq_triangle_intent_warp_test();
+    int quicrq_triangle_intent_warp_nc_test();
+    int quicrq_triangle_intent_warp_loss_test();
+    int quicrq_triangle_intent_warp_next_test();
     int quicrq_pyramid_basic_test();
     int quicrq_pyramid_datagram_test();
     int quicrq_pyramid_datagram_loss_test();
