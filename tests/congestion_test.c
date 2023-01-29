@@ -36,6 +36,7 @@ static const quicrq_congestion_test_t congestion_test_default = {
     0, /* receiver not congested */
     0, /* No drops */
     congestion_mode_full,
+    quicrq_congestion_control_delay,
     quicrq_subscribe_in_order,
     0x82, /* Default flag */
     0, /* Average delay needs to be set per test */
