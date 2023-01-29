@@ -64,9 +64,28 @@ quicrq_test_config_t* quicrq_test_triangle_config_create(uint64_t simulate_loss,
     return config;
 }
 
+typedef struct st_quicrq_triangle_test_spec_t {
+    int is_real_time;
+    uint64_t simulate_losses;
+    uint64_t extra_delay;
+    uint64_t start_point;
+    int test_cache_clear;
+    int test_intent;
+    quicrq_subscribe_order_enum subscribe_order;
+} quicrq_triangle_test_spec_t;
+
+static const quicrq_triangle_test_spec_t triangle_test_default = {
+    1, /* real time */
+    0, /* 0 loss */
+    0, /* 0 delay */
+    0, /* start from beginning */
+    0, /* Do not clear the cache */
+    0,  /* Intent: start from beginning */
+    quicrq_subscribe_in_order
+};
+
 /* Basic relay test */
-int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transport_mode, uint64_t simulate_losses, uint64_t extra_delay, uint64_t start_point,
-    int test_cache_clear, int test_intent)
+int quicrq_triangle_test_one(quicrq_transport_mode_enum transport_mode, quicrq_triangle_test_spec_t * spec)
 {
     int ret = 0;
     int nb_steps = 0;
@@ -74,7 +93,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
     int is_closed = 0;
     const uint64_t max_time = 360000000;
     const int max_inactive = 128;
-    quicrq_test_config_t* config = quicrq_test_triangle_config_create(simulate_losses, extra_delay);
+    quicrq_test_config_t* config = quicrq_test_triangle_config_create(spec->simulate_losses, spec->extra_delay);
     quicrq_cnx_ctx_t* cnx_ctx_1 = NULL;
     quicrq_cnx_ctx_t* cnx_ctx_2 = NULL;
     char media_source_path[512];
@@ -89,11 +108,11 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
     uint64_t start_object_intent = 0;
     char test_id[256];
 
-    /* Create unique names for los and results */
-    (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "triangle-%d-%c-%llx-%llu-%llu-%d-%d", is_real_time, 
+    /* Create unique names for logs and results */
+    (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "triangle-%d-%c-%llx-%llu-%llu-%d-%d", spec->is_real_time, 
         quicrq_transport_mode_to_letter(transport_mode),
-        (unsigned long long)simulate_losses, (unsigned long long)extra_delay,
-        (unsigned long long)start_point, test_cache_clear, test_intent);
+        (unsigned long long)spec->simulate_losses, (unsigned long long)spec->extra_delay,
+        (unsigned long long)spec->start_point, spec->test_cache_clear, spec->test_intent);
     (void)picoquic_sprintf(text_log_name, sizeof(text_log_name), &nb_log_chars, "%s_textlog.txt", test_id);
     (void)picoquic_sprintf(result_file_name, sizeof(result_file_name), NULL, "%s_video1.bin", test_id);
     (void)picoquic_sprintf(result_log_name, sizeof(result_log_name), NULL, "%s_video1.csv", test_id);
@@ -126,12 +145,12 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
         quicrq_media_object_source_properties_t properties = { 0 };
         int publish_node = 1;
 
-        if (test_cache_clear) {
+        if (spec->test_cache_clear) {
             properties.use_real_time_caching = 1;
             quicrq_set_cache_duration(config->nodes[0], 5000000);
         }
 
-        if (start_point != 0) {
+        if (spec->start_point != 0) {
             properties.start_group_id = 1;
             properties.start_object_id = 0;
             start_group_intent = 1;
@@ -139,7 +158,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
         }
 
         config->object_sources[0] = test_media_object_source_publish_ex(config->nodes[publish_node], (uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-            strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, is_real_time, config->simulated_time, &properties);
+            strlen(QUICRQ_TEST_BASIC_SOURCE), media_source_path, NULL, spec->is_real_time, config->simulated_time, &properties);
         if (config->object_sources[0] == NULL) {
             ret = -1;
         }
@@ -172,13 +191,15 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
     }
 
     if (ret == 0) {
-        if (test_intent > 0) {
+        if (spec->test_intent > 0) {
             config->next_test_event_time = 4000000;
         } else {
             /* Create a subscription to the test source on client # 2*/
             test_object_stream_ctx_t* object_stream_ctx = NULL;
-            object_stream_ctx = test_object_stream_subscribe(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name, result_log_name);
+
+            object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, spec->subscribe_order, NULL, result_file_name, result_log_name);
+
             if (object_stream_ctx == NULL) {
                 ret = -1;
             }
@@ -199,7 +220,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
             /* Create a subscription to the test source on client # 2*/
             test_object_stream_ctx_t* object_stream_ctx = NULL;
             quicrq_subscribe_intent_t intent = { 0 };
-            intent.intent_mode = (quicrq_subscribe_intent_enum)(test_intent - 1);
+            intent.intent_mode = (quicrq_subscribe_intent_enum)(spec->test_intent - 1);
             switch (intent.intent_mode) {
             case quicrq_subscribe_intent_current_group:
                 start_group_intent = 1;
@@ -219,7 +240,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
                 break;
             }
             object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, &intent, result_file_name, result_log_name);
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, spec->subscribe_order, &intent, result_file_name, result_log_name);
             if (object_stream_ctx == NULL) {
                 ret = -1;
                 break;
@@ -288,7 +309,7 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
         ret = -1;
     }
 
-    if (ret == 0 && test_cache_clear) {
+    if (ret == 0 && spec->test_cache_clear) {
         /* Check that relay sources are deleted after a sufficient timer */
         uint64_t cache_time = config->simulated_time + 10000000;
 
@@ -351,42 +372,53 @@ int quicrq_triangle_test_one(int is_real_time, quicrq_transport_mode_enum transp
 
 int quicrq_triangle_basic_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_basic_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0x7080, 0, 0, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_datagram_extra_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 10000, 0, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    spec.extra_delay = 10000;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_warp_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_warp, &spec);
 
     return ret;
 }
@@ -400,133 +432,190 @@ int quicrq_triangle_warp_test()
  */
 int quicrq_triangle_start_point_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 10000, 1, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    spec.extra_delay = 10000;
+    spec.start_point = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_start_point_s_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0x7080, 10000, 1, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    spec.extra_delay = 10000;
+    spec.start_point = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_start_point_w_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0x7080, 10000, 1, 0, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    spec.extra_delay = 10000;
+    spec.start_point = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_warp, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_cache_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_cache_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 1, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    spec.test_cache_clear = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_cache_stream_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 0);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 1);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_nc_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 0, 1);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_datagram_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 1);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_dg_nc_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 0, 1);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0x7080, 0, 0, 1, 1);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_next_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 2);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 2;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_next_s_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 2);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 2;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_that_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_datagram, 0, 0, 0, 1, 3);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 3;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_datagram, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_that_s_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_single_stream, 0, 0, 0, 1, 3);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 3;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_single_stream, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_warp_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 1, 1);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_warp, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_warp_nc_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 0, 1);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_warp, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_warp_loss_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0x7080, 0, 0, 1, 1);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_warp, &spec);
 
     return ret;
 }
 
 int quicrq_triangle_intent_warp_next_test()
 {
-    int ret = quicrq_triangle_test_one(1, quicrq_transport_mode_warp, 0, 0, 0, 1, 2);
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 2;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_warp, &spec);
 
     return ret;
 }

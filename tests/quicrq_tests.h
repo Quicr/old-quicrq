@@ -104,6 +104,7 @@ extern "C" {
     int quicrq_triangle_warp_test();
     int quicrq_congestion_warp_test();
     int quicrq_congestion_warp_g_test();
+    int quicrq_congestion_warp_gs_test();
     int quicrq_warp_relay_test();
     int quicrq_warp_basic_loss_test();
     int quicrq_warp_relay_loss_test();

@@ -614,6 +614,12 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(warp_congestion_gs) {
+			int ret = quicrq_congestion_warp_gs_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(warp_relay) {
 			int ret = quicrq_warp_relay_test();
 

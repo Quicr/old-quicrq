@@ -73,6 +73,9 @@ int quicrq_reassembly_learn_final_object_id(
 /* Find the object number of the last reassembled object */
 uint64_t quicrq_reassembly_object_id_last(quicrq_reassembly_context_t* reassembly_ctx);
 
+/* Find the number of objects in a group, returns 0 if unknown */
+uint64_t quicrq_reassembly_get_object_count(quicrq_reassembly_context_t* object_list, uint64_t group_id);
+
 /* Initialize the reassembly context, supposedly zero on input.
  */
 void quicrq_reassembly_init(quicrq_reassembly_context_t* reassembly_ctx);
