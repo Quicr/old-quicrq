@@ -22,6 +22,8 @@ typedef struct st_quicrq_object_stream_consumer_ctx {
     quicrq_object_stream_consumer_fn object_stream_consumer_fn;
     void * object_stream_consumer_ctx;
     quicrq_subscribe_order_enum order_required;
+    uint64_t next_group_id;
+    uint64_t next_object_id;
 } quicrq_object_stream_consumer_ctx;
 
 
@@ -50,17 +52,73 @@ int quicrq_media_object_bridge_ready(
         }
         break;
     case quicrq_subscribe_in_order:
-    case quicrq_subscribe_in_order_skip_to_group_ahead:
-    default:
         if (object_mode != quicrq_reassembly_object_peek) {
             ignore = 0;
         }
         break;
+    case quicrq_subscribe_in_order_skip_to_group_ahead:
+        if (group_id < bridge_ctx->next_group_id ||
+            (group_id == bridge_ctx->next_group_id &&
+                object_id < bridge_ctx->next_object_id)) {
+            /* Late arrival, already delivered -- ignore */
+            ignore = 1;
+        }
+        else if (object_mode == quicrq_reassembly_object_peek) {
+            /* Peeking at an object ahead of the expectation point */
+            if (group_id > bridge_ctx->next_group_id && object_id == 0) {
+                /* if this is the first object of a next group, jump
+                 * there, but first, deliver placeholders for all the
+                 * objects being dropped */
+                 /* But first, check the start point */
+                if (bridge_ctx->next_group_id == 0 && bridge_ctx->next_object_id == 0) {
+                    /* Replace values by value of start point */
+                    bridge_ctx->next_group_id = bridge_ctx->stream_ctx->start_group_id;
+                    bridge_ctx->next_object_id = bridge_ctx->stream_ctx->start_object_id;
+                }
+                /* Now, loop for all the groups that we expect */
+                while (bridge_ctx->next_group_id < group_id) {
+                    uint64_t object_id_limit = quicrq_reassembly_get_object_count(&bridge_ctx->reassembly_ctx, bridge_ctx->next_group_id);
+                    if (object_id_limit == 0) {
+                        object_id_limit = bridge_ctx->next_object_id;
+                        if (object_id_limit == 0) {
+                            object_id_limit = 1;
+                        }
+                    }
+                    while (bridge_ctx->next_object_id < object_id_limit) {
+                        quicrq_object_stream_consumer_properties_t properties = { 0 };
+                        uint8_t data = 0;
+                        properties.flags = 0xFF;
+                        ret = bridge_ctx->object_stream_consumer_fn(
+                            quicrq_media_datagram_ready,
+                            bridge_ctx->object_stream_consumer_ctx,
+                            current_time, bridge_ctx->next_group_id, bridge_ctx->next_object_id,
+                            &data, 0, &properties, 0, 0);
+                        bridge_ctx->next_object_id++;
+                    }
+                    bridge_ctx->next_group_id++;
+                    bridge_ctx->next_object_id = 0;
+                }
+                /* then, mark this object as accepted */
+                ignore = 0;
+            }
+        }
+        else {
+            /* this object is both in sequence and with a larger
+             * group-id or object-id than the expected value. It should
+             * be accepted.
+             */
+            ignore = 0;
+        }
+        break;
+    default:
+        break;
     }
     if (!ignore) {
-        /* Deliver to the application */
+        /* Deliver to the application, update the counters */
         quicrq_object_stream_consumer_properties_t properties = { 0 };
         properties.flags = flags;
+        bridge_ctx->next_group_id = group_id;
+        bridge_ctx->next_object_id = object_id + 1;
         ret = bridge_ctx->object_stream_consumer_fn(
             quicrq_media_datagram_ready,
             bridge_ctx->object_stream_consumer_ctx,

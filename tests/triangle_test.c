@@ -71,6 +71,7 @@ typedef struct st_quicrq_triangle_test_spec_t {
     uint64_t start_point;
     int test_cache_clear;
     int test_intent;
+    quicrq_subscribe_order_enum subscribe_order;
 } quicrq_triangle_test_spec_t;
 
 static const quicrq_triangle_test_spec_t triangle_test_default = {
@@ -79,7 +80,8 @@ static const quicrq_triangle_test_spec_t triangle_test_default = {
     0, /* 0 delay */
     0, /* start from beginning */
     0, /* Do not clear the cache */
-    0  /* Intent: start from beginning */
+    0,  /* Intent: start from beginning */
+    quicrq_subscribe_in_order
 };
 
 /* Basic relay test */
@@ -106,7 +108,7 @@ int quicrq_triangle_test_one(quicrq_transport_mode_enum transport_mode, quicrq_t
     uint64_t start_object_intent = 0;
     char test_id[256];
 
-    /* Create unique names for los and results */
+    /* Create unique names for logs and results */
     (void)picoquic_sprintf(test_id, sizeof(test_id), NULL, "triangle-%d-%c-%llx-%llu-%llu-%d-%d", spec->is_real_time, 
         quicrq_transport_mode_to_letter(transport_mode),
         (unsigned long long)spec->simulate_losses, (unsigned long long)spec->extra_delay,
@@ -194,8 +196,10 @@ int quicrq_triangle_test_one(quicrq_transport_mode_enum transport_mode, quicrq_t
         } else {
             /* Create a subscription to the test source on client # 2*/
             test_object_stream_ctx_t* object_stream_ctx = NULL;
-            object_stream_ctx = test_object_stream_subscribe(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, result_file_name, result_log_name);
+
+            object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, spec->subscribe_order, NULL, result_file_name, result_log_name);
+
             if (object_stream_ctx == NULL) {
                 ret = -1;
             }
@@ -236,7 +240,7 @@ int quicrq_triangle_test_one(quicrq_transport_mode_enum transport_mode, quicrq_t
                 break;
             }
             object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx_2, (const uint8_t*)QUICRQ_TEST_BASIC_SOURCE,
-                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, quicrq_subscribe_in_order, &intent, result_file_name, result_log_name);
+                strlen(QUICRQ_TEST_BASIC_SOURCE), transport_mode, spec->subscribe_order, &intent, result_file_name, result_log_name);
             if (object_stream_ctx == NULL) {
                 ret = -1;
                 break;

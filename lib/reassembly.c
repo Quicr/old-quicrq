@@ -126,6 +126,18 @@ static quicrq_reassembly_object_t* quicrq_object_find(quicrq_reassembly_context_
     return object;
 }
 
+/* Check whether the number of objects in the next group is known */
+uint64_t quicrq_reassembly_get_object_count(quicrq_reassembly_context_t* object_list, uint64_t group_id)
+{
+    /* Find whether the next object is in cache */
+    uint64_t nb_objects = 0;
+    quicrq_reassembly_object_t* object = quicrq_object_find(object_list, group_id + 1, 0);
+    if (object != NULL) {
+        nb_objects = object->nb_objects_previous_group;
+    }
+    return nb_objects;
+}
+
 /* Management of the list of objects undergoing reassembly, object-id based logic */
 static quicrq_reassembly_packet_t* quicrq_reassembly_object_create_packet(
     quicrq_reassembly_object_t* object,

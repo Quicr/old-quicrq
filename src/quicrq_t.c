@@ -119,6 +119,7 @@ static const quicrq_test_def_t test_table[] =
     { "warp_triangle", quicrq_triangle_warp_test },
     { "warp_congestion", quicrq_congestion_warp_test },
     { "warp_congestion_g", quicrq_congestion_warp_g_test },
+    { "warp_congestion_gs", quicrq_congestion_warp_gs_test },
     { "warp_relay", quicrq_warp_relay_test },
     { "warp_basic_loss", quicrq_warp_basic_loss_test },
     { "warp_relay_loss", quicrq_warp_relay_loss_test }
