@@ -264,7 +264,7 @@ int quicrq_evaluate_datagram_congestion(quicrq_stream_ctx_t * stream_ctx, quicrq
             break;
         case quicrq_congestion_control_delay:
         default:
-            has_backlog = (current_time - media_ctx->current_fragment->cache_time) > delta_t_max;
+            has_backlog = (int64_t)(current_time - media_ctx->current_fragment->cache_time) > delta_t_max;
             should_skip = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx,
                 media_ctx->current_fragment->flags, has_backlog, current_time);
             break;

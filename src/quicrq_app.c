@@ -300,7 +300,8 @@ void quicrq_app_free_sources(quicrq_app_loop_cb_t* cb_ctx)
 }
 
 char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char const* scenario,
-    uint64_t current_time, quicrq_transport_mode_enum transport_mode, quicrq_cnx_ctx_t * cnx_ctx)
+    uint64_t current_time, quicrq_transport_mode_enum transport_mode,
+    quicrq_subscribe_order_enum subscribe_order, quicrq_cnx_ctx_t * cnx_ctx)
 {
     /* parse the current scenario until end of line or semicolon */
     char const* next_char = scenario;
@@ -345,8 +346,8 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
                 }
                 if (ret == 0) {
                     test_object_stream_ctx_t* object_stream_ctx = NULL;
-                    object_stream_ctx = test_object_stream_subscribe(cnx_ctx, (const uint8_t*)url, url_length,
-                        transport_mode, path, log_path);
+                    object_stream_ctx = test_object_stream_subscribe_ex(cnx_ctx, (const uint8_t*)url, url_length,
+                        transport_mode, subscribe_order, NULL, path, log_path);
                     if (object_stream_ctx == NULL) {
                         ret = -1;
                     }
@@ -374,13 +375,14 @@ char const* quic_app_scenario_parse_line(quicrq_app_loop_cb_t* cb_ctx, char cons
 }
 
 int quic_app_scenario_parse(quicrq_app_loop_cb_t* cb_ctx, char const* scenario,
-    uint64_t current_time, quicrq_transport_mode_enum transport_mode, quicrq_cnx_ctx_t* cnx_ctx)
+    uint64_t current_time, quicrq_transport_mode_enum transport_mode,
+    quicrq_subscribe_order_enum subscribe_order, quicrq_cnx_ctx_t* cnx_ctx)
 {
     char const* next_char = scenario;
 
     while (next_char != NULL && *next_char != 0) {
         next_char = quic_app_scenario_parse_line(cb_ctx, next_char, current_time,
-            transport_mode, cnx_ctx);
+            transport_mode, subscribe_order, cnx_ctx);
     }
 
     return (next_char == NULL) ? -1 : 0;
@@ -391,6 +393,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
     const char* server_name,
     quicrq_transport_mode_enum transport_mode,
     quicrq_congestion_control_enum congestion_control_mode,
+    quicrq_subscribe_order_enum subscribe_order,
     int server_port,
     char const* scenario)
 {
@@ -490,7 +493,7 @@ int quic_app_loop(picoquic_quic_config_t* config,
         }
         else {
             ret = quic_app_scenario_parse(&cb_ctx, scenario, current_time,
-                transport_mode, cnx_ctx);
+                transport_mode, subscribe_order, cnx_ctx);
         }
     }
 
@@ -528,10 +531,14 @@ void usage()
     fprintf(stderr, "  For the server and relay mode, use -p to specify the port,\n");
     fprintf(stderr, "  and also -c and -k for certificate and matching private key.\n");
     fprintf(stderr, "\nOptions include generic picoquic options and QUICRQ option:\n");
-    fprintf(stderr, "  -f congestion_mode    Specify whether to drop frames during congestion:\n");
+    fprintf(stderr, "  -f congestion_mode    Specify how to handle congestion:\n");
     fprintf(stderr, "                        -f 1  drop low priority frames,\n");
+    fprintf(stderr, "                        -f 2  drop tail of group of block,\n");
+    fprintf(stderr, "                        -f 3  lower priority of previous group of blocks,\n");
     fprintf(stderr, "                        -f 0  do not drop any frame (default).\n");
-    picoquic_config_usage();
+    fprintf(stderr, "  -u subscribe_order    Specify in what order the client processes objects.\n");
+    fprintf(stderr, "                        -u 1  process in order (default).\n");
+    fprintf(stderr, "                        -u 2  skip ahead to last received group.\n");
     fprintf(stderr, "\nOn the client, the scenario argument specifies the media files\n");
     fprintf(stderr, "that should be retrieved (get) or published (post):\n");
     fprintf(stderr, "  *{{'get'|'post'}':'<url>':'<path>[':'<log_path>]';'}\n");
@@ -553,6 +560,7 @@ int main(int argc, char** argv)
     quicrq_transport_mode_enum transport_mode = quicrq_transport_mode_single_stream;
     int server_port = -1;
     int congestion_mode = 0;
+    int subscribe_order = 1;
     char const* scenario = NULL;
 #ifdef _WINDOWS
     WSADATA wsaData = { 0 };
@@ -561,8 +569,8 @@ int main(int argc, char** argv)
     fprintf(stdout, "QUICRQ Version %s, Picoquic Version %s\n", QUICRQ_VERSION, PICOQUIC_VERSION);
 
     picoquic_config_init(&config);
-    memcpy(option_string, "f:", 7);
-    ret = picoquic_config_option_letters(option_string + 2, sizeof(option_string) - 2, NULL);
+    memcpy(option_string, "f:u:", 5);
+    ret = picoquic_config_option_letters(option_string + 4, sizeof(option_string) - 4, NULL);
 
     if (ret == 0) {
         /* Get the parameters */
@@ -570,8 +578,15 @@ int main(int argc, char** argv)
             switch (opt) {
             case 'f':
                 congestion_mode = atoi(optarg);
-                if (congestion_mode <= 0 || congestion_mode >= quicrq_congestion_control_max) {
+                if (congestion_mode < 0 || congestion_mode >= quicrq_congestion_control_max) {
                     fprintf(stderr, "Invalid congestion mode: %s\n", optarg);
+                    usage();
+                }
+                break;
+            case 'u':
+                subscribe_order = atoi(optarg);
+                if (subscribe_order <= 0 || subscribe_order >= quicrq_subscribe_order_max) {
+                    fprintf(stderr, "Invalid subscribe order: %s\n", optarg);
                     usage();
                 }
                 break;
@@ -659,7 +674,10 @@ int main(int argc, char** argv)
     }
 
     /* Run */
-    ret = quic_app_loop(&config, mode, server_name, transport_mode, (quicrq_congestion_control_enum)congestion_mode, server_port, scenario);
+    ret = quic_app_loop(&config, mode, server_name, transport_mode, 
+        (quicrq_congestion_control_enum)congestion_mode, 
+        (quicrq_subscribe_order_enum)subscribe_order,
+        server_port, scenario);
     /* Clean up */
     picoquic_config_clear(&config);
     /* Exit */

@@ -228,8 +228,9 @@ typedef struct st_quicrq_object_stream_consumer_ctx quicrq_object_stream_consume
 
 typedef enum {
     quicrq_subscribe_out_of_order = 0,
-    quicrq_subscribe_in_order,
-    quicrq_subscribe_in_order_skip_to_group_ahead
+    quicrq_subscribe_in_order = 1,
+    quicrq_subscribe_in_order_skip_to_group_ahead = 2,
+    quicrq_subscribe_order_max
 } quicrq_subscribe_order_enum;
 
 typedef enum {
