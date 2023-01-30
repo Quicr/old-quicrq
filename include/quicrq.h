@@ -327,7 +327,7 @@ uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time);
  * The combination of group based + priorities will actually degrade performance, unless
  * the receiver selects the option "quicrq_subscribe_in_order_skip_to_group_ahead", which
  * cause receivers to process the next group as soon as reception begins, ignoring the tail
- * of the previous group. If that option s selected, performance is actually better than
+ * of the previous group. If that option is selected, performance is actually better than
  * the simple group based option.
  * 
  * The congestion options work for all transport modes (stream, datagram, warp), but in
