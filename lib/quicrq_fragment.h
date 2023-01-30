@@ -48,6 +48,7 @@ typedef struct st_quicrq_fragment_cache_t {
     quicrq_cached_fragment_t* first_fragment; /* Fragments in order of arrival */
     quicrq_cached_fragment_t* last_fragment;
     picosplay_tree_t fragment_tree; /* Splay ordered by group_id/object_id/offset */
+    uint8_t lowest_flags;
     int is_feed_closed; /* Whether the data providing connection is closed. */
     uint64_t cache_delete_time;
 } quicrq_fragment_cache_t;

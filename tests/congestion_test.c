@@ -660,11 +660,11 @@ int quicrq_congestion_warp_gs_test()
 
     spec.simulate_losses = 0;
     spec.congested_receiver = 0;
-    spec.max_drops = 62;
+    spec.max_drops = 60;
     spec.min_loss_flag = 0x82;
-    spec.average_delay_target = 530000;
-    spec.max_delay_target = 1120000;
-    spec.congestion_control_mode = quicrq_congestion_control_group;
+    spec.average_delay_target = 465000;
+    spec.max_delay_target = 755000;
+    spec.congestion_control_mode = quicrq_congestion_control_group_p;
     spec.subscribe_order = quicrq_subscribe_in_order_skip_to_group_ahead;
 
     ret = quicrq_congestion_test_one(1, quicrq_transport_mode_warp, &spec);

@@ -101,6 +101,10 @@ int quicrq_media_object_bridge_ready(
                 /* then, mark this object as accepted */
                 ignore = 0;
             }
+            else if (group_id == bridge_ctx->next_group_id && object_id == bridge_ctx->next_object_id) {
+                /* accept "peek" if it is in sequence */
+                ignore = 0;
+            }
         }
         else {
             /* this object is both in sequence and with a larger

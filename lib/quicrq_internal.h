@@ -415,6 +415,7 @@ struct st_quicrq_uni_stream_ctx_t {
     uint64_t current_group_id;
     uint64_t current_object_id;
     uint64_t last_object_id; 
+    uint64_t stream_priority;
     /* UniStream state */
     quicrq_uni_stream_sending_state_enum send_state;
     quicrq_uni_stream_receive_state_enum receive_state;
@@ -476,6 +477,7 @@ struct st_quicrq_stream_ctx_t {
     quicrq_media_close_reason_enum close_reason;
     uint64_t close_error_code;
     /* Control flags */
+    uint8_t lowest_flags; /* Mark the lowest value of the flags field for media segments */
     unsigned int is_sender : 1;
     /* is_cache_real_time:
      * Indicates whether local cache management follows the "real time" logic,

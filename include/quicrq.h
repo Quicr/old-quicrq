@@ -14,7 +14,7 @@ extern "C" {
  * The minor version is updated when the protocol changes
  * Only the letter is updated if the code changes without changing the protocol
  */
-#define QUICRQ_VERSION "0.26a"
+#define QUICRQ_VERSION "0.27"
 
 /* QUICR ALPN and QUICR port
  * For version zero, the ALPN is set to "quicr-h<minor>", where <minor> is
@@ -22,7 +22,7 @@ extern "C" {
  * different protocol versions will not be compatible, and connections attempts
  * between such binaries will fail, forcing deployments of compatible versions.
  */
-#define QUICRQ_ALPN "quicr-h26"
+#define QUICRQ_ALPN "quicr-h27"
 #define QUICRQ_PORT 853
 
 /* QUICR error codes */
@@ -318,14 +318,28 @@ void quicrq_set_extra_repeat(quicrq_ctx_t* qr, int on_nack, int after_delayed);
 void quicrq_set_extra_repeat_delay(quicrq_ctx_t* qr, uint64_t delay_in_microseconds);
 uint64_t quicrq_handle_extra_repeat(quicrq_ctx_t* qr, uint64_t current_time);
 
-/* Enable of disable congestion control.
- * Default to "none", i.e., disable.
+/* Different modes of congestion control:
+ * - None(0)
+ * - Delay based(1): skip packets if a queue of more than 5 packets is detected.
+ * - Group based(2): skip packets at the tail of the group if the new group is already there
+ * - Group based + priorities(3): same as group based, but in WARP transport mode, also mark
+ *   down the priorities of all but the last group.
+ * The combination of group based + priorities will actually degrade performance, unless
+ * the receiver selects the option "quicrq_subscribe_in_order_skip_to_group_ahead", which
+ * cause receivers to process the next group as soon as reception begins, ignoring the tail
+ * of the previous group. If that option s selected, performance is actually better than
+ * the simple group based option.
+ * 
+ * The congestion options work for all transport modes (stream, datagram, warp), but in
+ * stream mode or datagram mode the "group based" and "Group based + priorities" options
+ * are equivalent.
  */
 
 typedef enum {
     quicrq_congestion_control_none = 0,
     quicrq_congestion_control_delay = 1,
     quicrq_congestion_control_group = 2,
+    quicrq_congestion_control_group_p = 3,
     quicrq_congestion_control_max
 } quicrq_congestion_control_enum;
 
