@@ -173,6 +173,7 @@ int quicrq_evaluate_stream_congestion(quicrq_fragment_publisher_context_t* media
     case quicrq_congestion_control_none:
         break;
     case quicrq_congestion_control_group:
+    case quicrq_congestion_control_group_p:
         if (media_ctx->current_offset > 0 || media_ctx->length_sent > 0) {
             should_skip = 0;
         }
@@ -220,6 +221,7 @@ int quicrq_evaluate_warp_congestion(quicrq_uni_stream_ctx_t* uni_stream_ctx, qui
         case quicrq_congestion_control_none:
             break;
         case quicrq_congestion_control_group:
+        case quicrq_congestion_control_group_p:
             /* compute group mode congestion control */
             should_skip = quicrq_compute_group_mode_congestion(media_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id);
             break;
@@ -255,13 +257,14 @@ int quicrq_evaluate_datagram_congestion(quicrq_stream_ctx_t * stream_ctx, quicrq
         case quicrq_congestion_control_none:
             break;
         case quicrq_congestion_control_group:
+        case quicrq_congestion_control_group_p:
             /* compute group mode congestion control */
             should_skip = quicrq_compute_group_mode_congestion(media_ctx, media_ctx->current_fragment->group_id,
                 media_ctx->current_fragment->object_id);
             break;
         case quicrq_congestion_control_delay:
         default:
-            has_backlog = (current_time - media_ctx->current_fragment->cache_time) > delta_t_max;
+            has_backlog = (int64_t)(current_time - media_ctx->current_fragment->cache_time) > delta_t_max;
             should_skip = quicrq_congestion_check_per_cnx(stream_ctx->cnx_ctx,
                 media_ctx->current_fragment->flags, has_backlog, current_time);
             break;

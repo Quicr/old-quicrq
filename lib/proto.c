@@ -1013,9 +1013,29 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
     }
 }
 
+static uint8_t quicrq_flags_to_picoquic_stream_priority(uint8_t flags) {
+    return ((flags & 0x7f) << 1);
+}
+
+static void quicrq_set_control_stream_priority(quicrq_stream_ctx_t* stream_ctx)
+{
+    if (stream_ctx->media_ctx != NULL &&
+        stream_ctx->media_ctx->cache_ctx != NULL &&
+        stream_ctx->media_ctx->cache_ctx->lowest_flags > 0 && (
+            stream_ctx->lowest_flags == 0 ||
+            stream_ctx->media_ctx->cache_ctx->lowest_flags < stream_ctx->lowest_flags)) {
+        uint8_t stream_priority;
+        stream_ctx->lowest_flags = stream_ctx->media_ctx->cache_ctx->lowest_flags;
+        stream_priority = quicrq_flags_to_picoquic_stream_priority(stream_ctx->lowest_flags);
+        (void)picoquic_set_stream_priority(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, stream_priority);
+    }
+}
+
 void quicrq_wakeup_media_uni_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
+    uint64_t old_highest_group_id = stream_ctx->next_warp_group_id;
+    int uni_created = 0;
 
     /* loop through all the unistreams, since more than one can be active */
     quicrq_uni_stream_ctx_t* uni_stream_ctx = stream_ctx->first_uni_stream;
@@ -1033,14 +1053,50 @@ void quicrq_wakeup_media_uni_stream(quicrq_stream_ctx_t* stream_ctx)
         quicrq_uni_stream_ctx_t* ctx = quicrq_find_or_create_uni_stream(
             uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
         if (ctx != NULL) {
+            uni_created = 1;
             ctx->current_group_id = i;
             stream_ctx->next_warp_group_id = i + 1;
             picoquic_mark_active_stream(ctx->control_stream_ctx->cnx_ctx->cnx,
                 ctx->stream_id, 1, ctx);
-            /* TODO: update warp_next_group_id in stream context */
         }
         else {
             break;
+        }
+    }
+    /* If a new stream id has been created, and the control stream priority is known:
+     * - set the priority of the latest created stream to the stream priority
+     * - reset the priority of the other streams 2 down (since bit 0 is the round robin mark)
+     * Exception:
+     * - if the congestion control is not set to "group", don't reset previous streams.
+     * - if the stream priority is set to 0x80 (e.g., audio), don't reset the previous streams.
+     */
+    if (uni_created && stream_ctx->lowest_flags == 0) {
+        quicrq_set_control_stream_priority(stream_ctx);
+    }
+    if (uni_created && stream_ctx->lowest_flags != 0) {
+        uint8_t uni_stream_priority = quicrq_flags_to_picoquic_stream_priority(stream_ctx->lowest_flags);
+        uni_stream_ctx = stream_ctx->first_uni_stream;
+
+        while (uni_stream_ctx != NULL) {
+            if (uni_stream_ctx->send_state != quicrq_sending_warp_should_close) {
+                if (uni_stream_ctx->current_group_id == highest_group_id) {
+                    (void)picoquic_set_stream_priority(stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, uni_stream_priority);
+                    uni_stream_ctx->stream_priority = uni_stream_priority;
+                }
+                else
+                {
+                    uint8_t lower_uni_stream_priority = uni_stream_priority;
+                    if (stream_ctx->media_ctx != NULL && stream_ctx->media_ctx->congestion_control_mode == quicrq_congestion_control_group_p &&
+                        stream_ctx->lowest_flags != 0x80 && lower_uni_stream_priority < 0xfe) {
+                        lower_uni_stream_priority += 2;
+                    }
+                    if (uni_stream_ctx->stream_priority != lower_uni_stream_priority) {
+                        (void)picoquic_set_stream_priority(stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, lower_uni_stream_priority);
+                        uni_stream_ctx->stream_priority = lower_uni_stream_priority;
+                    }
+                }
+            }
+            uni_stream_ctx = uni_stream_ctx->next_uni_stream_for_control_stream;
         }
     }
 }
@@ -1057,6 +1113,7 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                 !stream_ctx->is_start_object_id_sent) ||
                 (stream_ctx->is_cache_real_time && !stream_ctx->is_cache_policy_sent)) {
                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
+                quicrq_set_control_stream_priority(stream_ctx);
             }
 
             if (stream_ctx->transport_mode == quicrq_transport_mode_datagram) {
@@ -1080,11 +1137,6 @@ void quicrq_wakeup_media_stream(quicrq_stream_ctx_t* stream_ctx)
                     (int)stream_ctx->transport_mode, quicrq_transport_mode_to_string(stream_ctx->transport_mode));
             }
         }
-#if 0
-        else if (stream_ctx->cnx_ctx->cnx != NULL) {
-            picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
-        }
-#endif
     }
 }
 

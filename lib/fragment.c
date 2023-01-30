@@ -114,6 +114,10 @@ void quicrq_fragment_cache_progress(quicrq_fragment_cache_t* cache_ctx,
         cache_ctx->highest_object_id = fragment->object_id;
     }
 
+    if (fragment->flags > 0 && (cache_ctx->lowest_flags == 0 || cache_ctx->lowest_flags > fragment->flags)) {
+        cache_ctx->lowest_flags = fragment->flags;
+    }
+
     do {
         int is_expected = 0;
         fragment = (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(next_fragment_node);
