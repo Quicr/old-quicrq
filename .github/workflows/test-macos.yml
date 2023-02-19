@@ -12,8 +12,7 @@ jobs:
   analyze:
     name: TestMacOs
     runs-on: macos-latest
-    env:
-        PKG_CONFIG_PATH: "/usr/local/opt/openssl@1.1/lib/pkgconfig"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -25,7 +24,7 @@ jobs:
       - name: Build quicrq
         run: |
           # brew reinstall openssl
-          export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
+          # export PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig"
           cmake -S . -B build
           cmake --build build
 
