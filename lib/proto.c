@@ -1013,8 +1013,8 @@ void quicrq_unsubscribe_local_media(quicrq_stream_ctx_t* stream_ctx)
     }
 }
 
-static uint8_t quicrq_flags_to_picoquic_stream_priority(uint8_t flags) {
-    return ((flags & 0x7f) << 1);
+static uint8_t quicrq_flags_to_picoquic_stream_priority(uint8_t flags, int use_fifo) {
+    return ((flags & 0x7f) << 1) + use_fifo;
 }
 
 static void quicrq_set_control_stream_priority(quicrq_stream_ctx_t* stream_ctx)
@@ -1026,7 +1026,7 @@ static void quicrq_set_control_stream_priority(quicrq_stream_ctx_t* stream_ctx)
             stream_ctx->media_ctx->cache_ctx->lowest_flags < stream_ctx->lowest_flags)) {
         uint8_t stream_priority;
         stream_ctx->lowest_flags = stream_ctx->media_ctx->cache_ctx->lowest_flags;
-        stream_priority = quicrq_flags_to_picoquic_stream_priority(stream_ctx->lowest_flags);
+        stream_priority = quicrq_flags_to_picoquic_stream_priority(stream_ctx->lowest_flags, 0);
         (void)picoquic_set_stream_priority(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, stream_priority);
     }
 }
@@ -1043,6 +1043,21 @@ static void quicrq_set_control_stream_priority(quicrq_stream_ctx_t* stream_ctx)
  * TODO: the first implementation does wake-up on whole objects. We should probably
  * wakeup on the arrival of fragments. This is also required for Warp.
  */
+
+static void quicrq_set_rush_stream_priority(quicrq_uni_stream_ctx_t* uni_stream_ctx)
+{
+    if (uni_stream_ctx->stream_priority == 0) {
+        uint8_t flags = quicrq_fragment_get_flags(uni_stream_ctx->control_stream_ctx->media_ctx->cache_ctx,
+            uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id);
+
+        if (flags != 0) {
+            uni_stream_ctx->stream_priority = quicrq_flags_to_picoquic_stream_priority(flags, 1);
+            (void)picoquic_set_stream_priority(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx,
+                uni_stream_ctx->stream_id, uni_stream_ctx->stream_priority);
+        }
+    }
+}
+
 void quicrq_wakeup_media_rush_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
@@ -1056,6 +1071,7 @@ void quicrq_wakeup_media_rush_stream(quicrq_stream_ctx_t* stream_ctx)
     while (uni_stream_ctx != NULL) {
         if (uni_stream_ctx->send_state != quicrq_sending_warp_should_close) {
             /* TODO: the used contexts should be removed, so the test above will not be needed. */
+            quicrq_set_rush_stream_priority(uni_stream_ctx);
             picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
         }
         /* todo, for rush: if header sent, only wake up if object is fully received. */
@@ -1088,18 +1104,22 @@ void quicrq_wakeup_media_rush_stream(quicrq_stream_ctx_t* stream_ctx)
         }
         for (uint64_t j = next_object_in_group; j < last_object_in_group; j++) {
             uint64_t uni_stream_id = picoquic_get_next_local_stream_id(stream_ctx->cnx_ctx->cnx, 1);
-            quicrq_uni_stream_ctx_t* ctx = quicrq_find_or_create_uni_stream(
+            quicrq_uni_stream_ctx_t* uni_stream_ctx = quicrq_find_or_create_uni_stream(
                 uni_stream_id, stream_ctx->cnx_ctx, stream_ctx, 1);
-            if (ctx != NULL) {
-                uni_created = 1;
-                ctx->current_group_id = i;
-                ctx->current_object_id = j;
-                ctx->last_object_id = j + 1;
+            if (uni_stream_ctx != NULL) {
+                uni_stream_ctx->current_group_id = i;
+                uni_stream_ctx->current_object_id = j;
+                uni_stream_ctx->last_object_id = j + 1;
                 stream_ctx->next_rush_object_id = j + 1;
-                picoquic_mark_active_stream(ctx->control_stream_ctx->cnx_ctx->cnx,
-                    ctx->stream_id, 1, ctx);
-                /* TODO: set priority based on flags.
-                 */
+                /* set priority based on flags. */
+                if (stream_ctx->lowest_flags == 0) {
+                    quicrq_set_control_stream_priority(stream_ctx);
+                }
+                if (stream_ctx->lowest_flags != 0) {
+                    quicrq_set_rush_stream_priority(uni_stream_ctx);
+                }
+                picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx,
+                    uni_stream_ctx->stream_id, 1, uni_stream_ctx);
             }
             else {
                 stop_creating = 1;
@@ -1152,7 +1172,7 @@ void quicrq_wakeup_media_uni_stream(quicrq_stream_ctx_t* stream_ctx)
         quicrq_set_control_stream_priority(stream_ctx);
     }
     if (uni_created && stream_ctx->lowest_flags != 0) {
-        uint8_t uni_stream_priority = quicrq_flags_to_picoquic_stream_priority(stream_ctx->lowest_flags);
+        uint8_t uni_stream_priority = quicrq_flags_to_picoquic_stream_priority(stream_ctx->lowest_flags, 0);
         uni_stream_ctx = stream_ctx->first_uni_stream;
 
         while (uni_stream_ctx != NULL) {

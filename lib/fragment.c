@@ -1081,6 +1081,24 @@ uint64_t quicrq_fragment_get_object_count(quicrq_fragment_cache_t* cache_ctx, ui
     return nb_objects;
 }
 
+/* Get the object flags, or zero if the object is not available*/
+uint8_t quicrq_fragment_get_flags(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id)
+{
+    quicrq_cached_fragment_t key = { 0 };
+    picosplay_node_t* fragment_node;
+    uint8_t flags = 0;
+    key.group_id = group_id;
+    key.object_id = object_id;
+    key.offset = 0;
+    fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
+    if (fragment_node != NULL) {
+        quicrq_cached_fragment_t* fragment_state =
+            (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+        flags = fragment_state->flags;
+    }
+    return flags;
+}
+
 /* Copy a full object from the cache.
  * - return the size of the object if it is completely received
  * - returns 0 if the object is not yet received

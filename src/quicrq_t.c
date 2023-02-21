@@ -131,7 +131,11 @@ static const quicrq_test_def_t test_table[] =
     { "rush_basic", quicrq_rush_basic_test },
     { "rush_basic_client", quicrq_rush_basic_client_test },
     { "rush_basic_loss", quicrq_rush_basic_loss_test },
-    { "rush_triangle", quicrq_triangle_rush_test }
+    { "rush_triangle", quicrq_triangle_rush_test },
+    { "congestion_rush", quicrq_congestion_rush_test },
+    { "congestion_rush_g", quicrq_congestion_rush_g_test },
+    { "congestion_rush_gs", quicrq_congestion_rush_gs_test },
+    { "congestion_rush_zero_s", quicrq_congestion_rush_zero_s_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);
