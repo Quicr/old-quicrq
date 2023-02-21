@@ -644,5 +644,23 @@ namespace UnitTest
             Assert::AreEqual(ret, 0);
         }
 
+		TEST_METHOD(rush_basic) {
+			int ret = quicrq_rush_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(rush_basic_client) {
+			int ret = quicrq_rush_basic_client_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(rush_basic_loss)
+		{
+			int ret = quicrq_rush_basic_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
     };
 }

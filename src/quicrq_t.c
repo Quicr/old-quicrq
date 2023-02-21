@@ -123,7 +123,10 @@ static const quicrq_test_def_t test_table[] =
     { "congestion_warp_zero_s", quicrq_congestion_warp_zero_s_test },
     { "warp_relay", quicrq_warp_relay_test },
     { "warp_basic_loss", quicrq_warp_basic_loss_test },
-    { "warp_relay_loss", quicrq_warp_relay_loss_test }
+    { "warp_relay_loss", quicrq_warp_relay_loss_test },
+    { "rush_basic", quicrq_rush_basic_test },
+    { "rush_basic_client", quicrq_rush_basic_client_test },
+    { "rush_basic_loss", quicrq_rush_basic_loss_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);

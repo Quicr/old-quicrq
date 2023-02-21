@@ -109,6 +109,9 @@ extern "C" {
     int quicrq_warp_relay_test();
     int quicrq_warp_basic_loss_test();
     int quicrq_warp_relay_loss_test();
+    int quicrq_rush_basic_test();
+    int quicrq_rush_basic_client_test();
+    int quicrq_rush_basic_loss_test();
 
 #ifdef __cplusplus
 }
