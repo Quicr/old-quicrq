@@ -112,6 +112,11 @@ extern "C" {
     int quicrq_rush_basic_test();
     int quicrq_rush_basic_client_test();
     int quicrq_rush_basic_loss_test();
+    int quicrq_triangle_rush_test();
+    int quicrq_triangle_intent_rush_test();
+    int quicrq_triangle_intent_rush_nc_test();
+    int quicrq_triangle_intent_rush_loss_test();
+    int quicrq_triangle_intent_rush_next_test();
 
 #ifdef __cplusplus
 }

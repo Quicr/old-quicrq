@@ -92,6 +92,10 @@ static const quicrq_test_def_t test_table[] =
     { "triangle_intent_warp_nc", quicrq_triangle_intent_warp_nc_test },
     { "triangle_intent_warp_loss", quicrq_triangle_intent_warp_loss_test },
     { "triangle_intent_warp_next", quicrq_triangle_intent_warp_next_test },
+    { "triangle_intent_rush", quicrq_triangle_intent_rush_test },
+    { "triangle_intent_rush_nc", quicrq_triangle_intent_rush_nc_test },
+    { "triangle_intent_rush_loss", quicrq_triangle_intent_rush_loss_test },
+    { "triangle_intent_rush_next", quicrq_triangle_intent_rush_next_test },
     { "pyramid_basic", quicrq_pyramid_basic_test },
     { "pyramid_datagram", quicrq_pyramid_datagram_test },
     { "pyramid_datagram_loss", quicrq_pyramid_datagram_loss_test },
@@ -126,7 +130,8 @@ static const quicrq_test_def_t test_table[] =
     { "warp_relay_loss", quicrq_warp_relay_loss_test },
     { "rush_basic", quicrq_rush_basic_test },
     { "rush_basic_client", quicrq_rush_basic_client_test },
-    { "rush_basic_loss", quicrq_rush_basic_loss_test }
+    { "rush_basic_loss", quicrq_rush_basic_loss_test },
+    { "rush_triangle", quicrq_triangle_rush_test }
 };
 
 static size_t const nb_tests = sizeof(test_table) / sizeof(quicrq_test_def_t);

@@ -471,6 +471,29 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(triangle_intent_rush) {
+			int ret = quicrq_triangle_intent_rush_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+		TEST_METHOD(triangle_intent_rush_nc) {
+			int ret = quicrq_triangle_intent_rush_nc_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_rush_loss) {
+			int ret = quicrq_triangle_intent_rush_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_rush_next) {
+			int ret = quicrq_triangle_intent_rush_next_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(pyramid_basic) {
 			int ret = quicrq_pyramid_basic_test();
 
@@ -659,6 +682,12 @@ namespace UnitTest
 		TEST_METHOD(rush_basic_loss)
 		{
 			int ret = quicrq_rush_basic_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(rush_triangle) {
+			int ret = quicrq_triangle_rush_test();
 
 			Assert::AreEqual(ret, 0);
 		}
