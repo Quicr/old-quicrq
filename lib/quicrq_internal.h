@@ -415,7 +415,7 @@ struct st_quicrq_uni_stream_ctx_t {
     uint64_t current_group_id;
     uint64_t current_object_id;
     uint64_t last_object_id; 
-    uint64_t stream_priority;
+    uint8_t stream_priority;
     /* UniStream state */
     quicrq_uni_stream_sending_state_enum send_state;
     quicrq_uni_stream_receive_state_enum receive_state;
