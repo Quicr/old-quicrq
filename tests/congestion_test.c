@@ -691,3 +691,79 @@ int quicrq_congestion_warp_zero_s_test()
 
     return ret;
 }
+
+
+int quicrq_congestion_rush_test()
+{
+    quicrq_congestion_test_t spec = congestion_test_default;
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 80;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 210000;
+    spec.max_delay_target = 600000;
+    spec.congestion_control_mode = quicrq_congestion_control_delay;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_rush, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_rush_g_test()
+{
+    quicrq_congestion_test_t spec = congestion_test_default;
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 61;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 550000;
+    spec.max_delay_target = 1500000;
+    spec.congestion_control_mode = quicrq_congestion_control_group;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_rush, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_rush_gs_test()
+{
+    quicrq_congestion_test_t spec = congestion_test_default;
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 76;
+    spec.min_loss_flag = 0x82;
+    spec.average_delay_target = 500000;
+    spec.max_delay_target = 1150000;
+    spec.congestion_control_mode = quicrq_congestion_control_group_p;
+    spec.subscribe_order = quicrq_subscribe_in_order_skip_to_group_ahead;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_rush, &spec);
+
+    return ret;
+}
+
+int quicrq_congestion_rush_zero_s_test()
+{
+    quicrq_congestion_test_t spec = congestion_test_default;
+    int ret = 0;
+
+    spec.simulate_losses = 0;
+    spec.congested_receiver = 0;
+    spec.max_drops = 0;
+    spec.min_loss_flag = 0xFF;
+    spec.congestion_mode = congestion_mode_zero;
+    spec.average_delay_target = 31000;
+    spec.max_delay_target = 155000;
+    spec.congestion_control_mode = quicrq_congestion_control_group_p;
+    spec.subscribe_order = quicrq_subscribe_in_order_skip_to_group_ahead;
+
+    ret = quicrq_congestion_test_one(1, quicrq_transport_mode_rush, &spec);
+
+    return ret;
+}

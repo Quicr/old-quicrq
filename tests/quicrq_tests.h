@@ -106,9 +106,21 @@ extern "C" {
     int quicrq_congestion_warp_g_test();
     int quicrq_congestion_warp_gs_test();
     int quicrq_congestion_warp_zero_s_test();
+    int quicrq_congestion_rush_test();
+    int quicrq_congestion_rush_g_test();
+    int quicrq_congestion_rush_gs_test();
+    int quicrq_congestion_rush_zero_s_test();
     int quicrq_warp_relay_test();
     int quicrq_warp_basic_loss_test();
     int quicrq_warp_relay_loss_test();
+    int quicrq_rush_basic_test();
+    int quicrq_rush_basic_client_test();
+    int quicrq_rush_basic_loss_test();
+    int quicrq_triangle_rush_test();
+    int quicrq_triangle_intent_rush_test();
+    int quicrq_triangle_intent_rush_nc_test();
+    int quicrq_triangle_intent_rush_loss_test();
+    int quicrq_triangle_intent_rush_next_test();
 
 #ifdef __cplusplus
 }

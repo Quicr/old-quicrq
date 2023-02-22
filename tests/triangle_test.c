@@ -423,6 +423,16 @@ int quicrq_triangle_warp_test()
     return ret;
 }
 
+int quicrq_triangle_rush_test()
+{
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_rush, &spec);
+
+    return ret;
+}
+
+
 /* The start point test verifies what happens if a source does not start
  * at Group=0, Object=0. That would be, for example, a source resuming
  * after a hiatus. This test will have to be rewritten after we change
@@ -616,6 +626,46 @@ int quicrq_triangle_intent_warp_next_test()
     spec.test_cache_clear = 1;
     spec.test_intent = 2;
     int ret = quicrq_triangle_test_one(quicrq_transport_mode_warp, &spec);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_rush_test()
+{
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_rush, &spec);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_rush_nc_test()
+{
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_rush, &spec);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_rush_loss_test()
+{
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.simulate_losses = 0x7080;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 1;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_rush, &spec);
+
+    return ret;
+}
+
+int quicrq_triangle_intent_rush_next_test()
+{
+    quicrq_triangle_test_spec_t spec = triangle_test_default;
+    spec.test_cache_clear = 1;
+    spec.test_intent = 2;
+    int ret = quicrq_triangle_test_one(quicrq_transport_mode_rush, &spec);
 
     return ret;
 }

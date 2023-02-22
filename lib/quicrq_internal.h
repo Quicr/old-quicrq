@@ -449,6 +449,7 @@ struct st_quicrq_stream_ctx_t {
     uint64_t final_group_id;
     uint64_t final_object_id;
     uint64_t next_warp_group_id; /* group_id to create next in warp mode */
+    uint64_t next_rush_object_id; /* in rush, next object to send in this group */
     /* Control of datagrams sent for that media
      * We only keep track of fragments that are above the horizon.
      * The one below horizon are already acked, or otherwise forgotten.
@@ -618,11 +619,11 @@ quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
     quicrq_cnx_ctx_t* cnx_ctx,
     quicrq_stream_ctx_t* stream_ctx,
     int should_create);
-
+#if 0
 quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
         quicrq_stream_ctx_t* control_stream_ctx,
         uint64_t group_id);
-
+#endif
 void quicrq_chain_uni_stream_to_control_stream(quicrq_uni_stream_ctx_t* uni_stream_ctx, quicrq_stream_ctx_t* stream_ctx);
 
 

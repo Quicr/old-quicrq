@@ -471,6 +471,29 @@ namespace UnitTest
 			Assert::AreEqual(ret, 0);
 		}
 
+		TEST_METHOD(triangle_intent_rush) {
+			int ret = quicrq_triangle_intent_rush_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+		TEST_METHOD(triangle_intent_rush_nc) {
+			int ret = quicrq_triangle_intent_rush_nc_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_rush_loss) {
+			int ret = quicrq_triangle_intent_rush_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(triangle_intent_rush_next) {
+			int ret = quicrq_triangle_intent_rush_next_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
 		TEST_METHOD(pyramid_basic) {
 			int ret = quicrq_pyramid_basic_test();
 
@@ -625,6 +648,7 @@ namespace UnitTest
 
 			Assert::AreEqual(ret, 0);
 		}
+
 		TEST_METHOD(warp_relay) {
 			int ret = quicrq_warp_relay_test();
 
@@ -644,5 +668,53 @@ namespace UnitTest
             Assert::AreEqual(ret, 0);
         }
 
+		TEST_METHOD(rush_basic) {
+			int ret = quicrq_rush_basic_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(rush_basic_client) {
+			int ret = quicrq_rush_basic_client_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(rush_basic_loss)
+		{
+			int ret = quicrq_rush_basic_loss_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(rush_triangle) {
+			int ret = quicrq_triangle_rush_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_rush) {
+			int ret = quicrq_congestion_rush_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_rush_g) {
+			int ret = quicrq_congestion_rush_g_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_rush_gs) {
+			int ret = quicrq_congestion_rush_gs_test();
+
+			Assert::AreEqual(ret, 0);
+		}
+
+		TEST_METHOD(congestion_rush_zero_s) {
+			int ret = quicrq_congestion_rush_zero_s_test();
+
+			Assert::AreEqual(ret, 0);
+		}
     };
 }

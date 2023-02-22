@@ -1343,6 +1343,7 @@ int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_s
 {
     int ret = 0;
     int more_to_send = 0;
+
     /*
      *  if (no bytes ready to send) {
      *    if(warp header not sent)  {
@@ -1383,6 +1384,11 @@ int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_s
                 uni_stream_ctx->send_state = quicrq_sending_warp_header_sent;
             }
         } else if(uni_stream_ctx->send_state == quicrq_sending_warp_header_sent) {
+            /* This handles both RUSH mode and WARP mode. RUSH sends only one object per uni stream,
+             * as specified in the uni-stream context. This means there is no need to check "last object
+             * id" -- it is alsways, "the specified object plus 1." We rely on the uni stream creation
+             * setting the last object ID to zero for WARP, and to "object+1" for RUSH.
+             */
             quicrq_fragment_publisher_context_t* media_ctx = uni_stream_ctx->control_stream_ctx->media_ctx;
             quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
             /* Check whether the fin object for the group is known */
@@ -1402,6 +1408,13 @@ int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_s
             if (uni_stream_ctx->last_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->last_object_id) {
                 /* we have sent all the objects from the current group */
                 uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
+#if 1
+                if (uni_stream_ctx->current_group_id == 4 &&
+                    uni_stream_ctx->current_object_id == 59)
+                {
+                    DBG_PRINTF("%s", "The end");
+                }
+#endif
             }
             else {
                 /* Check whether the next fragment is available */
@@ -1702,8 +1715,9 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                 picoquic_mark_active_stream(stream_ctx->cnx_ctx->cnx, stream_ctx->stream_id, 1, stream_ctx);
                             }
                             else if (incoming.transport_mode == quicrq_transport_mode_datagram
-                                || incoming.transport_mode == quicrq_transport_mode_warp) {
-                                /* Start sending datagrams without endpoint message */
+                                || incoming.transport_mode == quicrq_transport_mode_warp
+                                || incoming.transport_mode == quicrq_transport_mode_rush) {
+                                /* Start sending data without endpoint message */
                                 stream_ctx->send_state = quicrq_sending_ready;
                                 stream_ctx->receive_state = quicrq_receive_done;
                             }
@@ -2709,7 +2723,8 @@ quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
 }
 
 
-
+#if 0
+/* Apparently this is not used. */
 quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
         quicrq_stream_ctx_t* control_stream,
         uint64_t group_id)
@@ -2724,7 +2739,7 @@ quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
     }
     return NULL;
 }
-
+#endif
 
 int quicrq_cnx_has_stream(quicrq_cnx_ctx_t* cnx_ctx)
 {
