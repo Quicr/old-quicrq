@@ -1268,7 +1268,7 @@ int quicrq_cnx_subscribe_media(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* url, si
 }
 
 /* Process an incoming subscribe command */
-int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * url, size_t url_length, unsigned int use_datagram)
+int quicrq_cnx_connect_media_source(quicrq_stream_ctx_t* stream_ctx, uint8_t * url, size_t url_length)
 {
     int ret = 0;
     /* Process initial request */

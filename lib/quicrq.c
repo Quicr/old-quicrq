@@ -1894,89 +1894,89 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
     int ret = 0;
 
     while (ret == 0 && length > 0) {
-        /* There may be a set of messages back to back, and all have to be received. */
-        if (uni_stream_ctx->receive_state == quicrq_receive_done) {
-            /* Protocol violation, was not expecting any message */
+        /* Receive the next message on the stream, if any */
+        int is_finished = 0;
+        uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &uni_stream_ctx->message_buffer, &is_finished);
+        if (next_bytes == NULL) {
+            /* Something went wrong */
             ret = -1;
-            break;
         }
-        else {
-            /* Receive the next message on the stream, if any */
-            int is_finished = 0;
-            uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &uni_stream_ctx->message_buffer, &is_finished);
-            if (next_bytes == NULL) {
-                /* Something went wrong */
-                ret = -1;
-            }
-            else
-            {
-                length = (bytes + length) - next_bytes;
-                bytes = next_bytes;
-                if (is_finished) {
-                    /* Decode the incoming message */
-                    quicrq_message_t incoming = { 0 };
-                    const uint8_t* r_bytes = quicrq_msg_decode(uni_stream_ctx->message_buffer.buffer, uni_stream_ctx->message_buffer.buffer + uni_stream_ctx->message_buffer.message_size, &incoming);
+        else
+        {
+            length = (bytes + length) - next_bytes;
+            bytes = next_bytes;
+            if (is_finished) {
+                /* Decode the incoming message */
+                quicrq_message_t incoming = { 0 };
+                const uint8_t* r_bytes = quicrq_msg_decode(uni_stream_ctx->message_buffer.buffer, uni_stream_ctx->message_buffer.buffer + uni_stream_ctx->message_buffer.message_size, &incoming);
 
-                    if (r_bytes == NULL) {
-                        /* Message was incorrect */
-                        ret = -1;
-                    } else {
-                        quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received message type=%" PRIu8,
-                                           uni_stream_ctx->stream_id, incoming.message_type);
-
-                        switch (incoming.message_type) {
-                            case QUICRQ_ACTION_WARP_HEADER:
-                                uni_stream_ctx->current_group_id = incoming.group_id;
-                                uni_stream_ctx->receive_state = quicrq_receive_warp_header;
-                                quicrq_stream_ctx_t* ctrl_stream_ctx = quicrq_get_control_stream_for_media_id(cnx_ctx, incoming.media_id);
-                                if (ctrl_stream_ctx == NULL) {
-                                    /* Protocol error: unknown media ID. */
-                                    quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", unknown media id=%" PRIu64,
-                                        uni_stream_ctx->stream_id,incoming.media_id);
-                                    ret = -1;
-                                }
-                                else {
-                                    uni_stream_ctx->receive_state = quicrq_receive_warp_header;
-                                    if (uni_stream_ctx->control_stream_ctx == NULL) {
-                                        quicrq_chain_uni_stream_to_control_stream(uni_stream_ctx, ctrl_stream_ctx);
-                                    }
-                                    quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received warp header message uni_id= %" PRIu64,
-                                        ", ControlStream id= %" PRIu64 " media id=%" PRIu64,
-                                        uni_stream_ctx->stream_id, uni_stream_ctx->control_stream_ctx->stream_id, incoming.media_id);
-                                }
-                                break;
-                            case QUICRQ_ACTION_OBJECT_HEADER:
-                                if (uni_stream_ctx->receive_state != quicrq_receive_warp_header &&
-                                    uni_stream_ctx->receive_state != quicrq_receive_object_header) {
-                                    /* Protocol error */
-                                    ret = -1;
-                                }
-                                else if (uni_stream_ctx->control_stream_ctx == NULL) {
-                                    /* Protocol error -- the control stream MUST be initialized in the authorized states */
-                                    ret = -1;
-                                } else {
-                                    quicrq_stream_ctx_t* ctrl_stream_ctx = uni_stream_ctx->control_stream_ctx;
-
-                                    uni_stream_ctx->receive_state = quicrq_receive_object_header;
-                                    /* Pass the data to the media consumer. */
-                                    ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
-                                                                  incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
-                                                                  incoming.fragment_offset, 0, incoming.flags, incoming.nb_objects_previous_group,
-                                                                  incoming.fragment_length, incoming.fragment_length);
-                                    if (ret == quicrq_consumer_finished) {
-                                        ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 0, 1, ret);
-                                    }
-                                }
-                                break;
-                                default:
-                                    /* Some unknown message, maybe not implemented yet */
-                                    ret = -1;
-                                    break;
-                        }
-                    }
-                    /* As the message was processed, reset the message buffer. */
-                    quicrq_msg_buffer_reset(&uni_stream_ctx->message_buffer);
+                if (r_bytes == NULL) {
+                    /* Message was incorrect */
+                    ret = -1;
                 }
+                else {
+                    quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received message type=%" PRIu8,
+                        uni_stream_ctx->stream_id, incoming.message_type);
+
+                    switch (incoming.message_type) {
+                    case QUICRQ_ACTION_WARP_HEADER:
+                        if (uni_stream_ctx->receive_state != quicrq_receive_open) {
+                            /* Protocol error */
+                            ret = -1;
+                        }
+                        else {
+                            uni_stream_ctx->current_group_id = incoming.group_id;
+                            uni_stream_ctx->receive_state = quicrq_receive_warp_header;
+                            quicrq_stream_ctx_t* ctrl_stream_ctx = quicrq_get_control_stream_for_media_id(cnx_ctx, incoming.media_id);
+                            if (ctrl_stream_ctx == NULL) {
+                                /* Protocol error: unknown media ID. */
+                                quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", unknown media id=%" PRIu64,
+                                    uni_stream_ctx->stream_id, incoming.media_id);
+                                ret = -1;
+                            }
+                            else {
+                                uni_stream_ctx->receive_state = quicrq_receive_warp_header;
+                                if (uni_stream_ctx->control_stream_ctx == NULL) {
+                                    quicrq_chain_uni_stream_to_control_stream(uni_stream_ctx, ctrl_stream_ctx);
+                                }
+                                quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received warp header message uni_id= %" PRIu64,
+                                    ", ControlStream id= %" PRIu64 " media id=%" PRIu64,
+                                    uni_stream_ctx->stream_id, uni_stream_ctx->control_stream_ctx->stream_id, incoming.media_id);
+                            }
+                        }
+                        break;
+                    case QUICRQ_ACTION_OBJECT_HEADER:
+                        if (uni_stream_ctx->receive_state != quicrq_receive_warp_header &&
+                            uni_stream_ctx->receive_state != quicrq_receive_object_header) {
+                            /* Protocol error */
+                            ret = -1;
+                        }
+                        else if (uni_stream_ctx->control_stream_ctx == NULL) {
+                            /* Protocol error -- the control stream MUST be initialized in the authorized states */
+                            ret = -1;
+                        }
+                        else {
+                            quicrq_stream_ctx_t* ctrl_stream_ctx = uni_stream_ctx->control_stream_ctx;
+
+                            uni_stream_ctx->receive_state = quicrq_receive_object_header;
+                            /* Pass the data to the media consumer. */
+                            ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
+                                incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
+                                incoming.fragment_offset, 0, incoming.flags, incoming.nb_objects_previous_group,
+                                incoming.fragment_length, incoming.fragment_length);
+                            if (ret == quicrq_consumer_finished) {
+                                ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 0, 1, ret);
+                            }
+                        }
+                        break;
+                    default:
+                        /* Some unknown message, maybe not implemented yet */
+                        ret = -1;
+                        break;
+                    }
+                }
+                /* As the message was processed, reset the message buffer. */
+                quicrq_msg_buffer_reset(&uni_stream_ctx->message_buffer);
             }
         }
     }
