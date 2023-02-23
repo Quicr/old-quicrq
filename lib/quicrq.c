@@ -1338,7 +1338,6 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
 int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_stream_ctx_t * uni_stream_ctx, void* context, size_t space, uint64_t current_time)
 {
     int ret = 0;
-    int more_to_send = 0;
 
     /*
      *  if (no bytes ready to send) {
@@ -1413,7 +1412,6 @@ int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_s
                     &nb_objects_previous_group, &flags, NULL);
 
                 if (next_object_size > 0 || flags == 0xff ) {
-                    int has_backlog = 0;
                     int should_skip = 0;
                     quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
                     uint8_t* message_next = NULL;
@@ -1484,16 +1482,16 @@ int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_s
             (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
             uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
             /* Dispose of uni stream context. */
-            quicrq_delete_uni_stream_ctx(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx);
+            quicrq_delete_uni_stream_ctx(cnx_ctx, uni_stream_ctx);
         }
         else {
             /* Nothing to send */
-            ret = picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, uni_stream_ctx);
+            ret = picoquic_mark_active_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, uni_stream_ctx);
         }
     }
     else {
         int more_to_send = uni_stream_ctx->send_state != quicrq_sending_warp_should_close;
-        quicrq_log_message(uni_stream_ctx->control_stream_ctx->cnx_ctx, "Send:UniStream %" PRIu64 ",  message buffer size = %" PRIu8,
+        quicrq_log_message(cnx_ctx, "Send:UniStream %" PRIu64 ",  message buffer size = %" PRIu8,
                            uni_stream_ctx->stream_id, uni_stream_ctx->message_buffer.message_size);
         ret = quicrq_msg_buffer_prepare_to_send_message(&uni_stream_ctx->message_buffer, context, space, more_to_send);
     }

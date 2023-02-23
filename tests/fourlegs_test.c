@@ -134,7 +134,6 @@ void quicrq_debug_source_test(quicrq_ctx_t* node, int node_id)
                 uint64_t current_group_id = fragment->group_id;
                 uint64_t current_object_id = fragment->object_id;
                 uint64_t current_offset = 0;
-                int is_new_object = 1;
                 int is_last_fragment = 0;
 
                 if (current_group_id != cache_ctx->first_group_id || current_object_id != cache_ctx->first_object_id) {

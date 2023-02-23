@@ -92,8 +92,8 @@ int quicrq_relay_consumer_cb(
         if (cons_ctx->cache_ctx->final_group_id == 0 && cons_ctx->cache_ctx->final_object_id == 0) {
             /* cache delete time set in the future to allow for reconnection. */
             cons_ctx->cache_ctx->cache_delete_time = current_time + 
-                (cons_ctx->qr_ctx->cache_duration_max > QUICRQ_CACHE_INITIAL_DURATION)?
-                cons_ctx->qr_ctx->cache_duration_max:QUICRQ_CACHE_INITIAL_DURATION;
+                ((cons_ctx->qr_ctx->cache_duration_max > QUICRQ_CACHE_INITIAL_DURATION)?
+                cons_ctx->qr_ctx->cache_duration_max:QUICRQ_CACHE_INITIAL_DURATION);
             /* Document the last group_id and object_id that were fully received. */
             if (cons_ctx->cache_ctx->next_offset == 0) {
                 cons_ctx->cache_ctx->final_group_id = cons_ctx->cache_ctx->next_group_id;

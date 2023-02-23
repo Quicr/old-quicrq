@@ -670,7 +670,6 @@ int quicrq_fragment_publisher_fn(
             else {
                 size_t available = media_ctx->current_fragment->data_length - media_ctx->length_sent;
                 size_t copied = data_max_size;
-                int has_backlog = 0;
                 int end_of_fragment = 0;
 
                 *flags = media_ctx->current_fragment->flags;
@@ -890,8 +889,6 @@ int quicrq_fragment_datagram_publisher_send_fragment(
     uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
     uint8_t flags = (should_skip) ? 0xff : media_ctx->current_fragment->flags;
     uint64_t object_length = (should_skip) ? 0 : media_ctx->current_fragment->object_length;
-    int is_last_fragment = (should_skip) ? 1: 
-        (media_ctx->current_fragment->offset + media_ctx->current_fragment->data_length) >= media_ctx->current_fragment->object_length;
     size_t h_size = 0;
     uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
         media_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,

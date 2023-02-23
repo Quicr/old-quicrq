@@ -145,11 +145,9 @@ int quicrq_fragment_cache_fill_test_one(size_t fragment_max, size_t start_object
                 size_t offset = 0;
                 while (ret == 0 && offset < fragment_test_objects[f_id].length) {
                     size_t data_length = fragment_test_objects[f_id].length - offset;
-                    int is_last_fragment = 1;
                     int should_skip = 0;
                     if (data_length > fragment_max) {
                         data_length = fragment_max;
-                        is_last_fragment = 0;
                     }
                     /* If we are skipping some objects:
                      *    - these objects are skipped in the 1st pass
@@ -424,11 +422,9 @@ int quicrq_fragment_cache_publish_test_one(int is_datagram)
             size_t offset = 0;
             while (ret == 0 && offset < fragment_test_objects[f_id].length) {
                 size_t data_length = fragment_test_objects[f_id].length - offset;
-                int is_last_fragment = 1;
                 int should_skip = 0;
                 if (data_length > 8) {
                     data_length = 8;
-                    is_last_fragment = 0;
                 }
                 skip_count++;
                 if (skip_count >= 2) {

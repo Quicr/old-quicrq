@@ -1246,7 +1246,6 @@ int quicrq_log_file_statistics(char const* media_result_log, int* nb_frames, int
 {
     int ret = 0;
     int last_err1 = 0;
-    int last_err2 = 0;
     *nb_frames = 0;
     *nb_losses = 0;
     *delay_average = 0;
@@ -1346,7 +1345,6 @@ int quicrq_media_api_test_one(char const *media_source_name, char const* media_l
     uint8_t flags = 0;
     int is_new_group = 0;
     uint64_t object_length = 0;
-    int is_last_fragment = 0;
     int is_media_finished = 0;
     int is_still_active = 0;
     int has_backlog = 0;
@@ -1597,13 +1595,10 @@ int quicrq_media_datagram_test_one(char const* media_source_name, char const* me
 
     /* Loop through read and consume until finished, marking some objects as lost */
     while (ret == 0) {
-        int is_last_fragment = 0;
         /* Get the next object from the publisher */
         ret = test_media_object_publisher_fn(
             quicrq_media_source_get_data, pub_ctx, media_buffer, sizeof(media_buffer),
             &data_length, &flags, &is_new_group, &object_length,  &is_media_finished, &is_still_active, &has_backlog, current_time);
-
-        is_last_fragment = object_offset + data_length >= object_length;
         /* TODO: manage the new group transitions */
         if (ret != 0) {
             DBG_PRINTF("Media published function: ret = %d", ret);

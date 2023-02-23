@@ -995,7 +995,6 @@ void quicrq_wakeup_media_rush_stream(quicrq_stream_ctx_t* stream_ctx)
     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
     uint64_t highest_object_id = stream_ctx->media_ctx->cache_ctx->highest_object_id;
     uint64_t old_highest_group_id = stream_ctx->next_warp_group_id;
-    int uni_created = 0;
     int stop_creating = 0;
 
     /* loop through all the unistreams, since more than one can be active */
@@ -1064,7 +1063,6 @@ void quicrq_wakeup_media_rush_stream(quicrq_stream_ctx_t* stream_ctx)
 void quicrq_wakeup_media_uni_stream(quicrq_stream_ctx_t* stream_ctx)
 {
     uint64_t highest_group_id = stream_ctx->media_ctx->cache_ctx->highest_group_id;
-    uint64_t old_highest_group_id = stream_ctx->next_warp_group_id;
     int uni_created = 0;
 
     /* loop through all the unistreams, since more than one can be active */
