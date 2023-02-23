@@ -62,18 +62,24 @@ int quicrq_fragment_cache_verify(quicrq_fragment_cache_t* cache_ctx)
                 DBG_PRINTF("Fragment data incorrect, object %zu, offset %zu, length %zu", f_id, offset, fragment->data_length);
                 ret = -1;
             }
-            /* Verify is_last_fragment */
+            /* Verify offset compatible with length */
             if (ret == 0) {
-                int should_be_last = (offset + fragment->data_length) >= fragment_test_objects[f_id].length;
-                if (should_be_last && !fragment->is_last_fragment) {
-                    DBG_PRINTF("Fragment should be last, object %zu, offset %zu, length %zu", f_id, offset, fragment->data_length);
-                    ret = -1;
-                }
-                else if (!should_be_last && fragment->is_last_fragment) {
-                    DBG_PRINTF("Fragment should not be last, object %zu, offset %zu, length %zu", f_id, offset, fragment->data_length);
+                uint64_t target_object_length = offset + fragment->data_length;
+                if (target_object_length > fragment_test_objects[f_id].length) {
+                    DBG_PRINTF("Fragment object %zu, offset %zu, length %zu, extends beyond target length %zu",
+                        f_id, offset, fragment->data_length, fragment_test_objects[f_id].length);
                     ret = -1;
                 }
             }
+            /* Verify length is as expected */
+            if (ret == 0) {
+                if (fragment->object_length != fragment_test_objects[f_id].length) {
+                    DBG_PRINTF("Fragment object %zu, offset %zu, object length %" PRIu64", does not match target length % zu",
+                        f_id, offset, fragment->object_length, fragment_test_objects[f_id].length);
+                    ret = -1;
+                }
+            }
+
             /* Update offset, increment fragment count */
             if (ret == 0) {
                 offset += fragment->data_length;
@@ -185,7 +191,8 @@ int quicrq_fragment_cache_fill_test_one(size_t fragment_max, size_t start_object
                         }
                         ret = quicrq_fragment_propose_to_cache(cache_ctx, fragment_test_objects[f_id].data + offset,
                             fragment_test_objects[f_id].group_id, fragment_test_objects[f_id].object_id,
-                            offset, 0, 0, nb_objects_previous_group, is_last_fragment, data_length, 0);
+                            offset, 0, 0, nb_objects_previous_group,
+                            fragment_test_objects[f_id].length, data_length, 0);
                         if (ret != 0) {
                             DBG_PRINTF("Proposed segment fails, object %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
                         }
@@ -238,7 +245,6 @@ int quicrq_fragment_cache_publish_simulate(quicrq_fragment_publisher_context_t* 
     int ret = 0;
     uint8_t data[1024];
     int is_new_group;
-    int is_last_fragment;
     int is_media_finished;
     int is_still_active;
     int has_backlog;
@@ -249,6 +255,7 @@ int quicrq_fragment_cache_publish_simulate(quicrq_fragment_publisher_context_t* 
     size_t fragment_offset = 0;
     uint8_t* fragment = NULL;
     size_t fragment_length;
+    uint64_t object_length = UINT64_MAX;
 
     do {
         fragment_length = 0;
@@ -298,7 +305,7 @@ int quicrq_fragment_cache_publish_simulate(quicrq_fragment_publisher_context_t* 
                     const uint8_t* datagram_max = bytes + datagram_length;
 
                     bytes = quicrq_datagram_header_decode(bytes, datagram_max, &media_id,
-                        &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
+                        &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &object_length);
                     if (bytes == NULL) {
                         DBG_PRINTF("Cannot decode datagram header, length = %zu", datagram_length);
                         ret = -1;
@@ -318,7 +325,7 @@ int quicrq_fragment_cache_publish_simulate(quicrq_fragment_publisher_context_t* 
             /* The first call to the publisher functions positions to the current group id, objectid, offset, etc. */
             nb_objects_previous_group = 0;
             ret = quicrq_fragment_publisher_fn(quicrq_media_source_get_data, pub_ctx, NULL, 1024, &fragment_length,
-               &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
+               &flags, &is_new_group, &object_length, &is_media_finished, &is_still_active, &has_backlog, current_time);
             if (ret == 0 && fragment_length > 0) {
                 group_id = pub_ctx->current_group_id;
                 object_id = pub_ctx->current_object_id;
@@ -341,11 +348,12 @@ int quicrq_fragment_cache_publish_simulate(quicrq_fragment_publisher_context_t* 
                 if (ret == 0) {
                     /* The second call to the media function copies the data at the required space. */
                     ret = quicrq_fragment_publisher_fn(quicrq_media_source_get_data, pub_ctx, data, 1024, &fragment_length,
-                        &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
+                        &flags, &is_new_group, &object_length, &is_media_finished, &is_still_active, &has_backlog, current_time);
                 }
                 if (ret == 0){
+                    size_t next_offset = *sequential_offset + fragment_length;
                     fragment = data;
-                    if (is_last_fragment) {
+                    if (next_offset >= object_length) {
                         *sequential_offset = 0;
                         *sequential_object_id += 1;
                         if (*sequential_group_id < nb_fragment_test_groups &&
@@ -355,7 +363,7 @@ int quicrq_fragment_cache_publish_simulate(quicrq_fragment_publisher_context_t* 
                         }
                     }
                     else {
-                        *sequential_offset += fragment_length;
+                        *sequential_offset = next_offset;
                         if (*sequential_offset > RELAY_TEST_OBJECT_MAX) {
                             DBG_PRINTF("Wrong offset: %zu", *sequential_offset);
                             ret = -1;
@@ -367,7 +375,7 @@ int quicrq_fragment_cache_publish_simulate(quicrq_fragment_publisher_context_t* 
         if (ret == 0 && fragment_length > 0) {
             /* submit to the media cache */
             ret = quicrq_fragment_propose_to_cache(cache_ctx_p,
-                fragment, group_id, object_id, fragment_offset, 0, flags, nb_objects_previous_group, is_last_fragment, fragment_length, 0);
+                fragment, group_id, object_id, fragment_offset, 0, flags, nb_objects_previous_group, object_length, fragment_length, 0);
         }
     } while (ret == 0 && fragment_length > 0);
 
@@ -447,7 +455,7 @@ int quicrq_fragment_cache_publish_test_one(int is_datagram)
                     }
                     ret = quicrq_fragment_propose_to_cache(cache_ctx, fragment_test_objects[f_id].data + offset,
                         fragment_test_objects[f_id].group_id, fragment_test_objects[f_id].object_id,
-                        offset, 0, 0, nb_objects_previous_group, is_last_fragment, data_length, 0);
+                        offset, 0, 0, nb_objects_previous_group, fragment_test_objects[f_id].length, data_length, 0);
                     if (ret != 0) {
                         DBG_PRINTF("Proposed segment fails, object %zu, offset %zu, pass %d, ret %d", f_id, offset, pass, ret);
                     }

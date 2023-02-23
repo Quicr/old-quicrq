@@ -105,7 +105,7 @@ int quicrq_publish_object(
         ret = quicrq_fragment_propose_to_cache(object_source_ctx->cache_ctx,
             object_data, object_source_ctx->next_group_id, object_source_ctx->next_object_id,
             /* offset */ 0, /* queue delay */ 0, properties->flags, nb_objects_previous_group,
-            /* is_last_fragment */ 1, object_length, current_time);
+            object_length, object_length, current_time);
         if (ret == 0) {
             object_source_ctx->next_object_id++;
         }

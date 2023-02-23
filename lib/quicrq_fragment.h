@@ -24,7 +24,7 @@ typedef struct st_quicrq_cached_fragment_t {
     uint64_t queue_delay;
     uint64_t nb_objects_previous_group;
     uint8_t flags;
-    int is_last_fragment;
+    uint64_t object_length;
     struct st_quicrq_cached_fragment_t* previous_in_order;
     struct st_quicrq_cached_fragment_t* next_in_order;
     size_t data_length;
@@ -58,7 +58,7 @@ typedef struct st_quicrq_fragment_publisher_object_state_t {
     uint64_t group_id;
     uint64_t object_id;
     uint64_t nb_objects_previous_group;
-    uint64_t final_offset;
+    uint64_t object_length;
     uint64_t bytes_sent;
     int is_dropped;
     int is_sent;
@@ -107,7 +107,7 @@ int quicrq_fragment_add_to_cache(quicrq_fragment_cache_t* cached_ctx,
     uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
-    int is_last_fragment,
+    uint64_t object_length,
     size_t data_length,
     uint64_t current_time);
 
@@ -119,7 +119,7 @@ int quicrq_fragment_propose_to_cache(quicrq_fragment_cache_t* cached_ctx,
     uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
-    int is_last_fragment,
+    uint64_t object_length,
     size_t data_length,
     uint64_t current_time);
 
@@ -182,7 +182,7 @@ quicrq_fragment_cache_t* quicrq_fragment_cache_create_ctx(quicrq_ctx_t* qr_ctx);
  */
 
 quicrq_fragment_publisher_object_state_t* quicrq_fragment_publisher_object_add(quicrq_fragment_publisher_context_t* media_ctx,
-    uint64_t group_id, uint64_t object_id);
+    uint64_t group_id, uint64_t object_id, uint64_t object_length);
 
 quicrq_fragment_publisher_object_state_t* quicrq_fragment_publisher_object_get(quicrq_fragment_publisher_context_t* media_ctx,
     uint64_t group_id, uint64_t object_id);
@@ -197,7 +197,7 @@ int quicrq_fragment_publisher_fn(
     size_t* data_length,
     uint8_t* flags,
     int* is_new_group,
-    int* is_last_fragment,
+    uint64_t* object_length,
     int* is_media_finished,
     int* is_still_active,
     int* has_backlog,
@@ -236,7 +236,6 @@ int quicrq_fragment_datagram_publisher_object_prune(
 int quicrq_fragment_datagram_publisher_object_update(
     quicrq_fragment_publisher_context_t* media_ctx,
     int should_skip,
-    int is_last_fragment,
     uint64_t next_offset,
     size_t copied);
 

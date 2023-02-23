@@ -153,32 +153,8 @@ static uint8_t fin_msg_bytes[] = {
     0x80, 0x01, 0xe2, 0x40
 };
 
-#define REPAIR_BYTES 1,2,3,4,5,6,7,8,9,10,11,12,13
-static uint8_t repair_bytes[] = { REPAIR_BYTES };
-static quicrq_message_t repair_request_msg = {
-    QUICRQ_ACTION_REQUEST_REPAIR,
-    0,
-    NULL,
-    0,
-    0,
-    123456,
-    0,
-    1234,
-    0,
-    1,
-    sizeof(repair_bytes),
-    NULL,
-    0,
-    0,
-    quicrq_subscribe_intent_current_group
-};
-
-static uint8_t repair_request_msg_bytes[] = {
-    QUICRQ_ACTION_REQUEST_REPAIR,
-    0x0, 0x80, 0x01, 0xe2, 0x40,
-    0x49, 0xa5,
-    (uint8_t)sizeof(repair_bytes)
-};
+#define FRAGMENT_BYTES 1,2,3,4,5,6,7,8,9,10,11,12,13
+static uint8_t fragment_bytes[] = { FRAGMENT_BYTES };
 
 static quicrq_message_t fragment_msg = {
     QUICRQ_ACTION_FRAGMENT,
@@ -190,9 +166,9 @@ static quicrq_message_t fragment_msg = {
     0,
     1234,
     0x17,
-    1,
-    sizeof(repair_bytes),
-    repair_bytes,
+    sizeof(fragment_bytes) + 1234,
+    sizeof(fragment_bytes),
+    fragment_bytes,
     0,
     0,
     quicrq_subscribe_intent_current_group
@@ -202,10 +178,11 @@ static uint8_t fragment_msg_bytes[] = {
     QUICRQ_ACTION_FRAGMENT,
     0x00,
     0x80, 0x01, 0xe2, 0x40,
-    0x49, 0xa5,
+    0x44, 0xd2,
+    0x44, 0xdf,
     0x17,
-    (uint8_t)sizeof(repair_bytes),
-    REPAIR_BYTES
+    (uint8_t)sizeof(fragment_bytes),
+    FRAGMENT_BYTES
 };
 
 static quicrq_message_t fragment_msg2 = {
@@ -218,9 +195,9 @@ static quicrq_message_t fragment_msg2 = {
     60,
     0,
     0x17,
-    1,
-    sizeof(repair_bytes),
-    repair_bytes,
+    sizeof(fragment_bytes),
+    sizeof(fragment_bytes),
+    fragment_bytes,
     0,
     0,
     quicrq_subscribe_intent_current_group
@@ -230,11 +207,12 @@ static uint8_t fragment_msg2_bytes[] = {
     QUICRQ_ACTION_FRAGMENT,
     0x0b,
     0x00,
-    0x01,
+    0x00,
+    (uint8_t)sizeof(fragment_bytes),
     0x17,
     0x3c,
-    (uint8_t)sizeof(repair_bytes),
-    REPAIR_BYTES
+    (uint8_t)sizeof(fragment_bytes),
+    FRAGMENT_BYTES
 };
 
 static quicrq_message_t post_msg = {
@@ -444,8 +422,8 @@ static quicrq_message_t warp_object = {
     0,
     0x83,
     0,
-    sizeof(repair_bytes),
-    repair_bytes,
+    sizeof(fragment_bytes),
+    fragment_bytes,
     0,
     0,
     0
@@ -456,8 +434,8 @@ static uint8_t warp_object_bytes[] = {
     0x40,
     0x81,
     0x83,
-    (uint8_t)sizeof(repair_bytes),
-    REPAIR_BYTES
+    (uint8_t)sizeof(fragment_bytes),
+    FRAGMENT_BYTES
 };
 
 static quicrq_message_t warp_object0 = {
@@ -471,8 +449,8 @@ static quicrq_message_t warp_object0 = {
     0,
     0x83,
     0,
-    sizeof(repair_bytes),
-    repair_bytes,
+    sizeof(fragment_bytes),
+    fragment_bytes,
     0,
     0,
     0
@@ -483,8 +461,8 @@ static uint8_t warp_object0_bytes[] = {
     0x00,
     0x3f,
     0x83,
-    (uint8_t)sizeof(repair_bytes),
-    REPAIR_BYTES
+    (uint8_t)sizeof(fragment_bytes),
+    FRAGMENT_BYTES
 };
 
 
@@ -501,7 +479,6 @@ static proto_test_case_t proto_cases[] = {
     PROTO_TEST_ITEM(datagram_rq_next_group, datagram_rq_next_group_bytes),
     PROTO_TEST_ITEM(datagram_rq_start_point, datagram_rq_start_point_bytes),
     PROTO_TEST_ITEM(fin_msg, fin_msg_bytes),
-    PROTO_TEST_ITEM(repair_request_msg, repair_request_msg_bytes),
     PROTO_TEST_ITEM(fragment_msg, fragment_msg_bytes),
     PROTO_TEST_ITEM(fragment_msg2, fragment_msg2_bytes),
     PROTO_TEST_ITEM(post_msg, post_msg_bytes),
@@ -699,8 +676,8 @@ static uint8_t bad_bytes24[] = {
     0x40,
     0x81,
     0x83,
-    (uint8_t)sizeof(repair_bytes) + 1,
-    REPAIR_BYTES
+    (uint8_t)sizeof(fragment_bytes) + 1,
+    FRAGMENT_BYTES
 };
 
 static uint8_t bad_bytes25[] = {
@@ -708,8 +685,8 @@ static uint8_t bad_bytes25[] = {
     0x0,
     0xC1,
     0x83,
-    (uint8_t)sizeof(repair_bytes),
-    REPAIR_BYTES
+    (uint8_t)sizeof(fragment_bytes),
+    FRAGMENT_BYTES
 };
 
 typedef struct st_proto_test_bad_case_t {
@@ -794,19 +771,19 @@ int proto_msg_test()
         else if (result.nb_objects_previous_group != proto_cases[i].result->nb_objects_previous_group) {
             ret = -1;
         }
-        else if (result.offset != proto_cases[i].result->offset) {
+        else if (result.fragment_offset != proto_cases[i].result->fragment_offset) {
             ret = -1;
         }
         else if (result.flags != proto_cases[i].result->flags) {
             ret = -1;
         }
-        else if (result.is_last_fragment != proto_cases[i].result->is_last_fragment) {
+        else if (result.object_length != proto_cases[i].result->object_length) {
             ret = -1;
         }
         else if (result.subscribe_intent != proto_cases[i].result->subscribe_intent) {
             ret = -1;
         }
-        else if (result.length != proto_cases[i].result->length) {
+        else if (result.fragment_length != proto_cases[i].result->fragment_length) {
             ret = -1;
         }
     }

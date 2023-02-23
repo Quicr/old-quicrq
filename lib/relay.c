@@ -44,7 +44,7 @@ int quicrq_relay_consumer_cb(
     uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
-    int is_last_fragment,
+    uint64_t object_length,
     size_t data_length)
 {
     int ret = 0;
@@ -56,7 +56,7 @@ int quicrq_relay_consumer_cb(
          * This requires accessing the cache by object_id, offset and length. */
          /* Add fragment (or fragments) to cache */
         ret = quicrq_fragment_propose_to_cache(cons_ctx->cache_ctx, data, 
-            group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
+            group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, object_length, data_length, current_time);
         /* Manage fin of transmission */
         if (ret == 0) {
             /* If the final group id and object id are known, and the next expected
