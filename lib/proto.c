@@ -521,8 +521,7 @@ const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t
  *     object_id(i),
  *     [nb_objects_previous_group(i),]
  *     flags[8],
- *     length(i),
- *     data(...)
+ *     object_length(i)
  * }
  * 
  * The nb_objects_previous_group is only set if the object_id is zero.

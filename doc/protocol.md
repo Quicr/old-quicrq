@@ -185,20 +185,17 @@ quicrq_fragment_message {
     message_type(i),
     group_id(i),
     object_id(i),
-    offset_and_fin(i),
+    fragment_offset(i),
+    object_length(i),_
     flags (8),
     [nb_objects_previous_group(i)],
-    length(i),
+    fragment__length(i),
     data(...)
 }
 ```
 
 The message type will be set to FRAGMENT (5).
-The `offset_and_fin` field encodes two values, as in:
-```
-offset_and_fin = 2*offset + is_last_fragment
-```
-The variable `is_last_fragment` is set to 1 if this fragment is the last one of an object.
+
 The offset value indicates where the fragment
 data starts in the object designated by `group_id` and `object_id`. Successive messages
 are sent in order, which means one of the following three conditions must be verified:
@@ -355,5 +352,86 @@ lost, and in that case repeats the fragment. The Picoquic feature is susceptible
 errors, which means that the same fragment could very well be received multiple times.
 
 Relays may forward fragments even if they arrive out of order.
+
+## Sending objects in Warp streams
+
+When transport mode is set to "Warp", nodes and relays will send objects
+in unidirectional QUIC streams, using one stream per "group of objects".
+The stream will start with a "warp header" message specifying the
+mdeia ID and the group ID, followed for each object in the group by an "object header"
+specifying the object ID and the object length and then the content of the objects.
+
+```
++--------+------------+-------+------------+-------+------
+| Warp   | Object     | Bytes | Object     | Bytes |
+| header | header (0) |  (0)  | header (1) |  (1)  | ...
++--------+------------+-------+------------+-------+------
+```
+
+The first object in the stream is object number 0, followed by 1, etc.
+Arrival of objects out of order will be treated as a protocol error.
+
+### Warp header
+
+The first message on each Warp header is encoded as:
+```
+quicrq_warp_header_message {
+     message_type(i),
+     media_id(i),
+     group_id(i)
+}
+```
+The message type is set to WARP_HEADER, 12.
+
+### Object header
+
+Each object in the Warp stream is encoded as an Object header, followed by
+the content of the object. The Object header is encoded as:
+```
+quicrq_object_header_message {
+    message_type(i),
+    object_id(i),
+    [nb_objects_previous_group(i),]
+    flags[8],
+    object_length(i)
+}
+```
+The message type is set to OBJECT_HEADER, 13.
+
+The `flags` and `nb_objects_previous_group` have the same meaning as
+in the fragment header. The `nb_objects_previous_group` is only present
+if the `object_id` is set to 0.
+
+The content of the object is encoded in the `object_length` octets that
+follow the object header.
+
+## Sending objects in Rush streams
+
+When transport mode is set to "Rush", nodes and relays will send objects
+in unidirectional QUIC streams, using one stream per objects.
+The stream will start with a "warp header" message specifying the
+media ID and the group ID, followed by a single "object header"
+and then the content of the objects.
+
+```
++--------+------------+-------+
+| Warp   | Object     | Bytes |
+| header | header (n) |  (n)  |
++--------+------------+-------+
+```
+
+The first object in the stream is object number 0, followed by 1, etc.
+Arrival of objects out of order will be treated as a protocol error.
+
+The Warp header and the Object header have the same syntax as for Warp
+streams.
+
+When Rush mode is selected, arrival of more than one object per stream
+is treated as an error.
+
+
+
+
+
 
 
