@@ -276,6 +276,12 @@ uint64_t quicrq_fragment_get_object_count(quicrq_fragment_cache_t* cache_ctx, ui
 
 uint8_t quicrq_fragment_get_flags(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id);
 
+int quicrq_fragment_get_object_properties(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id,
+    size_t* object_length, uint64_t* nb_objects_previous_group, uint8_t* flags);
+
+size_t quicrq_fragment_object_copy_available_data(quicrq_fragment_cache_t* cache_ctx,
+    uint64_t group_id, uint64_t object_id, size_t offset, size_t available, uint8_t* buffer);
+
 size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id, uint64_t* nb_objects_previous_group, uint8_t* flags, uint8_t* buffer);
 
 void* quicrq_fragment_publisher_subscribe(quicrq_fragment_cache_t* cache_ctx, quicrq_stream_ctx_t* stream_ctx);

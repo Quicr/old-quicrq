@@ -421,9 +421,9 @@ static quicrq_message_t warp_object = {
     0,
     0,
     0x83,
-    0,
     sizeof(fragment_bytes),
-    fragment_bytes,
+    0,
+    NULL,
     0,
     0,
     0
@@ -434,8 +434,7 @@ static uint8_t warp_object_bytes[] = {
     0x40,
     0x81,
     0x83,
-    (uint8_t)sizeof(fragment_bytes),
-    FRAGMENT_BYTES
+    (uint8_t)sizeof(fragment_bytes)
 };
 
 static quicrq_message_t warp_object0 = {
@@ -448,9 +447,9 @@ static quicrq_message_t warp_object0 = {
     63,
     0,
     0x83,
-    0,
     sizeof(fragment_bytes),
-    fragment_bytes,
+    0,
+    NULL,
     0,
     0,
     0
@@ -461,8 +460,7 @@ static uint8_t warp_object0_bytes[] = {
     0x00,
     0x3f,
     0x83,
-    (uint8_t)sizeof(fragment_bytes),
-    FRAGMENT_BYTES
+    (uint8_t)sizeof(fragment_bytes)
 };
 
 
@@ -676,17 +674,15 @@ static uint8_t bad_bytes24[] = {
     0x40,
     0x81,
     0x83,
-    (uint8_t)sizeof(fragment_bytes) + 1,
-    FRAGMENT_BYTES
+    0xFF
 };
 
 static uint8_t bad_bytes25[] = {
     QUICRQ_ACTION_OBJECT_HEADER,
     0x0,
-    0xC1,
+    0xFF,
     0x83,
     (uint8_t)sizeof(fragment_bytes),
-    FRAGMENT_BYTES
 };
 
 typedef struct st_proto_test_bad_case_t {

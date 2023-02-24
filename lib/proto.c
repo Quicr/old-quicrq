@@ -528,18 +528,16 @@ const uint8_t* quicrq_warp_header_msg_decode(const uint8_t* bytes, const uint8_t
  * The nb_objects_previous_group is only set if the object_id is zero.
  */
 
-size_t quicrq_object_header_msg_reserve(uint64_t object_id, uint64_t nb_objects_previous_group, size_t data_length)
+size_t quicrq_object_header_msg_reserve(uint64_t object_id, uint64_t nb_objects_previous_group, size_t object_length)
 {
     size_t len = 1 + picoquic_frames_varint_encode_length(object_id) +
         ((object_id == 0) ? picoquic_frames_varint_encode_length(nb_objects_previous_group) : 0)
-        + 1;
-    len += picoquic_frames_varint_encode_length(data_length);
-    len += data_length;
+        + 1 + picoquic_frames_varint_encode_length(object_length);
     return len;
 }
 
 uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uint64_t message_type, uint64_t object_id,
-    uint64_t nb_objects_previous_group, uint8_t flags, size_t length, const uint8_t *data)
+    uint64_t nb_objects_previous_group, uint8_t flags, size_t object_length)
 {
     if ((bytes = picoquic_frames_varint_encode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_id)) != NULL) {
@@ -549,12 +547,7 @@ uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uin
         if (bytes != NULL) {
             if (bytes < bytes_max) {
                 *bytes++ = flags;
-                if (data != NULL) {
-                    bytes = picoquic_frames_length_data_encode(bytes, bytes_max, length, data);
-                }
-                else {
-                    bytes = picoquic_frames_varint_encode(bytes, bytes_max, length);
-                }
+                bytes = picoquic_frames_varint_encode(bytes, bytes_max, object_length);
             }
             else {
                 bytes = NULL;
@@ -565,13 +558,12 @@ uint8_t* quicrq_object_header_msg_encode(uint8_t* bytes, uint8_t* bytes_max, uin
 }
 
 const uint8_t* quicrq_object_header_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max, uint64_t* message_type,
-    uint64_t *object_id, uint64_t *nb_objects_previous_group, uint8_t* flags, size_t *length, const uint8_t **data)
+    uint64_t *object_id, uint64_t *nb_objects_previous_group, uint8_t* flags, size_t *object_length)
 {
     *object_id = 0;
     *nb_objects_previous_group = 0;
     *flags = 0;
-    *length = 0;
-    *data = NULL;
+    *object_length = 0;
     if ((bytes = picoquic_frames_varint_decode(bytes, bytes_max, message_type)) != NULL &&
         (bytes = picoquic_frames_varint_decode(bytes, bytes_max, object_id)) != NULL){
         if (*object_id == 0) {
@@ -580,10 +572,7 @@ const uint8_t* quicrq_object_header_msg_decode(const uint8_t* bytes, const uint8
         if (bytes != NULL) {
             if (bytes < bytes_max) {
                 *flags = *bytes++;
-                if ((bytes = picoquic_frames_varlen_decode(bytes, bytes_max, length)) != NULL) {
-                    *data = bytes;
-                    bytes = picoquic_frames_fixed_skip(bytes, bytes_max, *length);
-                }
+                bytes = picoquic_frames_varlen_decode(bytes, bytes_max, object_length);
             }
             else {
                 bytes = NULL;
@@ -639,7 +628,7 @@ const uint8_t* quicrq_msg_decode(const uint8_t* bytes, const uint8_t* bytes_max,
             break;
         case QUICRQ_ACTION_OBJECT_HEADER:
             bytes = quicrq_object_header_msg_decode(bytes, bytes_max, &msg->message_type, &msg->object_id,
-                &msg->nb_objects_previous_group, &msg->flags, &msg->fragment_length, &msg->data);
+                &msg->nb_objects_previous_group, &msg->flags, &msg->object_length);
             break;
         default:
             /* Unexpected message type */
@@ -690,7 +679,7 @@ uint8_t* quicrq_msg_encode(uint8_t* bytes, uint8_t* bytes_max, quicrq_message_t*
         break;
     case QUICRQ_ACTION_OBJECT_HEADER:
         bytes = quicrq_object_header_msg_encode(bytes, bytes_max, msg->message_type, msg->object_id,
-            msg->nb_objects_previous_group, msg->flags, msg->fragment_length, msg->data);
+            msg->nb_objects_previous_group, msg->flags, msg->object_length);
         break;
     default:
         /* Unexpected message type */
@@ -1002,6 +991,8 @@ void quicrq_wakeup_media_rush_stream(quicrq_stream_ctx_t* stream_ctx)
     while (uni_stream_ctx != NULL) {
         if (uni_stream_ctx->send_state != quicrq_sending_warp_should_close) {
             /* TODO: the used contexts should be removed, so the test above will not be needed. */
+            /* TODO: maybe document object properties */
+            /* TODO: if object unknown, priorities should be set when it becomes known. */
             quicrq_set_rush_stream_priority(uni_stream_ctx);
             picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 1, uni_stream_ctx);
         }
