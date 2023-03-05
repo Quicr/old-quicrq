@@ -35,7 +35,7 @@ typedef struct st_quicrq_reassembly_object_t {
     uint64_t group_id;
     uint64_t object_id;
     uint64_t nb_objects_previous_group;
-    uint64_t final_offset;
+    uint64_t object_length;
     uint64_t queue_delay;
     uint8_t flags;
     int is_last_received;
@@ -295,28 +295,28 @@ static int quicrq_reassembly_object_reassemble(quicrq_reassembly_object_t* objec
 {
     int ret = 0;
     /* Special case for zero length objects */
-    if (object->is_last_received && object->final_offset == 0 && object->data_received == 0) {
+    if (object->is_last_received && object->object_length == 0 && object->data_received == 0) {
         object->reassembled = (uint8_t*)malloc(1);
         if (object->reassembled == NULL) {
             ret = -1;
         }
     }
     /* Check that that the received bytes are in order */
-    else if (object->final_offset == 0 || object->data_received != object->final_offset) {
+    else if (object->object_length == 0 || object->data_received != object->object_length) {
         ret = -1;
     }
     else if (object->first_packet == NULL || object->first_packet->offset != 0) {
         ret = -1;
     }
     else if (object->last_packet == NULL ||
-        object->last_packet->offset + object->last_packet->data_length != object->final_offset) {
+        object->last_packet->offset + object->last_packet->data_length != object->object_length) {
         ret = -1;
     }
-    else if (object->final_offset > SIZE_MAX) {
+    else if (object->object_length > SIZE_MAX) {
         ret = -1;
     }
     else {
-        object->reassembled = (uint8_t*)malloc((size_t)object->final_offset);
+        object->reassembled = (uint8_t*)malloc((size_t)object->object_length);
         if (object->reassembled == NULL) {
             ret = -1;
         }
@@ -330,7 +330,7 @@ static int quicrq_reassembly_object_reassemble(quicrq_reassembly_object_t* objec
                 if (packet->offset != running_offset) {
                     ret = -1;
                 }
-                else if (running_offset + packet->data_length > object->final_offset) {
+                else if (running_offset + packet->data_length > object->object_length) {
                     ret = -1;
                 }
                 else {
@@ -340,7 +340,7 @@ static int quicrq_reassembly_object_reassemble(quicrq_reassembly_object_t* objec
                 }
             }
             /* Final check also is just for debugging, should never fire */
-            if (ret == 0 && running_offset != object->final_offset) {
+            if (ret == 0 && running_offset != object->object_length) {
                 ret = -1;
             }
         }
@@ -383,7 +383,7 @@ int quicrq_reassembly_update_start_point(quicrq_reassembly_context_t* reassembly
         } 
         /* Submit the object in order */
         ret = ready_fn(app_media_ctx, current_time, object->group_id, object->object_id, object->flags, object->reassembled,
-            (size_t)object->final_offset, quicrq_reassembly_object_repair);
+            (size_t)object->object_length, quicrq_reassembly_object_repair);
         /* delete the object that was just repaired. */
         quicrq_reassembly_object_delete(reassembly_ctx, object);
         /* update the next_object id */
@@ -408,12 +408,13 @@ int quicrq_reassembly_input(
     uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
-    int is_last_fragment,
+    uint64_t object_length,
     size_t data_length,
     quicrq_reassembly_object_ready_fn ready_fn,
     void* app_media_ctx)
 {
     int ret = 0;
+
     if (group_id < reassembly_ctx->next_group_id ||
         (group_id == reassembly_ctx->next_group_id &&
         object_id < reassembly_ctx->next_object_id)) {
@@ -427,6 +428,7 @@ int quicrq_reassembly_input(
             object = quicrq_reassembly_object_create(reassembly_ctx, group_id, object_id);
             object->queue_delay = queue_delay;
             object->flags = flags;
+            object->object_length = object_length;
         }
         else {
             if (object->queue_delay < queue_delay) {
@@ -443,51 +445,53 @@ int quicrq_reassembly_input(
                 object->nb_objects_previous_group = nb_objects_previous_group;
             }
             /* If this is the last fragment, update the object length */
-            if (is_last_fragment) {
+            if (offset + data_length >= object->object_length) {
                 object->is_last_received = 1;
-                if (object->final_offset == 0) {
-                    object->final_offset = offset + data_length;
-                }
-                else if (object->final_offset != offset + data_length) {
+                if (object->object_length != offset + data_length) {
                     ret = -1;
                 }
             }
-            /* Insert the object at the proper location */
-            ret = quicrq_reassembly_object_add_packet(object, current_time, data, offset, data_length);
-            if (ret != 0) {
-                DBG_PRINTF("Add packet, ret = %d", ret);
+            else if (object->object_length != object_length) {
+                ret = -1;
             }
-            else if (object->is_last_received && object->data_received >= object->final_offset) {
-                /* If the object is complete, verify and submit */
-                quicrq_reassembly_object_mode_enum object_mode;
-                if (group_id == reassembly_ctx->next_group_id + 1 &&
-                    object_id == 0 &&
-                    object->nb_objects_previous_group <= reassembly_ctx->next_object_id){
-                    /* This is the first object of a new group, and all objects of the previous group
-                     * have been received */
-                    reassembly_ctx->next_group_id += 1;
-                    reassembly_ctx->next_object_id = 0;
+            if (ret == 0) {
+                /* Insert the object at the proper location */
+                ret = quicrq_reassembly_object_add_packet(object, current_time, data, offset, data_length);
+                if (ret != 0) {
+                    DBG_PRINTF("Add packet, ret = %d", ret);
                 }
-
-                object_mode = (
-                    reassembly_ctx->next_group_id == group_id &&
-                    reassembly_ctx->next_object_id == object_id ) ?
-                    quicrq_reassembly_object_in_sequence : quicrq_reassembly_object_peek;
-
-                if (object->reassembled == NULL) {
-                    /* Reassemble and verify -- maybe should do that in real time instead of at the end? */
-                    ret = quicrq_reassembly_object_reassemble(object);
-                    if (ret == 0) {
-                        /* If the object is fully received, pass it to the application, indicating sequence or not. */
-                        ret = ready_fn(app_media_ctx, current_time, group_id, object_id, flags, object->reassembled, (size_t)object->final_offset, object_mode);
+                else if (object->is_last_received && object->data_received >= object->object_length) {
+                    /* If the object is complete, verify and submit */
+                    quicrq_reassembly_object_mode_enum object_mode;
+                    if (group_id == reassembly_ctx->next_group_id + 1 &&
+                        object_id == 0 &&
+                        object->nb_objects_previous_group <= reassembly_ctx->next_object_id) {
+                        /* This is the first object of a new group, and all objects of the previous group
+                         * have been received */
+                        reassembly_ctx->next_group_id += 1;
+                        reassembly_ctx->next_object_id = 0;
                     }
-                    if (ret == 0 && object_mode == quicrq_reassembly_object_in_sequence) {
-                        /* delete the object that was just reassembled. */
-                        quicrq_reassembly_object_delete(reassembly_ctx, object);
-                        /* update the next_object id */
-                        reassembly_ctx->next_object_id++;
-                        /* try processing all objects that might now be ready */
-                        ret = quicrq_reassembly_update_start_point(reassembly_ctx, current_time, ready_fn, app_media_ctx);
+
+                    object_mode = (
+                        reassembly_ctx->next_group_id == group_id &&
+                        reassembly_ctx->next_object_id == object_id) ?
+                        quicrq_reassembly_object_in_sequence : quicrq_reassembly_object_peek;
+
+                    if (object->reassembled == NULL) {
+                        /* Reassemble and verify -- maybe should do that in real time instead of at the end? */
+                        ret = quicrq_reassembly_object_reassemble(object);
+                        if (ret == 0) {
+                            /* If the object is fully received, pass it to the application, indicating sequence or not. */
+                            ret = ready_fn(app_media_ctx, current_time, group_id, object_id, flags, object->reassembled, (size_t)object->object_length, object_mode);
+                        }
+                        if (ret == 0 && object_mode == quicrq_reassembly_object_in_sequence) {
+                            /* delete the object that was just reassembled. */
+                            quicrq_reassembly_object_delete(reassembly_ctx, object);
+                            /* update the next_object id */
+                            reassembly_ctx->next_object_id++;
+                            /* try processing all objects that might now be ready */
+                            ret = quicrq_reassembly_update_start_point(reassembly_ctx, current_time, ready_fn, app_media_ctx);
+                        }
                     }
                 }
             }

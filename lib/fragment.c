@@ -141,12 +141,13 @@ void quicrq_fragment_cache_progress(quicrq_fragment_cache_t* cache_ctx,
             is_expected = 1;
         }
         if (is_expected) {
-            if (fragment->is_last_fragment) {
+            uint64_t next_offset = cache_ctx->next_offset + fragment->data_length;
+            if (next_offset >= fragment->object_length) {
                 cache_ctx->next_object_id += 1;
                 cache_ctx->next_offset = 0;
             }
             else {
-                cache_ctx->next_offset += fragment->data_length;
+                cache_ctx->next_offset = next_offset;
             }
         }
         else {
@@ -163,7 +164,7 @@ int quicrq_fragment_add_to_cache(quicrq_fragment_cache_t* cache_ctx,
     uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
-    int is_last_fragment,
+    uint64_t object_length,
     size_t data_length,
     uint64_t current_time)
 {
@@ -191,7 +192,7 @@ int quicrq_fragment_add_to_cache(quicrq_fragment_cache_t* cache_ctx,
         fragment->queue_delay = queue_delay;
         fragment->flags = flags;
         fragment->nb_objects_previous_group = nb_objects_previous_group;
-        fragment->is_last_fragment = is_last_fragment;
+        fragment->object_length = object_length;
         fragment->data = ((uint8_t*)fragment) + sizeof(quicrq_cached_fragment_t);
         fragment->data_length = data_length;
         memcpy(fragment->data, data, data_length);
@@ -210,7 +211,7 @@ int quicrq_fragment_propose_to_cache(quicrq_fragment_cache_t* cache_ctx,
     uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
-    int is_last_fragment,
+    uint64_t object_length,
     size_t data_length,
     uint64_t current_time)
 {
@@ -239,7 +240,7 @@ int quicrq_fragment_propose_to_cache(quicrq_fragment_cache_t* cache_ctx,
             first_fragment_state->offset + first_fragment_state->data_length < offset) {          
             /* Insert the whole fragment */
             ret = quicrq_fragment_add_to_cache(cache_ctx, data, 
-                group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, data_length, current_time);
+                group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, object_length, data_length, current_time);
             data_was_added = 1;
             /* Mark done */
             data_length = 0;
@@ -251,7 +252,7 @@ int quicrq_fragment_propose_to_cache(quicrq_fragment_cache_t* cache_ctx,
                 /* Some of the fragment data comes after this one. Submit */
                 size_t added_length = offset + data_length - previous_last_byte;
                 ret = quicrq_fragment_add_to_cache(cache_ctx, data, 
-                    group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, is_last_fragment, added_length, current_time);
+                    group_id, object_id, offset, queue_delay, flags, nb_objects_previous_group, object_length, added_length, current_time);
                 data_was_added = 1;
                 data_length -= added_length;
                 /* Previous group count is only used on first fragment */
@@ -278,7 +279,9 @@ int quicrq_fragment_propose_to_cache(quicrq_fragment_cache_t* cache_ctx,
         last_fragment_node = picosplay_find_previous(&cache_ctx->fragment_tree, &key);
         first_fragment_state = (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(last_fragment_node);
         if (first_fragment_state != NULL) {
-            int last_is_final = first_fragment_state->is_last_fragment;
+            int last_is_final =
+                (first_fragment_state->offset + first_fragment_state->data_length) >=
+                first_fragment_state->object_length;
             uint64_t previous_offset = first_fragment_state->offset;
 
             while (last_is_final && previous_offset > 0) {
@@ -506,7 +509,7 @@ static void quicrq_fragment_publisher_object_node_delete(void* tree, picosplay_n
 
 
 quicrq_fragment_publisher_object_state_t* quicrq_fragment_publisher_object_add(quicrq_fragment_publisher_context_t* media_ctx,
-    uint64_t group_id, uint64_t object_id)
+    uint64_t group_id, uint64_t object_id, uint64_t object_length)
 {
     quicrq_fragment_publisher_object_state_t* publisher_object = 
         (quicrq_fragment_publisher_object_state_t*)malloc(sizeof(quicrq_fragment_publisher_object_state_t));
@@ -515,6 +518,7 @@ quicrq_fragment_publisher_object_state_t* quicrq_fragment_publisher_object_add(q
         memset(publisher_object, 0, sizeof(quicrq_fragment_publisher_object_state_t));
         publisher_object->group_id = group_id;
         publisher_object->object_id = object_id;
+        publisher_object->object_length = object_length;
         picosplay_insert(&media_ctx->publisher_object_tree, publisher_object);
     }
 
@@ -549,15 +553,15 @@ int quicrq_fragment_is_ready_to_send(void* v_media_ctx, size_t data_max_size, ui
 {
     int is_ready = 0;
     int is_new_group = 0;
-    int is_last_fragment = 0;
     int is_media_finished = 0;
     int is_still_active = 0;
     int should_skip = 0;
     uint8_t flags = 0;
     size_t data_length = 0;
+    uint64_t object_length = 0;
 
     if (0 == quicrq_fragment_publisher_fn(quicrq_media_source_get_data, v_media_ctx, NULL, data_max_size,
-        &data_length, &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &should_skip, current_time)) {
+        &data_length, &flags, &is_new_group, &object_length, &is_media_finished, &is_still_active, &should_skip, current_time)) {
         if (data_length > 0) {
             is_ready = 1; 
         }
@@ -573,7 +577,7 @@ int quicrq_fragment_publisher_fn(
     size_t* data_length,
     uint8_t* flags,
     int* is_new_group,
-    int* is_last_fragment,
+    uint64_t* object_length,
     int* is_media_finished,
     int* is_still_active,
     int* should_skip,
@@ -585,7 +589,7 @@ int quicrq_fragment_publisher_fn(
     if (action == quicrq_media_source_get_data) {
         *is_new_group = 0;
         *is_media_finished = 0;
-        *is_last_fragment = 0;
+        *object_length = 0;
         *is_still_active = 0;
         *data_length = 0;
         *should_skip = 0;
@@ -666,14 +670,13 @@ int quicrq_fragment_publisher_fn(
             else {
                 size_t available = media_ctx->current_fragment->data_length - media_ctx->length_sent;
                 size_t copied = data_max_size;
-                int has_backlog = 0;
                 int end_of_fragment = 0;
 
                 *flags = media_ctx->current_fragment->flags;
+                *object_length = media_ctx->current_fragment->object_length;
 
                 if (data_max_size >= available) {
                     end_of_fragment = 1;
-                    *is_last_fragment = media_ctx->current_fragment->is_last_fragment;
                     copied = available;
                 }
                 *data_length = copied;
@@ -690,12 +693,13 @@ int quicrq_fragment_publisher_fn(
                     memcpy(data, media_ctx->current_fragment->data + media_ctx->length_sent, copied);
                     media_ctx->length_sent += copied;
                     if (end_of_fragment) {
-                        if (media_ctx->current_fragment->is_last_fragment) {
+                        size_t next_offset = media_ctx->current_offset + media_ctx->current_fragment->data_length;
+                        if (next_offset >= media_ctx->current_fragment->object_length) {
                             media_ctx->current_object_id++;
                             media_ctx->current_offset = 0;
                         }
                         else {
-                            media_ctx->current_offset += media_ctx->current_fragment->data_length;
+                            media_ctx->current_offset = next_offset;
                         }
 
                         media_ctx->length_sent = 0;
@@ -833,7 +837,6 @@ int quicrq_fragment_datagram_publisher_object_prune(
 int quicrq_fragment_datagram_publisher_object_update(
     quicrq_fragment_publisher_context_t* media_ctx,
     int should_skip,
-    int is_last_fragment,
     uint64_t next_offset,
     size_t copied )
 {
@@ -842,17 +845,16 @@ int quicrq_fragment_datagram_publisher_object_update(
         quicrq_fragment_publisher_object_get(media_ctx, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id);
     if (publisher_object == NULL) {
         publisher_object = quicrq_fragment_publisher_object_add(media_ctx,
-            media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id);
+            media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id,
+            media_ctx->current_fragment->object_length);
     }
     if (publisher_object == NULL) {
         ret = -1;
     }
     else {
         /* Document object properties */
+        int is_last_fragment = (next_offset >= publisher_object->object_length);
         publisher_object->bytes_sent += copied;
-        if (is_last_fragment) {
-            publisher_object->final_offset = next_offset;
-        }
         publisher_object->is_dropped = should_skip;
         if (media_ctx->current_fragment->nb_objects_previous_group > 0) {
             publisher_object->nb_objects_previous_group = media_ctx->current_fragment->nb_objects_previous_group;
@@ -861,7 +863,7 @@ int quicrq_fragment_datagram_publisher_object_update(
          * Consider special case of zero length fragments, skipped at previous network node.
          */
         if ((is_last_fragment && copied >= next_offset) ||
-            (publisher_object->final_offset > 0 && publisher_object->bytes_sent >= publisher_object->final_offset)) {
+            publisher_object->bytes_sent >= publisher_object->object_length) {
             publisher_object->is_sent = 1;
             ret = quicrq_fragment_datagram_publisher_object_prune(media_ctx);
         }
@@ -886,12 +888,12 @@ int quicrq_fragment_datagram_publisher_send_fragment(
     size_t offset = (should_skip) ? 0 : media_ctx->current_fragment->offset + media_ctx->length_sent;
     uint8_t datagram_header[QUICRQ_DATAGRAM_HEADER_MAX];
     uint8_t flags = (should_skip) ? 0xff : media_ctx->current_fragment->flags;
-    int is_last_fragment = (should_skip) ? 1: media_ctx->current_fragment->is_last_fragment;
+    uint64_t object_length = (should_skip) ? 0 : media_ctx->current_fragment->object_length;
     size_t h_size = 0;
     uint8_t* h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
         media_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
         media_ctx->current_fragment->queue_delay, flags, media_ctx->current_fragment->nb_objects_previous_group,
-        is_last_fragment);
+        object_length);
     if (h_byte == NULL) {
         /* Should never happen. */
         ret = -1;
@@ -915,20 +917,6 @@ int quicrq_fragment_datagram_publisher_send_fragment(
                 copied = space - h_size;
                 if (copied >= available) {
                     copied = available;
-                } else if (is_last_fragment){
-                    /* In the rare case where this was the last fragment but there is not enough space available, 
-                     * we need to reset the header.
-                     */
-                    is_last_fragment = 0;
-                    h_byte = quicrq_datagram_header_encode(datagram_header, datagram_header + QUICRQ_DATAGRAM_HEADER_MAX,
-                        media_id, media_ctx->current_fragment->group_id, media_ctx->current_fragment->object_id, offset,
-                        media_ctx->current_fragment->queue_delay, media_ctx->current_fragment->flags, media_ctx->current_fragment->nb_objects_previous_group,
-                        0);
-
-                    if (h_byte != datagram_header + h_size) {
-                        /* Can't happen, unless our coding assumptions were wrong. Would need to debug that. */
-                        ret = -1;
-                    }
                 }
             }
             if (copied > 0 || should_skip || media_ctx->current_fragment->data_length == 0){
@@ -956,7 +944,8 @@ int quicrq_fragment_datagram_publisher_send_fragment(
                                 media_ctx->current_fragment->object_id, offset, flags,
                                 media_ctx->current_fragment->nb_objects_previous_group,
                                 ((uint8_t*)buffer) + h_size, copied,
-                                media_ctx->current_fragment->queue_delay, is_last_fragment, NULL,
+                                media_ctx->current_fragment->queue_delay, 
+                                media_ctx->current_fragment->object_length, NULL,
                                 picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic));
                             if (ret != 0) {
                                 DBG_PRINTF("Datagram ack init returns %d", ret);
@@ -964,7 +953,7 @@ int quicrq_fragment_datagram_publisher_send_fragment(
                         }
                         if (ret == 0) {
                             ret = quicrq_fragment_datagram_publisher_object_update(media_ctx,
-                                should_skip, is_last_fragment, offset + copied, copied);
+                                should_skip, offset + copied, copied);
                         }
                     }
                 }
@@ -995,6 +984,7 @@ int quicrq_fragment_datagram_publisher_prepare(
     
     /* Evaluate fragment and congestion */
     ret = quicrq_fragment_datagram_publisher_check_fragment(stream_ctx, media_ctx, &should_skip, current_time);
+
     if (ret != 0 || media_ctx->current_fragment == NULL || media_ctx->is_current_fragment_sent) {
         *not_ready = 1;
     }
@@ -1033,6 +1023,7 @@ int quicrq_fragment_datagram_publisher_fn(
          * been sent.
          */
         if ((media_ctx->cache_ctx->final_group_id != 0 || media_ctx->cache_ctx->final_object_id != 0) &&
+            (stream_ctx->final_group_id == 0 && stream_ctx->final_object_id == 0) &&
             media_ctx->current_fragment != NULL &&
             media_ctx->is_current_fragment_sent &&
             media_ctx->current_fragment->next_in_order == NULL) {
@@ -1099,6 +1090,73 @@ uint8_t quicrq_fragment_get_flags(quicrq_fragment_cache_t* cache_ctx, uint64_t g
     return flags;
 }
 
+/* Get the length and flags of an object, i.e., the information required to
+ * format the object header.
+ */
+int quicrq_fragment_get_object_properties(quicrq_fragment_cache_t* cache_ctx, uint64_t group_id, uint64_t object_id,
+    size_t* object_length, uint64_t* nb_objects_previous_group, uint8_t* flags)
+{
+    int ret = -1;
+    quicrq_cached_fragment_t key = { 0 };
+    picosplay_node_t* fragment_node;
+    key.group_id = group_id;
+    key.object_id = object_id;
+    key.offset = 0;
+    fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
+    if (fragment_node != NULL) {
+        quicrq_cached_fragment_t* fragment_state =
+            (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+        ret = 0;
+        *object_length = fragment_state->object_length;
+        *nb_objects_previous_group = fragment_state->nb_objects_previous_group;
+        *flags = fragment_state->flags;
+    }
+    return ret;
+}
+
+size_t quicrq_fragment_object_copy_available_data(quicrq_fragment_cache_t* cache_ctx, 
+    uint64_t group_id, uint64_t object_id, size_t offset, size_t available, uint8_t* buffer)
+{
+    size_t fragment_size = 0;
+    uint64_t current_offset = 0;
+    picosplay_node_t* fragment_node = NULL;
+    /* find the fragment tree for the group/object */
+    /* TODO: should start the lookup at the current offset. */
+    quicrq_cached_fragment_t key = { 0 };
+    key.group_id = group_id;
+    key.object_id = object_id;
+    key.offset = 0;
+    fragment_node = picosplay_find(&cache_ctx->fragment_tree, &key);
+
+    while (fragment_node != NULL && fragment_size < available) {
+        quicrq_cached_fragment_t* fragment_state =
+            (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(fragment_node);
+        if (fragment_state->group_id != group_id || 
+            fragment_state->object_id != object_id ||
+            fragment_state->offset != current_offset) {
+            /* Next fragment in order is not what we expect, so stop there */
+            break;
+        }
+        /* compute the object size and fill the passed in buffer, if non-null */
+        if (current_offset + fragment_state->data_length > offset) {
+            size_t offset_offset = (current_offset < offset) ? offset - current_offset : 0;
+            size_t copied = fragment_state->data_length - offset_offset;
+            if (fragment_size + copied > available) {
+                copied = available - fragment_size;
+            }
+            if (buffer != NULL) {
+                memcpy(buffer + fragment_size, fragment_state->data + offset_offset, copied);
+            }
+            fragment_size += copied;
+        }
+        current_offset += fragment_state->data_length;
+        fragment_node = picosplay_next(fragment_node);
+    }
+
+    return fragment_size;
+}
+
+
 /* Copy a full object from the cache.
  * - return the size of the object if it is completely received
  * - returns 0 if the object is not yet received
@@ -1136,14 +1194,15 @@ size_t quicrq_fragment_object_copy(quicrq_fragment_cache_t* cache_ctx, uint64_t 
         object_size += fragment_state->data_length;
         if (buffer != NULL) {
             memcpy(buffer, fragment_state->data + current_offset, fragment_state->data_length);
-            current_offset += fragment_state->data_length;
         }
+        current_offset += fragment_state->data_length;
 
-        if (fragment_state->is_last_fragment) {
+        if (current_offset >= fragment_state->object_length) {
             /* we found all the fragments, return total length */
             *flags = fragment_state->flags;
             return object_size;
         }
+        fragment_node = picosplay_next(fragment_node);
     }
 
     return 0;

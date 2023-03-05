@@ -82,7 +82,6 @@ int quicrq_publish_object(
     int ret = 0;
     uint64_t current_time = picoquic_get_quic_time(object_source_ctx->qr_ctx->quic);
     uint64_t nb_objects_previous_group = 0;
-    int is_new_group = 0;
 
     /* Verify that the progression of numbers by the application matches the rules */
     if (group_id != object_source_ctx->next_group_id) {
@@ -91,7 +90,6 @@ int quicrq_publish_object(
             ret = -1;
         }
         else {
-            is_new_group = 1;
             nb_objects_previous_group = object_source_ctx->next_object_id;
             object_source_ctx->next_group_id++;
             object_source_ctx->next_object_id = 0;
@@ -105,7 +103,7 @@ int quicrq_publish_object(
         ret = quicrq_fragment_propose_to_cache(object_source_ctx->cache_ctx,
             object_data, object_source_ctx->next_group_id, object_source_ctx->next_object_id,
             /* offset */ 0, /* queue delay */ 0, properties->flags, nb_objects_previous_group,
-            /* is_last_fragment */ 1, object_length, current_time);
+            object_length, object_length, current_time);
         if (ret == 0) {
             object_source_ctx->next_object_id++;
         }

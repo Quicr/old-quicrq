@@ -134,7 +134,6 @@ void quicrq_debug_source_test(quicrq_ctx_t* node, int node_id)
                 uint64_t current_group_id = fragment->group_id;
                 uint64_t current_object_id = fragment->object_id;
                 uint64_t current_offset = 0;
-                int is_new_object = 1;
                 int is_last_fragment = 0;
 
                 if (current_group_id != cache_ctx->first_group_id || current_object_id != cache_ctx->first_object_id) {
@@ -149,7 +148,7 @@ void quicrq_debug_source_test(quicrq_ctx_t* node, int node_id)
                         break;
                     }
                     current_offset += fragment->data_length;
-                    is_last_fragment = fragment->is_last_fragment;
+                    is_last_fragment = current_offset >= fragment->object_length;
                     fragment = (quicrq_cached_fragment_t*)quicrq_fragment_cache_node_value(picosplay_next(&fragment->fragment_node));
                     if (fragment == NULL){
                         if (!is_last_fragment) {
@@ -213,31 +212,6 @@ void quicrq_debug_source_test(quicrq_ctx_t* node, int node_id)
                             cache_ctx->final_group_id, cache_ctx->final_object_id);
                         ret = -1;
                     }
-                }
-                if (1) {
-                    /* Check that the send chain include a description of the first object */
-                    size_t size_first_object = 0;
-                    size_t received_first_object = 0;
-                    int rank_first_object = 0;
-                    int nb_first_object = 0;
-                    int rank = 0;
-                    fragment = cache_ctx->first_fragment;
-                    while (fragment != NULL) {
-                        rank++;
-                        if (fragment->object_id == 0 && fragment->group_id == 0) {
-                            nb_first_object++;
-                            if (rank > rank_first_object) {
-                                rank_first_object = rank;
-                            }
-                            if (fragment->is_last_fragment) {
-                                size_first_object = fragment->offset + fragment->data_length;
-                            }
-                            received_first_object += fragment->data_length;
-                        }
-                        fragment = fragment->next_in_order;
-                    }
-                    DBG_PRINTF("First: %d segments(last %d), %zu bytes (received %zu)",
-                        nb_first_object, rank_first_object, size_first_object, received_first_object);
                 }
             }
         }

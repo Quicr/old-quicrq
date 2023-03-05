@@ -117,7 +117,6 @@ int quicrq_congestion_check_per_cnx(quicrq_cnx_ctx_t* cnx_ctx, uint8_t flags, in
 
 int quicrq_compute_group_mode_congestion(quicrq_fragment_publisher_context_t* media_ctx, uint64_t current_group_id, uint64_t current_object_id)
 {
-    int has_backlog = 0;
     int should_skip = 0;
 
     if (current_group_id < media_ctx->end_of_congestion_group_id) {

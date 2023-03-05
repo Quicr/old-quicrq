@@ -144,7 +144,7 @@ int quicrq_media_object_bridge_fn(
     uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
-    int is_last_fragment,
+    uint64_t object_length,
     size_t data_length)
 {
     int ret = 0;
@@ -154,7 +154,7 @@ int quicrq_media_object_bridge_fn(
     case quicrq_media_datagram_ready:
         ret = quicrq_reassembly_input(&bridge_ctx->reassembly_ctx, current_time, data, group_id, object_id, offset, 
             queue_delay, flags,
-            nb_objects_previous_group, is_last_fragment, data_length,
+            nb_objects_previous_group, object_length, data_length,
             quicrq_media_object_bridge_ready, bridge_ctx);
         if (ret == 0 && bridge_ctx->reassembly_ctx.is_finished) {
             ret = quicrq_consumer_finished;

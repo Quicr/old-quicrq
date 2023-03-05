@@ -55,7 +55,7 @@ int quicrq_reassembly_input(
     uint64_t queue_delay,
     uint8_t flags,
     uint64_t nb_objects_previous_group,
-    int is_last_fragment,
+    uint64_t object_length,
     size_t data_length,
     quicrq_reassembly_object_ready_fn ready_fn,
     void * app_media_ctx);

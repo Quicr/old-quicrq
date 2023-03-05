@@ -191,12 +191,12 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     /* Find how much data is available on the media stream */
     int is_media_finished = 0;
     int is_new_group = 0;
-    int is_last_fragment = 0;
     int is_still_active = 0;
     int should_skip = 0;
     int has_backlog = 0;
     size_t available = 0;
     size_t data_length = 0;
+    uint64_t object_length;
     uint8_t stream_header[QUICRQ_STREAM_HEADER_MAX];
     uint8_t flags = 0;
     size_t h_size;
@@ -211,7 +211,8 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
     /* First, create a "mock" buffer based on the available space instead of the actual number of bytes.
      * By design, we are encoding the fragment with the "data" parameter set to NULL. */
     uint8_t* h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
-        stream_ctx->next_group_id, stream_ctx->next_object_id, 0, stream_ctx->next_object_offset, 0, flags, space, NULL);
+        stream_ctx->next_group_id, stream_ctx->next_object_id, 0, stream_ctx->next_object_offset,
+        stream_ctx->next_object_offset + available, flags, space, NULL);
 
     if (h_byte == NULL) {
         /* That should not happen, unless the stream_header size is way too small */
@@ -226,7 +227,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         else {
             /* Find how much data is actually available */
             ret = quicrq_fragment_publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, NULL, space - h_size, &available, 
-                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &should_skip, current_time);
+                &flags, &is_new_group, &object_length, &is_media_finished, &is_still_active, &should_skip, current_time);
             if (is_new_group) {
                 stream_ctx->next_group_id += 1;
                 nb_objects_previous_group = stream_ctx->next_object_id;
@@ -242,9 +243,9 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
              * Call the publisher APi to signal that the object should be skipped. 
              */
             h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
-                stream_ctx->next_group_id, stream_ctx->next_object_id, nb_objects_previous_group, 0, 1, 0xFF, 0, NULL);
+                stream_ctx->next_group_id, stream_ctx->next_object_id, nb_objects_previous_group, 0, 0, 0xFF, 0, NULL);
             ret = quicrq_fragment_publisher_fn(quicrq_media_source_skip_object, stream_ctx->media_ctx, NULL, 0, &data_length,
-                &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
+                &flags, &is_new_group, &object_length, &is_media_finished, &is_still_active, &has_backlog, current_time);
             if (ret == 0) {
                 uint8_t* buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, h_size, 0, 1);
                 if (buffer == NULL) {
@@ -313,7 +314,8 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
         else {
             /* Encode the actual header, instead of a prediction */
             h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
-                stream_ctx->next_group_id, stream_ctx->next_object_id, nb_objects_previous_group, stream_ctx->next_object_offset, is_last_fragment, flags, available, NULL);
+                stream_ctx->next_group_id, stream_ctx->next_object_id, nb_objects_previous_group, stream_ctx->next_object_offset,
+                object_length, flags, available, NULL);
 
             if (h_byte == NULL) {
                 /* That should not happen, unless the stream_header size was way too small */
@@ -324,16 +326,16 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                 if (h_size + available > space) {
                     /* The encoding changed, the computation of available space was wrong. */
                     available = space - h_size;
-                    is_last_fragment = 0;
                     h_byte = quicrq_fragment_msg_encode(stream_header + 2, stream_header + QUICRQ_STREAM_HEADER_MAX, QUICRQ_ACTION_FRAGMENT,
-                        stream_ctx->next_group_id, stream_ctx->next_object_id, nb_objects_previous_group, stream_ctx->next_object_offset, is_last_fragment, flags, available, NULL);
+                        stream_ctx->next_group_id, stream_ctx->next_object_id, nb_objects_previous_group, stream_ctx->next_object_offset, 
+                        object_length, flags, available, NULL);
                     /* The header size may have changed again, if the smaller "available" value is coded on fewer bytes. But it can only be decreased. */
                     h_size = h_byte - stream_header;
                 }
             }
             if (ret == 0) {
                 uint8_t* buffer;
-                if (is_last_fragment) {
+                if (stream_ctx->next_object_offset + available >= object_length) {
                     picoquic_log_app_message(stream_ctx->cnx_ctx->cnx, "Final fragment of object %" PRIu64 ",%" PRIu64 " on stream % " PRIu64,
                         stream_ctx->next_group_id, stream_ctx->next_object_id, stream_ctx->stream_id);
                 }
@@ -346,7 +348,7 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                     /* copy the stream header to the packet */
                     memcpy(buffer, stream_header, h_size);
                     ret = quicrq_fragment_publisher_fn(quicrq_media_source_get_data, stream_ctx->media_ctx, buffer + h_size, available, &data_length,
-                        &flags, &is_new_group, &is_last_fragment, &is_media_finished, &is_still_active, &has_backlog, current_time);
+                        &flags, &is_new_group, &object_length, &is_media_finished, &is_still_active, &has_backlog, current_time);
                     if (ret == 0 && available != data_length) {
                         ret = -1;
                     }
@@ -357,12 +359,10 @@ int quicrq_prepare_to_send_media_to_stream(quicrq_stream_ctx_t* stream_ctx, void
                         buffer[0] = (uint8_t)(message_length >> 8);
                         buffer[1] = (uint8_t)(message_length & 0xff);
 
-                        if (is_last_fragment) {
+                        stream_ctx->next_object_offset += available;
+                        if (stream_ctx->next_object_offset >= object_length) {
                             stream_ctx->next_object_id++;
                             stream_ctx->next_object_offset = 0;
-                        }
-                        else {
-                            stream_ctx->next_object_offset += available;
                         }
 
                         if (is_media_finished) {
@@ -409,11 +409,11 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
     uint64_t object_offset;
     uint64_t queue_delay;
     uint64_t nb_objects_previous_group;
+    uint64_t object_length;
     uint8_t flags;
-    int is_last_fragment;
     const uint8_t* next_bytes;
 
-    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &media_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
+    next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &media_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &object_length);
 
     if (next_bytes == NULL) {
         DBG_PRINTF("%s", "Error decoding datagram header");
@@ -434,18 +434,20 @@ int quicrq_receive_datagram(quicrq_cnx_ctx_t* cnx_ctx, const uint8_t* bytes, siz
             }
         }
         else {
+            /* Compute data length based on remaining bytes */
+            size_t data_length = bytes_max - next_bytes;
             /* Verification that there are no unexpected fragments, used in tests */
             if (group_id < stream_ctx->start_group_id ||
                 (group_id == stream_ctx->start_group_id && object_id < stream_ctx->start_object_id)) {
                 cnx_ctx->qr_ctx->useless_fragments += 1;
             }
             /* Pass data to the media context. */
-            if (is_last_fragment) {
+            if (object_offset + data_length >= object_length) {
                 picoquic_log_app_message(cnx_ctx->cnx, "Received final fragment of object %" PRIu64 "/%" PRIu64 " on datagram stream %" PRIu64 ", stream %" PRIu64,
                     group_id, object_id, media_id, stream_ctx->stream_id);
             }
             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, current_time, next_bytes, group_id, object_id, object_offset, 
-                queue_delay, flags, nb_objects_previous_group, is_last_fragment, bytes_max - next_bytes);
+                queue_delay, flags, nb_objects_previous_group, object_length, bytes_max - next_bytes);
             if (ret == quicrq_consumer_finished) {
                 ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 1, ret);
             }
@@ -636,7 +638,7 @@ int64_t quicrq_datagram_check_horizon(quicrq_stream_ctx_t* stream_ctx, uint64_t 
 
 int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id, uint64_t object_id, 
     uint64_t object_offset, uint8_t flags, uint64_t nb_objects_previous_group, const uint8_t * data, size_t length,
-    uint64_t queue_delay, int is_last_fragment, void** p_created_state, uint64_t current_time)
+    uint64_t queue_delay, uint64_t object_length, void** p_created_state, uint64_t current_time)
 {
     int ret = 0;
 
@@ -669,7 +671,7 @@ int quicrq_datagram_ack_init(quicrq_stream_ctx_t* stream_ctx, uint64_t group_id,
                 da_new->flags = flags;
                 da_new->nb_objects_previous_group = nb_objects_previous_group;
                 da_new->length = length;
-                da_new->is_last_fragment = is_last_fragment;
+                da_new->object_length = object_length;
                 da_new->queue_delay = queue_delay;
                 da_new->start_time = current_time;
                 picosplay_insert(&stream_ctx->datagram_ack_tree, da_new);
@@ -802,8 +804,8 @@ int quicrq_datagram_handle_ack(quicrq_stream_ctx_t* stream_ctx, uint64_t group_i
                 stream_ctx->horizon_group_id = das->group_id;
                 stream_ctx->horizon_object_id = das->object_id;
                 stream_ctx->horizon_offset = das->object_offset + das->length;
-                stream_ctx->horizon_is_last_fragment = das->is_last_fragment;
-
+                stream_ctx->horizon_is_last_fragment =
+                    stream_ctx->horizon_offset >= das->object_length;
                 next_node = picosplay_next(next_node);
                 picosplay_delete_hint(&stream_ctx->datagram_ack_tree, to_be_forgotten);
             }
@@ -844,17 +846,12 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
             /* Encode the header */
             found->last_sent_time = current_time;
             bytes = quicrq_datagram_header_encode(bytes, bytes_max, stream_ctx->media_id,
-                found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, found->nb_objects_previous_group, found->is_last_fragment);
+                found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags,
+                found->nb_objects_previous_group, found->object_length);
             /* Check how much data should be send in this fragment */
             header_length = bytes - datagram;
             datagram_length = header_length + data_length;
             if (datagram_length > PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH) {
-                if (found->is_last_fragment) {
-                    /* Erase the last segment mark in datagram header */
-                    bytes = quicrq_datagram_header_encode(datagram, bytes_max, stream_ctx->media_id,
-                        found->group_id, found->object_id, found->object_offset, found->queue_delay + queue_delay_delta, found->flags, found->nb_objects_previous_group, 0);
-                    header_length = bytes - datagram;
-                }
                 fragment_length = PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH - header_length;
                 datagram_length = PICOQUIC_DATAGRAM_QUEUE_MAX_LENGTH;
             }
@@ -880,12 +877,11 @@ int quicrq_datagram_handle_repeat(quicrq_stream_ctx_t* stream_ctx,
                         /* split the fragment, get a new one, update old record, point found to new record. */
                         ret = quicrq_datagram_ack_init(stream_ctx, found->group_id, found->object_id, next_offset,
                             found->flags, found->nb_objects_previous_group, data, data_length,
-                            found->queue_delay, found->is_last_fragment, &p_next_record, found->start_time);
+                            found->queue_delay, found->object_length, &p_next_record, found->start_time);
                         if (ret == 0) {
                             quicrq_datagram_ack_state_t* next_record = (quicrq_datagram_ack_state_t*)p_next_record;
-                            next_record->is_last_fragment = found->is_last_fragment;
+                            next_record->object_length = found->object_length;
                             next_record->nack_received = found->nack_received;
-                            found->is_last_fragment = 0;
                             found->length = fragment_length;
                             found = next_record;
                         }
@@ -944,14 +940,14 @@ int quicrq_handle_datagram_ack_nack(quicrq_cnx_ctx_t* cnx_ctx, picoquic_call_bac
     uint64_t queue_delay;
     uint8_t flags;
     uint64_t nb_objects_previous_group;
-    int is_last_fragment;
+    uint64_t object_length;
     const uint8_t* next_bytes;
 
     if (bytes == NULL) {
         ret = -1;
     }
     else {
-        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &media_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &is_last_fragment);
+        next_bytes = quicrq_datagram_header_decode(bytes, bytes_max, &media_id, &group_id, &object_id, &object_offset, &queue_delay, &flags, &nb_objects_previous_group, &object_length);
         
         /* Retrieve the stream context for the datagram */
         if (next_bytes == NULL) {
@@ -1337,176 +1333,191 @@ int quicrq_prepare_to_send_on_stream(quicrq_stream_ctx_t* stream_ctx, void* cont
 
     return ret;
 }
+/* Prepare the warp header */
+int quicrq_prepare_warp_header(quicrq_uni_stream_ctx_t* uni_stream_ctx) 
+{
+    int ret = 0;
 
+    quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
+    if (quicrq_msg_buffer_alloc(message, quicrq_warp_header_msg_reserve(uni_stream_ctx->control_stream_ctx->media_id, uni_stream_ctx->current_group_id), 0) != 0) {
+        ret = -1;
+    }
+    else {
+        uint8_t* message_next = quicrq_warp_header_msg_encode(message->buffer,
+            message->buffer + message->buffer_alloc,
+            QUICRQ_ACTION_WARP_HEADER,
+            uni_stream_ctx->control_stream_ctx->media_id,
+            uni_stream_ctx->current_group_id);
+        if (message_next == NULL) {
+            ret = -1;
+        }
+        message->message_size = message_next - message->buffer;
+        uni_stream_ctx->send_state = quicrq_sending_warp_header_sent;
+    }
+
+    return ret;
+}
+
+/* Prepare the warp object header */
+int quicrq_prepare_warp_object_header(quicrq_uni_stream_ctx_t* uni_stream_ctx, uint64_t current_time) 
+{
+    int ret = 0;
+
+    /* This handles both RUSH mode and WARP mode. RUSH sends only one object per uni stream,
+    * as specified in the uni-stream context. This means there is no need to check "last object
+    * id" -- it is alsways, "the specified object plus 1." We rely on the uni stream creation
+    * setting the last object ID to zero for WARP, and to "object+1" for RUSH.
+    */
+    quicrq_fragment_publisher_context_t* media_ctx = uni_stream_ctx->control_stream_ctx->media_ctx;
+    quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
+    /* Check whether the fin object for the group is known */
+    if (uni_stream_ctx->last_object_id == 0) {
+        /* see if we have media stream has reported its final group already
+        * (in Rush mode, this is known as we only send on object per uni stream.)
+        */
+        if ((uni_stream_ctx->control_stream_ctx->final_group_id > 0 ||
+            uni_stream_ctx->control_stream_ctx->final_object_id > 0) &&
+            uni_stream_ctx->control_stream_ctx->final_group_id == uni_stream_ctx->current_group_id) {
+            uni_stream_ctx->last_object_id = uni_stream_ctx->control_stream_ctx->final_object_id;
+        }
+        else {
+            /* check to see if we know object_count from this group */
+            uni_stream_ctx->last_object_id = quicrq_fragment_get_object_count(cache_ctx, uni_stream_ctx->current_group_id);
+        }
+    }
+
+    if (uni_stream_ctx->last_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->last_object_id) {
+        /* we have sent all the objects from the current group */
+        uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
+    }
+    else {
+        /* Check whether the next fragment is available */
+        uint8_t flags = 0;
+        uint64_t nb_objects_previous_group = 0;
+        /* Todo: we may send this immediately, as soon as the object length is known. */
+        if (quicrq_fragment_get_object_properties(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id,
+            &uni_stream_ctx->current_object_length, &uni_stream_ctx->nb_objects_previous_group, 
+            &uni_stream_ctx->current_object_flags) == 0){
+            int should_skip = 0;
+            quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
+            uint8_t* message_next = NULL;
+
+            should_skip = quicrq_evaluate_warp_congestion(uni_stream_ctx, media_ctx, uni_stream_ctx->current_object_length, flags, current_time);
+
+            if (should_skip) {
+                uni_stream_ctx->current_object_length = 0;
+                uni_stream_ctx->current_object_flags = 0xff;
+            }
+            /* Encode object header */
+            if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, 
+                nb_objects_previous_group, uni_stream_ctx->current_object_length), 0) != 0) {
+                ret = -1;
+            }
+            else {
+                message_next = quicrq_object_header_msg_encode(message->buffer,
+                    message->buffer + message->buffer_alloc,
+                    QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
+                    uni_stream_ctx->nb_objects_previous_group,
+                    uni_stream_ctx->current_object_flags, uni_stream_ctx->current_object_length);
+
+                if (message_next == NULL) {
+                    ret = -1;
+                }
+                else {
+                    message->message_size = message_next - message->buffer;
+                }
+                if (uni_stream_ctx->current_object_length == 0) {
+                    /* No need to wait for transmission of the object data! */
+                    uni_stream_ctx->current_object_id++;
+                    uni_stream_ctx->send_state = quicrq_sending_warp_header_sent;
+                }
+                else {
+                    uni_stream_ctx->send_state = quicrq_sending_object_data;
+                }
+            }
+        }
+        else {
+            /* Not available. Could it be because the final object ID has been reached? */
+            quicrq_fragment_notify_final_to_control(cache_ctx, uni_stream_ctx->control_stream_ctx);
+        }
+    }
+    return ret;
+}
 /* Sending data on unidirectional stream, for warp mode */
 int quicrq_prepare_to_send_on_unistream(quicrq_cnx_ctx_t * cnx_ctx, quicrq_uni_stream_ctx_t * uni_stream_ctx, void* context, size_t space, uint64_t current_time)
 {
     int ret = 0;
-    int more_to_send = 0;
-
-    /*
-     *  if (no bytes ready to send) {
-     *    if(warp header not sent)  {
-     *      prepare warp header
-     *    } else if (object is ready) {
-            prepare obj header
-          } else {
-            // no-op
-          }
-     *  }
-     *
-     *
-     *  if (bytes are ready) {
-     *     // just send the next bytes to be sent
-     *     // update num bytes sent
-     *  }
-     *
-     *
-     *
-     */
     /* prepare the message that needs to be sent */
-    if (uni_stream_ctx->message_buffer.message_size == 0) {
-        if (uni_stream_ctx->send_state == quicrq_sending_open) {
-            /* prepare warp_header, since its the first time we are dealing with this stream */
-            quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
-            if (quicrq_msg_buffer_alloc(message, quicrq_warp_header_msg_reserve(uni_stream_ctx->control_stream_ctx->media_id, uni_stream_ctx->current_group_id), 0) != 0) {
-                ret = -1;
-            } else {
-                uint8_t *message_next = quicrq_warp_header_msg_encode(message->buffer,
-                                                                      message->buffer + message->buffer_alloc,
-                                                                      QUICRQ_ACTION_WARP_HEADER,
-                                                                      uni_stream_ctx->control_stream_ctx->media_id,
-                                                                      uni_stream_ctx->current_group_id);
-                if (message_next == NULL) {
-                    ret = -1;
-                }
-                message->message_size = message_next - message->buffer;
-                uni_stream_ctx->send_state = quicrq_sending_warp_header_sent;
-            }
-        } else if(uni_stream_ctx->send_state == quicrq_sending_warp_header_sent) {
-            /* This handles both RUSH mode and WARP mode. RUSH sends only one object per uni stream,
-             * as specified in the uni-stream context. This means there is no need to check "last object
-             * id" -- it is alsways, "the specified object plus 1." We rely on the uni stream creation
-             * setting the last object ID to zero for WARP, and to "object+1" for RUSH.
-             */
-            quicrq_fragment_publisher_context_t* media_ctx = uni_stream_ctx->control_stream_ctx->media_ctx;
-            quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
-            /* Check whether the fin object for the group is known */
-            if (uni_stream_ctx->last_object_id == 0) {
-                /* see if we have media stream has reported its final group already */
-                if ((uni_stream_ctx->control_stream_ctx->final_group_id > 0 ||
-                    uni_stream_ctx->control_stream_ctx->final_object_id > 0) &&
-                    uni_stream_ctx->control_stream_ctx->final_group_id == uni_stream_ctx->current_group_id) {
-                    uni_stream_ctx->last_object_id = uni_stream_ctx->control_stream_ctx->final_object_id;
-                }
-                else {
-                    /* check to see if we object_count from the next group for the current group */
-                    uni_stream_ctx->last_object_id = quicrq_fragment_get_object_count(cache_ctx, uni_stream_ctx->current_group_id);
-                }
-            }
+    if (uni_stream_ctx->send_state == quicrq_sending_object_data) {
+        /* Todo: if content is available, send it */
+        /* When done: back to quicrq_sending_warp_header_sent */
+        quicrq_fragment_publisher_context_t* media_ctx = uni_stream_ctx->control_stream_ctx->media_ctx;
+        quicrq_fragment_cache_t* cache_ctx = media_ctx->cache_ctx;
+        size_t fragment_length = quicrq_fragment_object_copy_available_data(cache_ctx,
+            uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id,
+            uni_stream_ctx->current_object_offset, space, NULL);
 
-            if (uni_stream_ctx->last_object_id > 0 && uni_stream_ctx->current_object_id >= uni_stream_ctx->last_object_id) {
-                /* we have sent all the objects from the current group */
-                uni_stream_ctx->send_state = quicrq_sending_warp_all_sent;
-#if 1
-                if (uni_stream_ctx->current_group_id == 4 &&
-                    uni_stream_ctx->current_object_id == 59)
-                {
-                    DBG_PRINTF("%s", "The end");
-                }
-#endif
+        if (fragment_length > 0) {
+            uint8_t* buffer = (uint8_t*)picoquic_provide_stream_data_buffer(context, fragment_length, 0, 1);
+            if (buffer == NULL) {
+                ret = -1;
             }
             else {
-                /* Check whether the next fragment is available */
-                uint8_t flags = 0;
-                uint64_t nb_objects_previous_group = 0;
-                size_t next_object_size = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id,
-                    &nb_objects_previous_group, &flags, NULL);
-
-                if (next_object_size > 0 || flags == 0xff ) {
-                    int has_backlog = 0;
-                    int should_skip = 0;
-                    quicrq_message_buffer_t* message = &uni_stream_ctx->message_buffer;
-                    uint8_t* message_next = NULL;
-
-                    should_skip = quicrq_evaluate_warp_congestion(uni_stream_ctx, media_ctx, next_object_size, flags, current_time);
-
-                    if (should_skip) {
-                        uint8_t place_holder = 0;
-
-                        flags = 0xff;
-                        if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, nb_objects_previous_group, 0), 0) != 0) {
-                            ret = -1;
-                        }
-                        else {
-                            /* Format the place holder message */
-                            message_next = quicrq_object_header_msg_encode(message->buffer,
-                                message->buffer + message->buffer_alloc,
-                                QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
-                                nb_objects_previous_group, flags, 0, &place_holder);
-                            if (message_next == NULL) {
-                                ret = -1;
-                            }
-                            else {
-                                message->message_size = message_next - message->buffer;
-                                uni_stream_ctx->current_object_id++;
-                            }
-                        }
-                    }
-                    else {
-                        if (quicrq_msg_buffer_alloc(message, quicrq_object_header_msg_reserve(uni_stream_ctx->current_object_id, nb_objects_previous_group, next_object_size), 0) != 0) {
-                            ret = -1;
-                        }
-                        else {
-                            message_next = quicrq_object_header_msg_encode(message->buffer,
-                                message->buffer + message->buffer_alloc,
-                                QUICRQ_ACTION_OBJECT_HEADER, uni_stream_ctx->current_object_id,
-                                nb_objects_previous_group, flags, next_object_size, NULL);
-                        }
-                        if (message_next == NULL) {
-                            ret = -1;
-                        }
-                        else {
-                            size_t copied = quicrq_fragment_object_copy(cache_ctx, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id, &nb_objects_previous_group, &flags, message_next);
-                            if (copied != next_object_size) {
-                                ret = -1;
-                            }
-                            else {
-                                message->message_size = message_next - message->buffer;
-                                message->message_size += next_object_size;
-                                uni_stream_ctx->current_object_id++;
-                            }
-                        }
-                    }
+                size_t copied_length = quicrq_fragment_object_copy_available_data(cache_ctx,
+                    uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id,
+                    uni_stream_ctx->current_object_offset, fragment_length, buffer);
+                if (copied_length != fragment_length) {
+                    ret = -1;
                 }
                 else {
-                    /* Not available. Could it be because the final object ID has been reached? */
-                    quicrq_fragment_notify_final_to_control(cache_ctx, uni_stream_ctx->control_stream_ctx);
+                    uni_stream_ctx->current_object_offset += copied_length;
+                    if (uni_stream_ctx->current_object_offset == uni_stream_ctx->current_object_length) {
+                        /* this object is sent, back to state quicrq_sending_warp_header_sent */
+                        uni_stream_ctx->current_object_id++;
+                        uni_stream_ctx->current_object_offset = 0;
+                        uni_stream_ctx->send_state = quicrq_sending_warp_header_sent;
+                    } else if (uni_stream_ctx->current_object_offset > uni_stream_ctx->current_object_length) {
+                        ret = -1;
+                    }
                 }
             }
-        } else {
-            /* no op */
-        }
-    }
-
-    if (uni_stream_ctx->message_buffer.message_size == 0) {
-        if (uni_stream_ctx->send_state == quicrq_sending_warp_all_sent) {
-            /* Send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
-            (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
-            uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
-            /* Dispose of uni stream context. */
-            quicrq_delete_uni_stream_ctx(uni_stream_ctx->control_stream_ctx->cnx_ctx, uni_stream_ctx);
         }
         else {
-            /* Nothing to send */
-            ret = picoquic_mark_active_stream(uni_stream_ctx->control_stream_ctx->cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, uni_stream_ctx);
+            /* Nothing to send yet. */
+            ret = picoquic_mark_active_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, uni_stream_ctx);
         }
     }
     else {
-        int more_to_send = uni_stream_ctx->send_state != quicrq_sending_warp_should_close;
-        quicrq_log_message(uni_stream_ctx->control_stream_ctx->cnx_ctx, "Send:UniStream %" PRIu64 ",  message buffer size = %" PRIu8,
-                           uni_stream_ctx->stream_id, uni_stream_ctx->message_buffer.message_size);
-        ret = quicrq_msg_buffer_prepare_to_send_message(&uni_stream_ctx->message_buffer, context, space, more_to_send);
+        if (uni_stream_ctx->message_buffer.message_size == 0) {
+            if (uni_stream_ctx->send_state == quicrq_sending_open) {
+                /* prepare warp_header, since its the first time we are dealing with this stream */
+                ret = quicrq_prepare_warp_header(uni_stream_ctx);
+            }
+            else if (uni_stream_ctx->send_state == quicrq_sending_warp_header_sent) {
+                ret = quicrq_prepare_warp_object_header(uni_stream_ctx, current_time);
+            }
+        }
+
+        if (uni_stream_ctx->message_buffer.message_size > 0) {
+            /* Send the message that was just prepared */
+            int more_to_send = uni_stream_ctx->send_state != quicrq_sending_warp_should_close;
+            quicrq_log_message(cnx_ctx, "Send:UniStream %" PRIu64 ",  message buffer size = %" PRIu8,
+                uni_stream_ctx->stream_id, uni_stream_ctx->message_buffer.message_size);
+            ret = quicrq_msg_buffer_prepare_to_send_message(&uni_stream_ctx->message_buffer, context, space, more_to_send);
+        } else {
+            /* Nothing to send: maybe end of stream, maybe need to wait */
+            if (uni_stream_ctx->send_state == quicrq_sending_warp_all_sent) {
+                /* Send the fin bit on the stream (uni), clean up stream_ctx for that uni stream */
+                (void)picoquic_provide_stream_data_buffer(context, 0, 1, 0);
+                uni_stream_ctx->send_state = quicrq_sending_warp_should_close;
+                /* Dispose of uni stream context. */
+                quicrq_delete_uni_stream_ctx(cnx_ctx, uni_stream_ctx);
+            }
+            else {
+                /* Nothing to send */
+                ret = picoquic_mark_active_stream(cnx_ctx->cnx, uni_stream_ctx->stream_id, 0, uni_stream_ctx);
+            }
+        }
     }
 
     return ret;
@@ -1789,10 +1800,6 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 1, 0, ret);
                         }
                         break;
-                    case QUICRQ_ACTION_REQUEST_REPAIR:
-                        /* TODO - implement that */
-                        ret = -1;
-                        break;
                     case QUICRQ_ACTION_FRAGMENT:
                         if (stream_ctx->receive_state != quicrq_receive_fragment) {
                             /* Protocol error */
@@ -1805,11 +1812,11 @@ int quicrq_receive_stream_data(quicrq_stream_ctx_t* stream_ctx, uint8_t* bytes, 
                                     incoming.object_id < stream_ctx->start_object_id)) {
                                 stream_ctx->cnx_ctx->qr_ctx->useless_fragments++;
                             }
-                            /* Pass the repair data to the media consumer. */
+                            /* Pass the fragment data to the media consumer. */
                             ret = stream_ctx->consumer_fn(quicrq_media_datagram_ready, stream_ctx->media_ctx, picoquic_get_quic_time(stream_ctx->cnx_ctx->qr_ctx->quic),
                                 incoming.data, incoming.group_id, incoming.object_id,
-                                incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
-                                incoming.is_last_fragment, incoming.length);
+                                incoming.fragment_offset, 0, incoming.flags, incoming.nb_objects_previous_group,
+                                incoming.object_length, incoming.fragment_length);
                             ret = quicrq_cnx_handle_consumer_finished(stream_ctx, 0, 0, ret);
                         }
                         break;
@@ -1911,14 +1918,38 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
     int ret = 0;
 
     while (ret == 0 && length > 0) {
-        /* There may be a set of messages back to back, and all have to be received. */
-        if (uni_stream_ctx->receive_state == quicrq_receive_done) {
-            /* Protocol violation, was not expecting any message */
-            ret = -1;
-            break;
+        /* Receive the next message on the stream, if any */
+        /* TODO: add state for receiving data, take data out of header envelope */
+        if (uni_stream_ctx->receive_state == quicrq_receive_object_data) {
+            /* In data state, receive "object_length" bytes. Store them as 
+             * fragment. If enough to complete the object, consider it finished,
+             * cycle to state "quicrq_receive_object_header" so remaining bytes
+             * can be processed.
+             */
+            quicrq_stream_ctx_t* ctrl_stream_ctx = uni_stream_ctx->control_stream_ctx;
+            size_t copied = length;
+            if (uni_stream_ctx->current_object_offset + copied > uni_stream_ctx->current_object_length) {
+                copied = uni_stream_ctx->current_object_length - uni_stream_ctx->current_object_offset;
+            }
+            ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
+                bytes, uni_stream_ctx->current_group_id, uni_stream_ctx->current_object_id,
+                uni_stream_ctx->current_object_offset, 0, uni_stream_ctx->current_object_flags,
+                uni_stream_ctx->nb_objects_previous_group,  uni_stream_ctx->current_object_length, copied);
+            uni_stream_ctx->current_object_offset += copied;
+            length -= copied;
+            if (uni_stream_ctx->current_object_offset >= uni_stream_ctx->current_object_length) {
+                uni_stream_ctx->receive_state = quicrq_receive_object_header;
+                /* Increment predicted object ID to enable checks */
+                uni_stream_ctx->current_object_id += 1;
+#if 1
+                uni_stream_ctx->current_object_offset = 0;
+#endif
+            }
+            if (ret == quicrq_consumer_finished) {
+                ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 0, 1, ret);
+            }
         }
         else {
-            /* Receive the next message on the stream, if any */
             int is_finished = 0;
             uint8_t* next_bytes = quicrq_msg_buffer_store(bytes, length, &uni_stream_ctx->message_buffer, &is_finished);
             if (next_bytes == NULL) {
@@ -1937,19 +1968,25 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                     if (r_bytes == NULL) {
                         /* Message was incorrect */
                         ret = -1;
-                    } else {
+                    }
+                    else {
                         quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", received message type=%" PRIu8,
-                                           uni_stream_ctx->stream_id, incoming.message_type);
+                            uni_stream_ctx->stream_id, incoming.message_type);
 
                         switch (incoming.message_type) {
-                            case QUICRQ_ACTION_WARP_HEADER:
+                        case QUICRQ_ACTION_WARP_HEADER:
+                            if (uni_stream_ctx->receive_state != quicrq_receive_open) {
+                                /* Protocol error */
+                                ret = -1;
+                            }
+                            else {
                                 uni_stream_ctx->current_group_id = incoming.group_id;
                                 uni_stream_ctx->receive_state = quicrq_receive_warp_header;
                                 quicrq_stream_ctx_t* ctrl_stream_ctx = quicrq_get_control_stream_for_media_id(cnx_ctx, incoming.media_id);
                                 if (ctrl_stream_ctx == NULL) {
                                     /* Protocol error: unknown media ID. */
                                     quicrq_log_message(cnx_ctx, "UniStream %" PRIu64 ", unknown media id=%" PRIu64,
-                                        uni_stream_ctx->stream_id,incoming.media_id);
+                                        uni_stream_ctx->stream_id, incoming.media_id);
                                     ret = -1;
                                 }
                                 else {
@@ -1961,34 +1998,55 @@ int quicrq_receive_warp_or_rush_stream_data(quicrq_cnx_ctx_t* cnx_ctx, quicrq_un
                                         ", ControlStream id= %" PRIu64 " media id=%" PRIu64,
                                         uni_stream_ctx->stream_id, uni_stream_ctx->control_stream_ctx->stream_id, incoming.media_id);
                                 }
-                                break;
-                            case QUICRQ_ACTION_OBJECT_HEADER:
-                                if (uni_stream_ctx->receive_state != quicrq_receive_warp_header &&
-                                    uni_stream_ctx->receive_state != quicrq_receive_object_header) {
-                                    /* Protocol error */
-                                    ret = -1;
-                                }
-                                else if (uni_stream_ctx->control_stream_ctx == NULL) {
-                                    /* Protocol error -- the control stream MUST be initialized in the authorized states */
-                                    ret = -1;
-                                } else {
-                                    quicrq_stream_ctx_t* ctrl_stream_ctx = uni_stream_ctx->control_stream_ctx;
+                            }
+                            break;
+                        case QUICRQ_ACTION_OBJECT_HEADER:
+                            if (uni_stream_ctx->receive_state != quicrq_receive_warp_header &&
+                                uni_stream_ctx->receive_state != quicrq_receive_object_header) {
+                                /* Protocol error */
+                                ret = -1;
+                            }
+                            else if (uni_stream_ctx->control_stream_ctx == NULL) {
+                                /* Protocol error -- the control stream MUST be initialized in the authorized states */
+                                ret = -1;
+                            }
+                            else if (
+                                (uni_stream_ctx->control_stream_ctx->transport_mode == quicrq_transport_mode_rush &&
+                                    uni_stream_ctx->current_object_id != 0) ||
+                                (uni_stream_ctx->control_stream_ctx->transport_mode == quicrq_transport_mode_warp &&
+                                uni_stream_ctx->current_object_id != incoming.object_id )) {
+                                /* The peer is misbehaving */
+                                DBG_PRINTF("Object not expected: %" PRIu64, incoming.object_id);
+                                ret = -1;
+                            }
+                            else if (incoming.object_length > 0) {
+                                uni_stream_ctx->receive_state = quicrq_receive_object_data;
+                                uni_stream_ctx->current_object_id = incoming.object_id;
+                                uni_stream_ctx->current_object_length = incoming.object_length;
+                                uni_stream_ctx->current_object_flags = incoming.flags;
+                                uni_stream_ctx->nb_objects_previous_group = incoming.nb_objects_previous_group;
+                                uni_stream_ctx->current_object_offset = 0;
+                            }
+                            else {
+                                /* Special case of zero length objects */
+                                quicrq_stream_ctx_t* ctrl_stream_ctx = uni_stream_ctx->control_stream_ctx;
 
-                                    uni_stream_ctx->receive_state = quicrq_receive_object_header;
-                                    /* Pass the data to the media consumer. */
-                                    ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
-                                                                  incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
-                                                                  incoming.offset, 0, incoming.flags, incoming.nb_objects_previous_group,
-                                                                  1, incoming.length);
-                                    if (ret == quicrq_consumer_finished) {
-                                        ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 0, 1, ret);
-                                    }
+                                uni_stream_ctx->receive_state = quicrq_receive_object_header;
+                                /* Pass the empty data to the media consumer. */
+                                ret = ctrl_stream_ctx->consumer_fn(quicrq_media_datagram_ready, ctrl_stream_ctx->media_ctx, picoquic_get_quic_time(ctrl_stream_ctx->cnx_ctx->qr_ctx->quic),
+                                    incoming.data, uni_stream_ctx->current_group_id, incoming.object_id,
+                                    0, 0, incoming.flags, incoming.nb_objects_previous_group, 0, 0);
+                                /* Increment predicted object ID to enable checks */
+                                uni_stream_ctx->current_object_id += 1;
+                                if (ret == quicrq_consumer_finished) {
+                                    ret = quicrq_cnx_handle_consumer_finished(ctrl_stream_ctx, 0, 1, ret);
                                 }
-                                break;
-                                default:
-                                    /* Some unknown message, maybe not implemented yet */
-                                    ret = -1;
-                                    break;
+                            }
+                            break;
+                        default:
+                            /* Some unknown message, maybe not implemented yet */
+                            ret = -1;
+                            break;
                         }
                     }
                     /* As the message was processed, reset the message buffer. */
@@ -2721,25 +2779,6 @@ quicrq_uni_stream_ctx_t* quicrq_find_or_create_uni_stream(
 
     return uni_stream_ctx;
 }
-
-
-#if 0
-/* Apparently this is not used. */
-quicrq_uni_stream_ctx_t* quicrq_find_uni_stream_for_group(
-        quicrq_stream_ctx_t* control_stream,
-        uint64_t group_id)
-{
-    quicrq_uni_stream_ctx_t* uni_stream_ctx = control_stream->first_uni_stream;
-
-    while (uni_stream_ctx != NULL) {
-        if (uni_stream_ctx->current_group_id == group_id) {
-            return  uni_stream_ctx;
-        }
-        uni_stream_ctx = uni_stream_ctx->next_uni_stream_for_control_stream;
-    }
-    return NULL;
-}
-#endif
 
 int quicrq_cnx_has_stream(quicrq_cnx_ctx_t* cnx_ctx)
 {
